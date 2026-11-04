@@ -39,3 +39,8 @@
 | 2026-11-04 | Tests de l'API sur une base séparée `cms_test`, créée et migrée automatiquement | Les tests vident leurs tables sans toucher aux données de développement |
 | 2026-11-04 | La commande super-admin crée le compte ou réinitialise son mot de passe, et ferme ses sessions | Une seule commande couvre aussi le risque « mot de passe du super-admin oublié » |
 | 2026-11-04 | Documentation OpenAPI (`@nestjs/swagger`) reportée | Les schémas sont en Zod ; la brancher demande un adaptateur, à faire quand l'API sera plus fournie |
+| 2026-11-04 | Slug d'espace : minuscules, chiffres et tirets, 50 caractères maximum, `nouveau` réservé | Le slug apparaît dans les URLs du dashboard, où `/espaces/nouveau` est l'écran de création |
+| 2026-11-04 | URL du site stockée réduite à son origine (`https://domaine`) | La collecte compare cette valeur à l'en-tête `Origin` |
+| 2026-11-04 | Invitation refusée (409) si l'email a obtenu un compte entre-temps | Accepter le lien écraserait le mot de passe d'un compte existant |
+| 2026-11-04 | Une nouvelle invitation ou réinitialisation remplace le lien encore valide pour le même email ou compte | Un seul lien actif à la fois, la liste des invitations reste lisible |
+| 2026-11-04 | Action réservée au super-admin sur un espace accessible : 403 ; espace inaccessible : 404 | Le membre connaît déjà l'espace, rien n'est révélé ; le 404 reste réservé aux espaces cachés |
