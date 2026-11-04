@@ -54,7 +54,7 @@ export class SessionGuard implements CanActivate {
     if (!user) throw new UnauthorizedException('Session absente ou expirée')
 
     req.user = user
-    req.sessionToken = token as string
+    req.sessionToken = token as string // garanti par le typeof ci-dessus, que TS ne propage pas
     setSessionCookie(ctx.switchToHttp().getResponse<Response>(), req.sessionToken)
     return true
   }

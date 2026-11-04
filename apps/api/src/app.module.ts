@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common'
+import { type MiddlewareConsumer, Module, type NestModule } from '@nestjs/common'
 import { APP_FILTER, APP_GUARD } from '@nestjs/core'
 import { ThrottlerModule } from '@nestjs/throttler'
 import { AuthController } from './auth/auth.controller.js'
@@ -6,6 +6,7 @@ import { AuthService } from './auth/auth.service.js'
 import { SessionGuard } from './auth/session.guard.js'
 import { DbModule } from './db/db.module.js'
 import { ErrorFilter } from './error.filter.js'
+import { requireJson } from './require-json.middleware.js'
 
 @Module({
   imports: [
@@ -28,4 +29,8 @@ import { ErrorFilter } from './error.filter.js'
     { provide: APP_FILTER, useClass: ErrorFilter },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(requireJson).forRoutes('*')
+  }
+}

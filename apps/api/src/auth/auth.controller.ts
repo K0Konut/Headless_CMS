@@ -33,11 +33,10 @@ export class AuthController {
   @HttpCode(200)
   async login(@Body() body: unknown, @Res({ passthrough: true }) res: Response) {
     const { email, password } = loginSchema.parse(body)
-    const token = await this.auth.login(email, password)
-    if (!token) throw new UnauthorizedException('Email ou mot de passe incorrect')
-    setSessionCookie(res, token)
-    const user = await this.auth.userFromSession(token)
-    return this.auth.me(user!)
+    const session = await this.auth.login(email, password)
+    if (!session) throw new UnauthorizedException('Email ou mot de passe incorrect')
+    setSessionCookie(res, session.token)
+    return this.auth.me(session.user)
   }
 
   @Post('logout')

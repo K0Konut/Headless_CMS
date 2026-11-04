@@ -16,11 +16,11 @@ export class AuthService {
 
   constructor(@Inject(DB) private readonly db: Db) {}
 
-  /** Renvoie le jeton d'une nouvelle session, ou `null` si les identifiants sont faux. */
+  /** Ouvre une session et renvoie son jeton avec l'utilisateur, ou `null` si les identifiants sont faux. */
   async login(email: string, password: string) {
     const [user] = await this.db.select().from(users).where(eq(users.email, email))
     const ok = await argon2.verify(user?.passwordHash ?? (await this.dummyHash), password)
-    return user && ok ? this.openSession(user.id) : null
+    return user && ok ? { user, token: await this.openSession(user.id) } : null
   }
 
   async openSession(userId: string) {

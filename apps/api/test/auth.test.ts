@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing'
+import argon2 from 'argon2'
 import type { NestExpressApplication } from '@nestjs/platform-express'
 import { sql } from 'drizzle-orm'
 import request from 'supertest'
@@ -66,7 +67,9 @@ describe('connexion', () => {
       .post('/api/auth/login')
       .type('form')
       .send({ email: 'a@b.fr', password: PASSWORD })
-      .expect(415)
+      .expect(415, {
+        error: { code: 'unsupported_media_type', message: 'Content-Type: application/json requis' },
+      })
   })
 })
 
@@ -79,10 +82,7 @@ describe('session', () => {
     await upsertSuperAdmin(db, 'admin@exemple.fr', PASSWORD)
     const [member] = await db
       .insert(users)
-      .values({
-        email: 'membre@exemple.fr',
-        passwordHash: (await upsertSuperAdmin(db, 'tmp@exemple.fr', PASSWORD)).passwordHash,
-      })
+      .values({ email: 'membre@exemple.fr', passwordHash: await argon2.hash(PASSWORD) })
       .returning()
     const [a, b] = await db
       .insert(spaces)
