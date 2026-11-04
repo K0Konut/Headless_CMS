@@ -10,6 +10,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "db": "docker compose -f docker/compose.yml up -d db",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
