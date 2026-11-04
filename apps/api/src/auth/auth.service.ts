@@ -69,20 +69,23 @@ export class AuthService {
     return true
   }
 
-  /** Utilisateur et espaces accessibles : tous pour le super-admin, ses adhésions sinon. */
-  async me(user: User) {
+  /** Espaces accessibles : tous pour le super-admin, ses adhésions sinon. */
+  accessibleSpaces(user: User) {
     const columns = { slug: spaces.slug, name: spaces.name }
-    const userSpaces = user.isSuperAdmin
-      ? await this.db.select(columns).from(spaces).orderBy(asc(spaces.name))
-      : await this.db
+    return user.isSuperAdmin
+      ? this.db.select(columns).from(spaces).orderBy(asc(spaces.name))
+      : this.db
           .select(columns)
           .from(spaces)
           .innerJoin(memberships, eq(memberships.spaceId, spaces.id))
           .where(eq(memberships.userId, user.id))
           .orderBy(asc(spaces.name))
+  }
+
+  async me(user: User) {
     return {
       user: { id: user.id, email: user.email, isSuperAdmin: user.isSuperAdmin },
-      spaces: userSpaces,
+      spaces: await this.accessibleSpaces(user),
     }
   }
 }
