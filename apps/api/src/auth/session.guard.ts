@@ -1,6 +1,7 @@
 import {
   type CanActivate,
   type ExecutionContext,
+  ForbiddenException,
   Injectable,
   SetMetadata,
   UnauthorizedException,
@@ -57,6 +58,16 @@ export class SessionGuard implements CanActivate {
     req.sessionToken = token as string // garanti par le typeof ci-dessus, que TS ne propage pas
     if (session.renewed) {
       setSessionCookie(ctx.switchToHttp().getResponse<Response>(), req.sessionToken)
+    }
+    return true
+  }
+}
+
+@Injectable()
+export class SuperAdminGuard implements CanActivate {
+  canActivate(ctx: ExecutionContext) {
+    if (!ctx.switchToHttp().getRequest<AuthedRequest>().user.isSuperAdmin) {
+      throw new ForbiddenException('Réservé au super-admin')
     }
     return true
   }

@@ -28,3 +28,29 @@ export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1).max(128),
   newPassword: passwordSchema,
 })
+
+/** Slug d'espace, utilisé dans les URLs du dashboard (`/espaces/:slug`). */
+export const slugSchema = z
+  .string()
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Minuscules, chiffres et tirets uniquement')
+  .max(50)
+  // `/espaces/nouveau` est l'écran de création.
+  .refine((slug) => slug !== 'nouveau', 'Ce slug est réservé')
+
+/** URL du site réduite à son origine : c'est elle que la collecte compare à l'en-tête `Origin`. */
+export const siteUrlSchema = z
+  .url({ protocol: /^https?$/, error: 'URL invalide (http ou https)' })
+  .transform((url) => new URL(url).origin)
+
+export const createSpaceSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  slug: slugSchema,
+  siteUrl: siteUrlSchema,
+})
+
+export const updateSpaceSchema = createSpaceSchema.partial()
+
+export const invitationSchema = z.object({ email: emailSchema })
+
+/** Corps de `POST /tokens/:token` : le mot de passe choisi par l'invité ou le membre. */
+export const consumeTokenSchema = z.object({ password: passwordSchema })

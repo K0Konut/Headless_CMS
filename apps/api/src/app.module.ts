@@ -4,10 +4,14 @@ import { ThrottlerModule } from '@nestjs/throttler'
 import { emailSchema } from '@cms/shared'
 import { AuthController } from './auth/auth.controller.js'
 import { AuthService } from './auth/auth.service.js'
+import { LinksController } from './auth/links.controller.js'
+import { LinksService } from './auth/links.service.js'
 import { SessionGuard } from './auth/session.guard.js'
 import { DbModule } from './db/db.module.js'
 import { ErrorFilter } from './error.filter.js'
 import { requireJson } from './require-json.middleware.js'
+import { SpaceController, SpacesController } from './spaces/spaces.controller.js'
+import { SpacesService } from './spaces/spaces.service.js'
 
 @Module({
   imports: [
@@ -24,9 +28,11 @@ import { requireJson } from './require-json.middleware.js'
       },
     ]),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, LinksController, SpacesController, SpaceController],
   providers: [
     AuthService,
+    LinksService,
+    SpacesService,
     { provide: APP_GUARD, useClass: SessionGuard },
     { provide: APP_FILTER, useClass: ErrorFilter },
   ],

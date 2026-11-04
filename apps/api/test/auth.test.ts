@@ -1,39 +1,14 @@
-import { Test } from '@nestjs/testing'
 import argon2 from 'argon2'
-import type { NestExpressApplication } from '@nestjs/platform-express'
-import { sql } from 'drizzle-orm'
 import request from 'supertest'
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { AppModule } from '../src/app.module.js'
-import { setupApp } from '../src/app.setup.js'
+import { describe, expect, it } from 'vitest'
 import { upsertSuperAdmin } from '../src/auth/super-admin.js'
-import { createDb } from '../src/db/index.js'
 import { memberships, spaces, users } from '../src/db/schema.js'
+import { PASSWORD, db, sessionCookie, useTestApp } from './helpers.js'
 
-const db = createDb()
-const PASSWORD = 'motdepasse-solide'
-let app: NestExpressApplication
-
-/** Cookie de session posé par une réponse, prêt à renvoyer. Le cookie est `Secure` : un client
- *  HTTP de test ne le renverrait pas de lui-même. */
-const sessionCookie = (res: request.Response) =>
-  [res.headers['set-cookie']]
-    .flat()
-    .find((c) => c?.startsWith('cms_session='))!
-    .split(';')[0]!
+const ctx = useTestApp()
 
 const login = (email: string, password = PASSWORD) =>
-  request(app.getHttpServer()).post('/api/auth/login').send({ email, password })
-
-beforeEach(async () => {
-  await db.execute(sql`truncate users, spaces cascade`)
-  // Une application par test : les compteurs de limitation de débit repartent à zéro.
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile()
-  app = setupApp(moduleRef.createNestApplication<NestExpressApplication>())
-  await app.init()
-})
-afterEach(() => app.close())
-afterAll(() => db.$client.end())
+  request(ctx.app.getHttpServer()).post('/api/auth/login').send({ email, password })
 
 describe('connexion', () => {
   it('ouvre une session et pose un cookie sécurisé', async () => {
@@ -70,7 +45,7 @@ describe('connexion', () => {
   })
 
   it('refuse une requête qui modifie des données sans JSON', async () => {
-    await request(app.getHttpServer())
+    await request(ctx.app.getHttpServer())
       .post('/api/auth/login')
       .type('form')
       .send({ email: 'a@b.fr', password: PASSWORD })
@@ -80,7 +55,7 @@ describe('connexion', () => {
   })
 
   it('accepte un Content-Type JSON quelle que soit sa casse', async () => {
-    await request(app.getHttpServer())
+    await request(ctx.app.getHttpServer())
       .post('/api/auth/login')
       .set('Content-Type', 'Application/JSON')
       .send(JSON.stringify({ email: 'a@b.fr', password: PASSWORD }))
@@ -90,7 +65,7 @@ describe('connexion', () => {
 
 describe('session', () => {
   it('exige une session sur les routes protégées', async () => {
-    await request(app.getHttpServer()).get('/api/auth/me').expect(401)
+    await request(ctx.app.getHttpServer()).get('/api/auth/me').expect(401)
   })
 
   it('liste tous les espaces au super-admin et ses seuls espaces à un membre', async () => {
@@ -110,7 +85,7 @@ describe('session', () => {
 
     const admin = sessionCookie(await login('admin@exemple.fr'))
     const memberCookie = sessionCookie(await login('membre@exemple.fr'))
-    const server = app.getHttpServer()
+    const server = ctx.app.getHttpServer()
 
     const adminMe = await request(server).get('/api/auth/me').set('Cookie', admin).expect(200)
     expect(adminMe.body.spaces).toEqual([
@@ -130,14 +105,14 @@ describe('session', () => {
   it('ferme la session à la déconnexion', async () => {
     await upsertSuperAdmin(db, 'admin@exemple.fr', PASSWORD)
     const cookie = sessionCookie(await login('admin@exemple.fr'))
-    const server = app.getHttpServer()
+    const server = ctx.app.getHttpServer()
 
     await request(server).post('/api/auth/logout').set('Cookie', cookie).type('json').expect(204)
     await request(server).get('/api/auth/me').set('Cookie', cookie).expect(401)
   })
 
   it('efface le cookie à la déconnexion même si la session est déjà fermée', async () => {
-    const res = await request(app.getHttpServer())
+    const res = await request(ctx.app.getHttpServer())
       .post('/api/auth/logout')
       .set('Cookie', 'cms_session=inconnu')
       .type('json')
@@ -148,7 +123,7 @@ describe('session', () => {
   it('ne réécrit pas le cookie à chaque requête', async () => {
     await upsertSuperAdmin(db, 'admin@exemple.fr', PASSWORD)
     const cookie = sessionCookie(await login('admin@exemple.fr'))
-    const res = await request(app.getHttpServer())
+    const res = await request(ctx.app.getHttpServer())
       .get('/api/auth/me')
       .set('Cookie', cookie)
       .expect(200)
@@ -161,7 +136,7 @@ describe('changement de mot de passe', () => {
     await upsertSuperAdmin(db, 'admin@exemple.fr', PASSWORD)
     const current = sessionCookie(await login('admin@exemple.fr'))
     const other = sessionCookie(await login('admin@exemple.fr'))
-    const server = app.getHttpServer()
+    const server = ctx.app.getHttpServer()
 
     await request(server)
       .put('/api/auth/password')
@@ -178,7 +153,7 @@ describe('changement de mot de passe', () => {
     await upsertSuperAdmin(db, 'admin@exemple.fr', PASSWORD)
     const cookie = sessionCookie(await login('admin@exemple.fr'))
     const put = (body: object) =>
-      request(app.getHttpServer()).put('/api/auth/password').set('Cookie', cookie).send(body)
+      request(ctx.app.getHttpServer()).put('/api/auth/password').set('Cookie', cookie).send(body)
 
     await put({ currentPassword: 'faux', newPassword: 'nouveau-mot-de-passe' }).expect(401)
     const short = await put({ currentPassword: PASSWORD, newPassword: 'court' }).expect(400)
@@ -193,7 +168,7 @@ describe('commande super-admin', () => {
 
     await upsertSuperAdmin(db, 'admin@exemple.fr', 'autre-mot-de-passe')
 
-    await request(app.getHttpServer()).get('/api/auth/me').set('Cookie', cookie).expect(401)
+    await request(ctx.app.getHttpServer()).get('/api/auth/me').set('Cookie', cookie).expect(401)
     await login('admin@exemple.fr', 'autre-mot-de-passe').expect(200)
   })
 })
