@@ -34,3 +34,8 @@
 | 2026-11-04 | API en modules ES (`"type": "module"`) | NestJS 12 est publié en ESM ; le reste du monorepo l'est déjà |
 | 2026-11-04 | Pilote PostgreSQL : `pg` (node-postgres) | Le plus répandu, pris en charge nativement par Drizzle |
 | 2026-11-04 | Contraintes en base : email en minuscules, invitation liée à un espace, réinitialisation liée à un utilisateur | Une erreur de l'API ne peut pas écrire de données incohérentes |
+| 2026-11-04 | Mot de passe : 12 caractères minimum, 128 maximum | Le PRD ne fixait rien ; le plafond évite qu'un mot de passe géant rende le hachage Argon2 coûteux |
+| 2026-11-04 | API compilée par le builder SWC de NestJS ; `packages/shared` reste en TypeScript source, lu directement par Node (22.18 minimum) | Pas d'étape de build pour `shared` ; `tsc --noEmit` garde la vérification des types |
+| 2026-11-04 | Tests de l'API sur une base séparée `cms_test`, créée et migrée automatiquement | Les tests vident leurs tables sans toucher aux données de développement |
+| 2026-11-04 | La commande super-admin crée le compte ou réinitialise son mot de passe, et ferme ses sessions | Une seule commande couvre aussi le risque « mot de passe du super-admin oublié » |
+| 2026-11-04 | Documentation OpenAPI (`@nestjs/swagger`) reportée | Les schémas sont en Zod ; la brancher demande un adaptateur, à faire quand l'API sera plus fournie |

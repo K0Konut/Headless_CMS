@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { collectEventSchema } from './index'
+import { collectEventSchema, emailSchema, passwordSchema } from './index'
 
 const valid = { k: 'pk_test', t: 'view', p: '/projets/cms', r: 'linkedin.com' }
 
@@ -17,5 +17,23 @@ describe('collectEventSchema', () => {
     ['une clé vide', { k: '' }],
   ])('refuse %s', (_, override) => {
     expect(collectEventSchema.safeParse({ ...valid, ...override }).success).toBe(false)
+  })
+})
+
+describe('emailSchema', () => {
+  it('normalise en minuscules sans espaces', () => {
+    expect(emailSchema.parse('  Moi@Exemple.FR ')).toBe('moi@exemple.fr')
+  })
+
+  it('refuse une adresse invalide', () => {
+    expect(emailSchema.safeParse('moi@').success).toBe(false)
+  })
+})
+
+describe('passwordSchema', () => {
+  it('exige entre 12 et 128 caractères', () => {
+    expect(passwordSchema.safeParse('a'.repeat(11)).success).toBe(false)
+    expect(passwordSchema.safeParse('a'.repeat(12)).success).toBe(true)
+    expect(passwordSchema.safeParse('a'.repeat(129)).success).toBe(false)
   })
 })

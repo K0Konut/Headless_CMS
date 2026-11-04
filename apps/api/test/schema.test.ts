@@ -1,11 +1,9 @@
-import { eq } from 'drizzle-orm'
-import { drizzle } from 'drizzle-orm/node-postgres'
-import { migrate } from 'drizzle-orm/node-postgres/migrator'
+import { eq, sql } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import * as schema from '../src/db/schema.js'
-import { databaseUrl } from '../src/db/url.js'
+import { createDb } from '../src/db/index.js'
 
-const db = drizzle(databaseUrl, { schema })
+const db = createDb()
 const { users, spaces, memberships, tokens, events } = schema
 
 class Rollback extends Error {}
@@ -22,7 +20,7 @@ async function inRollback(
   ).rejects.toBeInstanceOf(Rollback)
 }
 
-beforeAll(() => migrate(db, { migrationsFolder: new URL('../drizzle', import.meta.url).pathname }))
+beforeAll(() => db.execute(sql`truncate users, spaces cascade`))
 afterAll(() => db.$client.end())
 
 describe('schéma V1', () => {
