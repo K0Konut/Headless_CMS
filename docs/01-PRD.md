@@ -1,10 +1,10 @@
-# PRD — CMS personnel
+# PRD — Dashility
 
 2 novembre 2026 · Costa Maskulov
 
 ## Résumé et objectifs
 
-Un CMS headless auto-hébergé pour gérer, depuis un seul dashboard, le contenu et l'audience de mes sites et de ceux de mes proches ou clients, sans toucher au code. Le nom reste à trouver.
+Un CMS headless auto-hébergé pour gérer, depuis un seul dashboard, le contenu et l'audience de mes sites et de ceux de mes proches ou clients, sans toucher au code. Il s'appelle **Dashility** : *dash*, pour le dashboard, et le suffixe de *visibility* (voir son audience) et d'*agility* (publier sans toucher au code).
 
 Pourquoi le construire moi-même plutôt qu'utiliser Strapi ou Directus :
 
@@ -276,5 +276,5 @@ Tranchés le 4 novembre 2026 (détail dans `decisions.md`).
 - [x] ORM : Drizzle.
 - [x] Méthode allégée pour le CMS : PRD, architecture et UX, wireframes, code, sans territoire de marque ni DA.
 - [x] Projets mis en avant : tirage au build, avec un rebuild nocturne.
-- [ ] Nom du CMS : reporté, à choisir avant de rendre le dépôt public (nom de code « cms » d'ici là).
+- [x] Nom du CMS : **Dashility**, libre sur npm et sur GitHub au moment du choix.
 - [ ] Types de contenu du portfolio autres que « Projet » (expériences, parcours, compétences, textes du site) : reportés à la phase architecture et UX.

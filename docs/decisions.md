@@ -63,3 +63,4 @@
 | 2026-11-04 | Retrait d'un membre confirmé par la boîte de dialogue native ; suppression d'un espace confirmée en retapant son nom | Le retrait se répare par une nouvelle invitation ; la suppression est définitive (document UX) |
 | 2026-11-04 | Boutons « Copier » nommés d'après ce qu'ils copient (« Copier : Identifiant public ») | Plusieurs boutons sur une même page ; le nom commence par le texte visible (WCAG 2.5.3) |
 | 2026-11-04 | Test de bout en bout qui vérifie l'absence de défilement horizontal à 390 px | Un débordement des réglages sur mobile n'avait été vu qu'à la capture d'écran |
+| 2026-11-04 | Nom du CMS : **Dashility** ; packages `@dashility/*`, cookie `dashility_session`, marqueur et paramètre `dashility-ignore`, attribut `data-dashility-cv` | *Dash* (dashboard) + *-ility* (visibility, agility) ; libre sur npm et GitHub ; Dashy écarté pour éviter la confusion avec le projet auto-hébergé du même nom |
