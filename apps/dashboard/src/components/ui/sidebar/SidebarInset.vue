@@ -8,7 +8,8 @@ const props = defineProps<{
 </script>
 
 <template>
-  <main
+  <!-- div et non main : la zone principale est la <main id="contenu"> de AppLayout. -->
+  <div
     data-slot="sidebar-inset"
     :class="
       cn(
@@ -19,5 +20,5 @@ const props = defineProps<{
     "
   >
     <slot />
-  </main>
+  </div>
 </template>
