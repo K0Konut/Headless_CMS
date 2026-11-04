@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ApiError, api } from '@/lib/api'
+import { api, errorMessage } from '@/lib/api'
 import { newPasswordError } from '@/lib/passwords'
 import { useSessionStore } from '@/stores/session'
 
@@ -32,7 +32,7 @@ async function submit() {
     current.value = password.value = confirmation.value = ''
     done.value = true
   } catch (err) {
-    error.value = err instanceof ApiError ? err.message : 'Une erreur est survenue'
+    error.value = errorMessage(err)
   } finally {
     pending.value = false
   }

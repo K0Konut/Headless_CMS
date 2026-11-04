@@ -7,7 +7,7 @@ import NewPasswordFields from '@/components/NewPasswordFields.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ApiError, api } from '@/lib/api'
+import { api, ApiError, errorMessage } from '@/lib/api'
 import { homePath } from '@/lib/navigation'
 import { newPasswordError } from '@/lib/passwords'
 import type { Me, SpaceSummary } from '@/lib/types'
@@ -70,7 +70,7 @@ async function submit() {
   } catch (err) {
     if (err instanceof ApiError && err.status === 409) state.value = 'existing'
     else if (err instanceof ApiError && err.status === 404) state.value = 'invalid'
-    else error.value = err instanceof ApiError ? err.message : 'Une erreur est survenue'
+    else error.value = errorMessage(err)
   } finally {
     pending.value = false
   }

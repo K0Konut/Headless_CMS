@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChartColumn } from '@lucide/vue'
+import { ChartColumn, Settings } from '@lucide/vue'
 import { computed } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import SpaceSwitcher from '@/components/SpaceSwitcher.vue'
@@ -18,7 +18,6 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { lastSpace } from '@/lib/navigation'
-import NotFoundPage from '@/pages/NotFoundPage.vue'
 import { useSessionStore } from '@/stores/session'
 
 const session = useSessionStore()
@@ -31,8 +30,6 @@ const slug = computed(() =>
 const space = computed(() =>
   slug.value ? session.spaces.find((s) => s.slug === slug.value) : lastSpace(session.spaces),
 )
-/** Un espace inaccessible n'existe pas : même page que pour une URL inconnue. */
-const hidden = computed(() => slug.value !== undefined && !space.value)
 </script>
 
 <template>
@@ -45,7 +42,11 @@ const hidden = computed(() => slug.value !== undefined && !space.value)
   <SidebarProvider>
     <Sidebar>
       <SidebarHeader>
-        <SpaceSwitcher :current="space" :spaces="session.spaces" />
+        <SpaceSwitcher
+          :current="space"
+          :spaces="session.spaces"
+          :can-create="!!session.me?.user.isSuperAdmin"
+        />
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup v-if="space">
@@ -59,6 +60,17 @@ const hidden = computed(() => slug.value !== undefined && !space.value)
                 >
                   <RouterLink :to="`/espaces/${space.slug}/analytics`">
                     <ChartColumn aria-hidden="true" />Analytics
+                  </RouterLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  as-child
+                  :is-active="route.name === 'settings'"
+                  class="data-[active=true]:text-sidebar-primary"
+                >
+                  <RouterLink :to="`/espaces/${space.slug}/reglages`">
+                    <Settings aria-hidden="true" />Réglages
                   </RouterLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -80,8 +92,8 @@ const hidden = computed(() => slug.value !== undefined && !space.value)
         tabindex="-1"
         class="w-full max-w-5xl px-4 py-8 outline-none md:px-10 md:py-10"
       >
-        <NotFoundPage v-if="hidden" />
-        <RouterView v-else />
+        <!-- Un espace inaccessible est routé vers « Page introuvable » par le garde du routeur. -->
+        <RouterView />
       </main>
     </SidebarInset>
   </SidebarProvider>

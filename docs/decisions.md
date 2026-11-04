@@ -59,3 +59,7 @@
 | 2026-11-04 | Agrégats rechargés après un événement en direct, au plus toutes les 2 s, si la période inclut aujourd'hui | Tuiles cohérentes avec le temps réel, sans une requête par événement |
 | 2026-11-04 | Période dans l'URL (`?periode=7j\|30j\|6m` ou `?du=&au=`), 200 jours au plus | Lien partageable ; la rétention est de 6 mois |
 | 2026-11-04 | Export CSV : dates ISO UTC, type brut (`view`, `cv`), BOM UTF-8 | Données brutes réutilisables ; le BOM fait ouvrir le fichier en UTF-8 par Excel |
+| 2026-11-04 | Espace inaccessible : « Page introuvable » décidée par le garde du routeur, plus par la mise en page | La session peut changer en pleine navigation (renommage, suppression) ; une décision réactive démontait l'écran affiché |
+| 2026-11-04 | Retrait d'un membre confirmé par la boîte de dialogue native ; suppression d'un espace confirmée en retapant son nom | Le retrait se répare par une nouvelle invitation ; la suppression est définitive (document UX) |
+| 2026-11-04 | Boutons « Copier » nommés d'après ce qu'ils copient (« Copier : Identifiant public ») | Plusieurs boutons sur une même page ; le nom commence par le texte visible (WCAG 2.5.3) |
+| 2026-11-04 | Test de bout en bout qui vérifie l'absence de défilement horizontal à 390 px | Un débordement des réglages sur mobile n'avait été vu qu'à la capture d'écran |

@@ -8,11 +8,16 @@ declare module 'vue-router' {
     public?: boolean
     /** Premier élément du titre de l'onglet : `<Écran> · <Espace> · CMS`. */
     title?: string
+    /** Réservé au super-admin ; les autres voient « Page introuvable ». */
+    superAdmin?: boolean
   }
 }
 
 export const router = createRouter({
   history: createWebHistory(),
+  // Retour arrière : position restaurée. Les ancres sont gérées par les pages, une fois leur
+  // contenu chargé.
+  scrollBehavior: (_to, _from, saved) => saved ?? { top: 0 },
   routes: [
     {
       path: '/connexion',
@@ -61,6 +66,11 @@ export const router = createRouter({
           component: () => import('@/pages/AccountPage.vue'),
           meta: { title: 'Mon compte' },
         },
+        {
+          path: 'espaces/nouveau',
+          component: () => import('@/pages/NewSpacePage.vue'),
+          meta: { title: 'Nouvel espace', superAdmin: true },
+        },
         { path: 'espaces/:espace', redirect: (to) => `/espaces/${to.params.espace}/analytics` },
         {
           path: 'espaces/:espace/analytics',
@@ -69,7 +79,14 @@ export const router = createRouter({
           meta: { title: 'Analytics' },
         },
         {
+          path: 'espaces/:espace/reglages',
+          name: 'settings',
+          component: () => import('@/pages/SettingsPage.vue'),
+          meta: { title: 'Réglages' },
+        },
+        {
           path: ':chemin(.*)*',
+          name: 'not-found',
           component: () => import('@/pages/NotFoundPage.vue'),
           meta: { title: 'Page introuvable' },
         },
@@ -96,6 +113,15 @@ router.beforeEach(async (to) => {
   }
   if (to.meta.public) return true
   if (!session.me) return { name: 'login', query: { retour: to.fullPath } }
+  // Espace inaccessible ou écran réservé : « Page introuvable », à la même URL. La décision est
+  // prise ici, une fois par navigation, et non par la mise en page : la session peut changer en
+  // pleine navigation (renommage, suppression) sans démonter l'écran affiché.
+  const forbidden = to.meta.superAdmin && !session.me.user.isSuperAdmin
+  if (forbidden || (slug && !session.spaces.some((s) => s.slug === slug))) {
+    // Segments décodés : le routeur les réencode, l'URL reste identique.
+    const chemin = to.path.slice(1).split('/').map(decodeURIComponent)
+    return { name: 'not-found', params: { chemin }, query: to.query, hash: to.hash, replace: true }
+  }
   return true
 })
 
