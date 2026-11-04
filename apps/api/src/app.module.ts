@@ -3,6 +3,9 @@ import { APP_FILTER, APP_GUARD } from '@nestjs/core'
 import { ScheduleModule } from '@nestjs/schedule'
 import { ThrottlerModule } from '@nestjs/throttler'
 import { emailSchema } from '@cms/shared'
+import { AnalyticsController } from './analytics/analytics.controller.js'
+import { AnalyticsService } from './analytics/analytics.service.js'
+import { LiveService } from './analytics/live.service.js'
 import { AuthController } from './auth/auth.controller.js'
 import { AuthService } from './auth/auth.service.js'
 import { LinksController } from './auth/links.controller.js'
@@ -33,6 +36,7 @@ import { SpacesService } from './spaces/spaces.service.js'
     ]),
   ],
   controllers: [
+    AnalyticsController,
     AuthController,
     CollectController,
     LinksController,
@@ -40,7 +44,9 @@ import { SpacesService } from './spaces/spaces.service.js'
     SpaceController,
   ],
   providers: [
+    AnalyticsService,
     AuthService,
+    LiveService,
     LinksService,
     RetentionService,
     SpacesService,

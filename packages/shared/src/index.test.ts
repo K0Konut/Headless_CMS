@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { collectEventSchema, emailSchema, passwordSchema, siteUrlSchema, slugSchema } from './index'
+import {
+  analyticsQuerySchema,
+  collectEventSchema,
+  emailSchema,
+  passwordSchema,
+  siteUrlSchema,
+  slugSchema,
+} from './index'
 
 const valid = { k: 'pk_test', t: 'view', p: '/projets/cms', r: 'linkedin.com' }
 
@@ -64,5 +71,21 @@ describe('siteUrlSchema', () => {
   it('refuse un autre protocole', () => {
     expect(siteUrlSchema.safeParse('ftp://exemple.fr').success).toBe(false)
     expect(siteUrlSchema.safeParse('javascript:alert(1)').success).toBe(false)
+  })
+})
+
+describe('analyticsQuerySchema', () => {
+  it('accepte une période valide', () => {
+    expect(analyticsQuerySchema.safeParse({ from: '2026-10-01', to: '2026-10-31' }).success).toBe(
+      true,
+    )
+  })
+
+  it.each([
+    ['des bornes inversées', { from: '2026-10-31', to: '2026-10-01' }],
+    ['une date mal formée', { from: '01/10/2026', to: '2026-10-31' }],
+    ['plus de 200 jours', { from: '2026-01-01', to: '2026-12-31' }],
+  ])('refuse %s', (_, query) => {
+    expect(analyticsQuerySchema.safeParse(query).success).toBe(false)
   })
 })
