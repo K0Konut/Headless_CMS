@@ -1,5 +1,6 @@
-import { type MiddlewareConsumer, Module, type NestModule } from '@nestjs/common'
+import { type MiddlewareConsumer, Module, type NestModule, RequestMethod } from '@nestjs/common'
 import { APP_FILTER, APP_GUARD } from '@nestjs/core'
+import { ScheduleModule } from '@nestjs/schedule'
 import { ThrottlerModule } from '@nestjs/throttler'
 import { emailSchema } from '@cms/shared'
 import { AuthController } from './auth/auth.controller.js'
@@ -7,6 +8,8 @@ import { AuthService } from './auth/auth.service.js'
 import { LinksController } from './auth/links.controller.js'
 import { LinksService } from './auth/links.service.js'
 import { SessionGuard } from './auth/session.guard.js'
+import { CollectController } from './collect/collect.controller.js'
+import { RetentionService } from './collect/retention.service.js'
 import { DbModule } from './db/db.module.js'
 import { ErrorFilter } from './error.filter.js'
 import { requireJson } from './require-json.middleware.js'
@@ -16,6 +19,7 @@ import { SpacesService } from './spaces/spaces.service.js'
 @Module({
   imports: [
     DbModule,
+    ScheduleModule.forRoot(),
     // Compteurs en mémoire : les IP ne sont jamais écrites en base.
     ThrottlerModule.forRoot([
       { name: 'ip', ttl: 60_000, limit: 5 },
@@ -28,10 +32,17 @@ import { SpacesService } from './spaces/spaces.service.js'
       },
     ]),
   ],
-  controllers: [AuthController, LinksController, SpacesController, SpaceController],
+  controllers: [
+    AuthController,
+    CollectController,
+    LinksController,
+    SpacesController,
+    SpaceController,
+  ],
   providers: [
     AuthService,
     LinksService,
+    RetentionService,
     SpacesService,
     { provide: APP_GUARD, useClass: SessionGuard },
     { provide: APP_FILTER, useClass: ErrorFilter },
@@ -39,6 +50,7 @@ import { SpacesService } from './spaces/spaces.service.js'
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(requireJson).forRoutes('*')
+    // La collecte reçoit du text/plain (sendBeacon) ; elle n'utilise ni session ni cookie.
+    consumer.apply(requireJson).exclude({ path: 'e', method: RequestMethod.POST }).forRoutes('*')
   }
 }
