@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { initAnalytics } from './index'
 
-const OPTIONS = { key: 'pk_test', endpoint: 'https://cms.exemple.fr/api/e' }
+const OPTIONS = { key: 'pk_test', endpoint: 'https://dashility.exemple.fr/api/e' }
 const beacon = vi.fn<(url: string, body: string) => boolean>(() => true)
 let stop: () => void
 
@@ -75,7 +75,7 @@ describe('initAnalytics', () => {
 
   it('compte un clic sur un lien de CV, même sur un élément enfant', () => {
     document.body.innerHTML =
-      '<a href="/cv.pdf" data-cms-cv><span>Mon CV</span></a><a href="/">Accueil</a>'
+      '<a href="/cv.pdf" data-dashility-cv><span>Mon CV</span></a><a href="/">Accueil</a>'
     stop = initAnalytics(OPTIONS)
     document.querySelector('span')!.click()
     document.querySelector('a[href="/"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -84,7 +84,7 @@ describe('initAnalytics', () => {
   })
 
   it('compte le CV ouvert au clic molette, pas au clic droit', () => {
-    document.body.innerHTML = '<a href="/cv.pdf" data-cms-cv>CV</a>'
+    document.body.innerHTML = '<a href="/cv.pdf" data-dashility-cv>CV</a>'
     stop = initAnalytics(OPTIONS)
     const link = document.querySelector('a')!
     link.dispatchEvent(new MouseEvent('auxclick', { bubbles: true, button: 1 }))
@@ -107,8 +107,8 @@ describe('initAnalytics', () => {
 })
 
 describe('lien magique « Ne pas me compter »', () => {
-  it('?cms-ignore=1 exclut le navigateur, nettoie l’URL et confirme', () => {
-    history.replaceState(null, '', '/?cms-ignore=1&autre=2')
+  it('?dashility-ignore=1 exclut le navigateur, nettoie l’URL et confirme', () => {
+    history.replaceState(null, '', '/?dashility-ignore=1&autre=2')
     stop = initAnalytics(OPTIONS)
 
     expect(beacon).not.toHaveBeenCalled()
@@ -119,12 +119,12 @@ describe('lien magique « Ne pas me compter »', () => {
     expect(beacon).not.toHaveBeenCalled()
   })
 
-  it('?cms-ignore=0 annule l’exclusion', () => {
-    localStorage.setItem('cms-ignore', '1')
-    history.replaceState(null, '', '/?cms-ignore=0')
+  it('?dashility-ignore=0 annule l’exclusion', () => {
+    localStorage.setItem('dashility-ignore', '1')
+    history.replaceState(null, '', '/?dashility-ignore=0')
     stop = initAnalytics(OPTIONS)
 
-    expect(localStorage.getItem('cms-ignore')).toBeNull()
+    expect(localStorage.getItem('dashility-ignore')).toBeNull()
     expect(sent()).toHaveLength(1)
   })
 })

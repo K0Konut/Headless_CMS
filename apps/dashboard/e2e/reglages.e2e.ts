@@ -51,7 +51,7 @@ test('créer un espace, puis inviter un membre qui ne voit que « Ne pas me comp
   await expect(member.getByRole('heading', { name: 'Ne pas me compter' })).toBeVisible()
   await expect(member.getByRole('link', { name: /m’exclure/ })).toHaveAttribute(
     'href',
-    'https://journal.fr/?cms-ignore=1',
+    'https://journal.fr/?dashility-ignore=1',
   )
   for (const hidden of ['Général', 'Membres', 'Intégration', 'Supprimer l’espace']) {
     await expect(member.getByRole('heading', { name: hidden })).toHaveCount(0)

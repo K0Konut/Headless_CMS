@@ -1,4 +1,4 @@
-import { passwordSchema } from '@cms/shared'
+import { passwordSchema } from '@dashility/shared'
 
 /** Erreur à afficher pour un nouveau mot de passe, ou chaîne vide s'il convient. */
 export function newPasswordError(password: string, confirmation: string) {

@@ -30,5 +30,5 @@ export function useTestApp() {
 export const sessionCookie = (res: request.Response) =>
   [res.headers['set-cookie']]
     .flat()
-    .find((c) => c?.startsWith('cms_session='))!
+    .find((c) => c?.startsWith('dashility_session='))!
     .split(';')[0]!

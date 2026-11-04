@@ -19,7 +19,7 @@ test.describe('sans session', () => {
     await page.getByLabel('Mot de passe').fill(PASSWORD)
     await page.keyboard.press('Enter')
     await expect(page).toHaveURL('/espaces/blog/analytics')
-    await expect(page).toHaveTitle('Analytics · Blog · CMS')
+    await expect(page).toHaveTitle('Analytics · Blog · Dashility')
   })
 
   test('un invité crée son compte et ne voit que son espace', async ({ browser, page }) => {
@@ -118,6 +118,6 @@ test('un espace créé après le chargement du dashboard est accessible sans rec
     history.pushState({}, '', '/espaces/docs/analytics')
     dispatchEvent(new PopStateEvent('popstate'))
   })
-  await expect(page).toHaveTitle('Analytics · Docs · CMS')
+  await expect(page).toHaveTitle('Analytics · Docs · Dashility')
   await expect(page.getByRole('heading', { name: 'Page introuvable' })).toHaveCount(0)
 })

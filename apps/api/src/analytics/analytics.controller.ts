@@ -1,6 +1,6 @@
 import { Controller, Get, Header, Query, Req, Res, Sse, UseGuards } from '@nestjs/common'
 import type { MessageEvent } from '@nestjs/common'
-import { analyticsQuerySchema } from '@cms/shared'
+import { analyticsQuerySchema } from '@dashility/shared'
 import type { Response } from 'express'
 import { from, interval, map, merge, type Observable } from 'rxjs'
 import { type SpaceRequest, SpaceAccessGuard } from '../spaces/guards.js'

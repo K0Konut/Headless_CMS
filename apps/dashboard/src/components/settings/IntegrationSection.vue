@@ -7,7 +7,7 @@ import SettingsSection from './SettingsSection.vue'
 const props = defineProps<{ space: SpaceDetail }>()
 
 const snippet = computed(
-  () => `import { initAnalytics } from '@cms/client'
+  () => `import { initAnalytics } from '@dashility/client'
 
 initAnalytics({
   key: '${props.space.publicKey}',
@@ -20,7 +20,7 @@ initAnalytics({
   <SettingsSection
     id="integration"
     title="Intégration"
-    description="Installez le package @cms/client dans le site, puis appelez initAnalytics au démarrage."
+    description="Installez le package @dashility/client dans le site, puis appelez initAnalytics au démarrage."
   >
     <div class="grid max-w-2xl grid-cols-1 gap-4">
       <div class="grid grid-cols-1 gap-2">
@@ -33,7 +33,7 @@ initAnalytics({
       </div>
       <p class="text-sm text-muted-foreground">
         Pour compter les téléchargements du CV, ajoutez l’attribut
-        <code class="rounded bg-muted px-1">data-cms-cv</code> à son lien. Les visites ne sont
+        <code class="rounded bg-muted px-1">data-dashility-cv</code> à son lien. Les visites ne sont
         comptées que si elles viennent de {{ space.siteUrl }}.
       </p>
     </div>

@@ -12,9 +12,9 @@ jobs:
       db:
         image: postgres:17
         env:
-          POSTGRES_USER: cms
-          POSTGRES_PASSWORD: cms
-          POSTGRES_DB: cms
+          POSTGRES_USER: dashility
+          POSTGRES_PASSWORD: dashility
+          POSTGRES_DB: dashility
         ports:
           - 5432:5432
         options: >-
@@ -34,5 +34,5 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      - run: npx -w @cms/dashboard playwright install --with-deps chromium
-      - run: npm run test:e2e -w @cms/dashboard
+      - run: npx -w @dashility/dashboard playwright install --with-deps chromium
+      - run: npm run test:e2e -w @dashility/dashboard

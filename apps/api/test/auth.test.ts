@@ -114,10 +114,10 @@ describe('session', () => {
   it('efface le cookie à la déconnexion même si la session est déjà fermée', async () => {
     const res = await request(ctx.app.getHttpServer())
       .post('/api/auth/logout')
-      .set('Cookie', 'cms_session=inconnu')
+      .set('Cookie', 'dashility_session=inconnu')
       .type('json')
       .expect(204)
-    expect([res.headers['set-cookie']].flat().join()).toMatch(/cms_session=;/)
+    expect([res.headers['set-cookie']].flat().join()).toMatch(/dashility_session=;/)
   })
 
   it('ne réécrit pas le cookie à chaque requête', async () => {

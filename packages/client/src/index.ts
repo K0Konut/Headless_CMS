@@ -1,7 +1,7 @@
 export interface AnalyticsOptions {
   /** Clé publique de l'espace (Réglages › Intégration). */
   key: string
-  /** URL de collecte, par exemple `https://cms.domaine/api/e`. */
+  /** URL de collecte, par exemple `https://dashility.domaine/api/e`. */
   endpoint: string
 }
 
@@ -9,7 +9,7 @@ export interface AnalyticsOptions {
 // plutôt qu'importée : Zod ferait dépasser le budget de 2 Ko.
 type EventType = 'view' | 'cv'
 
-const IGNORE = 'cms-ignore'
+const IGNORE = 'dashility-ignore'
 
 function isIgnored() {
   try {
@@ -19,7 +19,7 @@ function isIgnored() {
   }
 }
 
-/** Lien magique `?cms-ignore=1` (ou `=0`) : pose ou retire le marqueur, nettoie l'URL et
+/** Lien magique `?dashility-ignore=1` (ou `=0`) : pose ou retire le marqueur, nettoie l'URL et
  *  affiche une confirmation discrète. */
 function handleIgnoreLink() {
   const url = new URL(location.href)
@@ -59,7 +59,7 @@ function externalReferrer() {
 }
 
 /**
- * Compte les vues (chargement et navigations SPA) et les clics sur les liens `data-cms-cv`.
+ * Compte les vues (chargement et navigations SPA) et les clics sur les liens `data-dashility-cv`.
  * Rien n'est envoyé hors navigateur (pré-rendu), en local, sous automatisation, ou si le
  * visiteur s'est exclu avec le lien magique. Renvoie une fonction qui arrête la collecte.
  */
@@ -92,7 +92,7 @@ export function initAnalytics({ key, endpoint }: AnalyticsOptions) {
   const onClick = (e: MouseEvent) => {
     // Clic gauche, ou clic molette (ouverture dans un nouvel onglet).
     if (e.button > 1) return
-    if ((e.target as Element | null)?.closest?.('[data-cms-cv]')) send('cv')
+    if ((e.target as Element | null)?.closest?.('[data-dashility-cv]')) send('cv')
   }
 
   // replaceState aussi : les redirections du routeur (/ → /fr) passent par lui. Les appels qui

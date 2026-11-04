@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { createSpaceSchema } from '@cms/shared'
+import { createSpaceSchema } from '@dashility/shared'
 import { reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import FormError from '@/components/FormError.vue'

@@ -10,7 +10,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common'
-import { createSpaceSchema, invitationSchema, updateSpaceSchema } from '@cms/shared'
+import { createSpaceSchema, invitationSchema, updateSpaceSchema } from '@dashility/shared'
 import { AuthService } from '../auth/auth.service.js'
 import { CurrentUser, SuperAdminGuard } from '../auth/session.guard.js'
 import type { User } from '../db/index.js'

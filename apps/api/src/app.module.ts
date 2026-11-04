@@ -2,7 +2,7 @@ import { type MiddlewareConsumer, Module, type NestModule, RequestMethod } from 
 import { APP_FILTER, APP_GUARD } from '@nestjs/core'
 import { ScheduleModule } from '@nestjs/schedule'
 import { ThrottlerModule } from '@nestjs/throttler'
-import { emailSchema } from '@cms/shared'
+import { emailSchema } from '@dashility/shared'
 import { AnalyticsController } from './analytics/analytics.controller.js'
 import { AnalyticsService } from './analytics/analytics.service.js'
 import { LiveService } from './analytics/live.service.js'

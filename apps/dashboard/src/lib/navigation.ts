@@ -1,6 +1,6 @@
 import type { Me, SpaceSummary } from './types'
 
-const LAST_SPACE = 'cms:dernier-espace'
+const LAST_SPACE = 'dashility:dernier-espace'
 
 /** Commodité seulement : le dernier espace ouvert n'est gardé que dans ce navigateur. */
 export function rememberSpace(slug: string) {
