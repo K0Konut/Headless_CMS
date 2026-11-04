@@ -21,3 +21,11 @@
 | 2026-11-04 | Types de contenu du portfolio autres que « Projet » reportés à nouveau, au début de la V2 | Ils dépendent du constructeur de types, conçu en V2 |
 | 2026-11-04 | Interface du dashboard en français uniquement | Seul le contenu géré est bilingue |
 | 2026-11-04 | Double authentification TOTP sortie de la V1, prévue dans une version ultérieure | Choix de l'utilisateur : V1 recentrée sur l'analytics |
+| 2026-11-04 | Sessions par cookie httpOnly stockées en base, dashboard et API sur la même origine | Révocation immédiate, pas de jeton lisible en JS, pas de CORS |
+| 2026-11-04 | Script analytics distribué en package npm public (`packages/client`) | Bundlé dans le site, il fonctionne même si le CMS est hors ligne ; le même package servira au contenu en V2 |
+| 2026-11-04 | Un seul conteneur applicatif : NestJS sert l'API et le dashboard compilé | Même origine sans configuration de proxy supplémentaire |
+| 2026-11-04 | Code, base et routes de l'API en anglais ; interface, URLs du dashboard et commits en français | Usage courant pour un dépôt public |
+| 2026-11-04 | Zod dans `packages/shared`, Vitest partout, Playwright pour le dashboard | Un seul outil de validation et un seul lanceur de tests sur tout le monorepo |
+| 2026-11-04 | Endpoint de collecte nommé `/api/e`, envoi par `sendBeacon` en `text/plain` | Évite les filtres des bloqueurs et la requête CORS préalable |
+| 2026-11-04 | Super-admin créé par une commande serveur | Aucun mot de passe dans les variables d'environnement |
+| 2026-11-04 | Collecte construite avant le dashboard dans l'ordre de la V1 | Accumuler des données réelles le plus tôt possible |
