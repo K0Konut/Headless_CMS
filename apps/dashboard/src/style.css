@@ -126,3 +126,9 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Séries de l'analytics : palette validée (CVD, contraste) avec le skill dataviz. */
+:root {
+  --series-views: #2a78d6;
+  --series-cvs: #eb6834;
+}
