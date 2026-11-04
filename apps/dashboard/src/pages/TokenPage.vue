@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import AuthShell from '@/components/AuthShell.vue'
 import FormError from '@/components/FormError.vue'
@@ -37,15 +37,23 @@ const title = computed(() => {
   return link.value?.space ? `Rejoindre ${link.value.space.name}` : 'Invitation'
 })
 
-onMounted(async () => {
-  try {
-    const info = await api<Link>(`/tokens/${encodeURIComponent(props.token)}`)
-    link.value = info
-    state.value = info.kind === props.kind ? 'form' : 'invalid'
-  } catch {
-    state.value = 'invalid'
-  }
-})
+// Revérifié à chaque changement de jeton : Vue réutilise la page d'un lien à l'autre.
+watch(
+  () => [props.token, props.kind],
+  async () => {
+    state.value = 'loading'
+    link.value = null
+    error.value = password.value = confirmation.value = ''
+    try {
+      const info = await api<Link>(`/tokens/${encodeURIComponent(props.token)}`)
+      link.value = info
+      state.value = info.kind === props.kind ? 'form' : 'invalid'
+    } catch {
+      state.value = 'invalid'
+    }
+  },
+  { immediate: true },
+)
 
 async function submit() {
   error.value = newPasswordError(password.value, confirmation.value)

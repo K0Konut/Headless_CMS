@@ -14,7 +14,13 @@ const session = useSessionStore()
 const router = useRouter()
 
 async function logout() {
-  await session.logout()
+  try {
+    await session.logout()
+  } catch {
+    // La session est peut-être encore ouverte : ne pas laisser croire le contraire.
+    alert('La déconnexion a échoué. Vérifiez votre connexion, puis réessayez.')
+    return
+  }
   await router.push({ name: 'login' })
 }
 </script>

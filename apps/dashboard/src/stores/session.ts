@@ -13,11 +13,11 @@ export const useSessionStore = defineStore('session', () => {
     try {
       me.value = await api<Me>('/auth/me')
     } catch (err) {
+      // API indisponible : on ne conclut rien sur la session, la prochaine navigation réessaiera.
       if (!(err instanceof ApiError && err.status === 401)) throw err
       me.value = null
-    } finally {
-      loaded.value = true
     }
+    loaded.value = true
   }
 
   async function login(email: string, password: string) {

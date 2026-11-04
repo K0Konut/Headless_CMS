@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { homePath, rememberSpace } from '@/lib/navigation'
+import { homePath, rememberSpace, safeReturn } from '@/lib/navigation'
 import { useSessionStore } from '@/stores/session'
 
 declare module 'vue-router' {
@@ -31,6 +31,12 @@ export const router = createRouter({
       component: () => import('@/pages/TokenPage.vue'),
       props: (route) => ({ token: route.params.jeton, kind: 'reset' }),
       meta: { public: true, title: 'Nouveau mot de passe' },
+    },
+    {
+      path: '/indisponible',
+      name: 'unavailable',
+      component: () => import('@/pages/UnavailablePage.vue'),
+      meta: { public: true, title: 'Serveur indisponible' },
     },
     {
       path: '/',
@@ -73,9 +79,21 @@ export const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
+  if (to.name === 'unavailable') return true
   const session = useSessionStore()
-  if (!session.loaded) await session.load()
-  if (to.name === 'login' && session.me) return homePath(session.me)
+  const slug = typeof to.params.espace === 'string' ? to.params.espace : undefined
+  try {
+    // Espace inconnu de la session : il a pu être créé ou rejoint depuis, on relit avant de
+    // conclure qu'il n'existe pas.
+    if (!session.loaded || (slug && session.me && !session.spaces.some((s) => s.slug === slug))) {
+      await session.load()
+    }
+  } catch {
+    return { name: 'unavailable', query: { retour: to.fullPath } }
+  }
+  if (to.name === 'login' && session.me) {
+    return safeReturn(to.query.retour) ?? homePath(session.me)
+  }
   if (to.meta.public) return true
   if (!session.me) return { name: 'login', query: { retour: to.fullPath } }
   return true

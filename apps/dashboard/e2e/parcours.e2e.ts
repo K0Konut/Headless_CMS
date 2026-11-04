@@ -101,3 +101,23 @@ test('changer de mot de passe depuis Mon compte', async ({ page }) => {
   await page.getByRole('button', { name: 'Changer le mot de passe' }).click()
   await expect(page.getByRole('status')).toContainText('Mot de passe modifié')
 })
+
+test('un espace créé après le chargement du dashboard est accessible sans recharger', async ({
+  browser,
+  page,
+}) => {
+  await page.goto('/espaces/portfolio/analytics')
+  await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible()
+
+  const admin = await adminApi(browser)
+  await admin.call('post', '/spaces', { name: 'Docs', slug: 'docs', siteUrl: 'https://docs.fr' })
+  await admin.close()
+
+  // Navigation interne, comme un lien du dashboard : pas de rechargement de la page.
+  await page.evaluate(() => {
+    history.pushState({}, '', '/espaces/docs/analytics')
+    dispatchEvent(new PopStateEvent('popstate'))
+  })
+  await expect(page).toHaveTitle('Analytics · Docs · CMS')
+  await expect(page.getByRole('heading', { name: 'Page introuvable' })).toHaveCount(0)
+})

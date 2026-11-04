@@ -8,6 +8,10 @@ import pg from 'pg'
 export async function prepareDatabase(databaseUrl: string) {
   const url = new URL(databaseUrl)
   const name = url.pathname.slice(1)
+  // Cette fonction vide la base : jamais sur une base qui n'est pas explicitement de test.
+  if (!/_(test|e2e)$/.test(name)) {
+    throw new Error(`Base « ${name} » refusée : son nom doit finir par _test ou _e2e`)
+  }
 
   const adminUrl = new URL(url)
   adminUrl.pathname = '/postgres'
