@@ -25,21 +25,18 @@ export class SpaceAccessGuard implements CanActivate {
 
   async canActivate(ctx: ExecutionContext) {
     const req = ctx.switchToHttp().getRequest<SpaceRequest>()
-    const [space] = await this.db
-      .select()
+    const [row] = await this.db
+      .select({ space: spaces, memberId: memberships.userId })
       .from(spaces)
+      .leftJoin(
+        memberships,
+        and(eq(memberships.spaceId, spaces.id), eq(memberships.userId, req.user.id)),
+      )
       .where(eq(spaces.slug, String(req.params.slug)))
-    const isMember =
-      space &&
-      (req.user.isSuperAdmin ||
-        (
-          await this.db
-            .select({ userId: memberships.userId })
-            .from(memberships)
-            .where(and(eq(memberships.spaceId, space.id), eq(memberships.userId, req.user.id)))
-        ).length > 0)
-    if (!isMember) throw new NotFoundException('Espace introuvable')
-    req.space = space
+    if (!row || !(req.user.isSuperAdmin || row.memberId)) {
+      throw new NotFoundException('Espace introuvable')
+    }
+    req.space = row.space
     return true
   }
 }
