@@ -2,6 +2,7 @@ import { Body, Controller, Headers, HttpCode, Inject, Post, UseGuards } from '@n
 import { SkipThrottle, Throttle, ThrottlerGuard } from '@nestjs/throttler'
 import { collectEventSchema } from '@cms/shared'
 import { eq } from 'drizzle-orm'
+import { LiveService } from '../analytics/live.service.js'
 import { Public } from '../auth/session.guard.js'
 import { DB } from '../db/db.module.js'
 import type { Db } from '../db/index.js'
@@ -27,7 +28,10 @@ function parseEvent(body: unknown) {
  *  ignoré : un site ne peut pas sonder les clés ou les origines acceptées. */
 @Controller('e')
 export class CollectController {
-  constructor(@Inject(DB) private readonly db: Db) {}
+  constructor(
+    @Inject(DB) private readonly db: Db,
+    private readonly live: LiveService,
+  ) {}
 
   @Public()
   @UseGuards(ThrottlerGuard)
@@ -49,8 +53,10 @@ export class CollectController {
       .where(eq(spaces.publicKey, event.k))
     if (!space || space.siteUrl !== origin) return
 
-    await this.db
+    const [row] = await this.db
       .insert(events)
       .values({ spaceId: space.id, kind: event.t, path: event.p, referrer: event.r ?? '' })
+      .returning({ at: events.createdAt })
+    this.live.publish(space.id, { at: row!.at.toISOString(), kind: event.t, path: event.p })
   }
 }
