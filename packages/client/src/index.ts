@@ -43,7 +43,8 @@ function handleIgnoreLink() {
   toast.style.cssText =
     'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:2147483647;' +
     'padding:8px 14px;border-radius:6px;background:#111;color:#fff;font:14px/1.4 system-ui,sans-serif'
-  document.body.append(toast)
+  // Script chargé dans <head> : body n'existe pas encore.
+  ;(document.body ?? document.documentElement).append(toast)
   setTimeout(() => toast.remove(), 4000)
 }
 
@@ -62,8 +63,12 @@ function externalReferrer() {
  * Rien n'est envoyé hors navigateur (pré-rendu), en local, sous automatisation, ou si le
  * visiteur s'est exclu avec le lien magique. Renvoie une fonction qui arrête la collecte.
  */
+let active = false
+
 export function initAnalytics({ key, endpoint }: AnalyticsOptions) {
-  if (typeof window === 'undefined') return () => {}
+  // Hors navigateur (pré-rendu), ou déjà lancé (remontage, rechargement à chaud) : rien à faire.
+  if (typeof window === 'undefined' || active) return () => {}
+  active = true
   handleIgnoreLink()
 
   const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)
@@ -85,21 +90,33 @@ export function initAnalytics({ key, endpoint }: AnalyticsOptions) {
     send('view')
   }
   const onClick = (e: MouseEvent) => {
+    // Clic gauche, ou clic molette (ouverture dans un nouvel onglet).
+    if (e.button > 1) return
     if ((e.target as Element | null)?.closest?.('[data-cms-cv]')) send('cv')
   }
 
-  const pushState = history.pushState
+  // replaceState aussi : les redirections du routeur (/ → /fr) passent par lui. Les appels qui
+  // gardent le même chemin (mémorisation du défilement) sont filtrés par onNavigate.
+  const { pushState, replaceState } = history
   history.pushState = function (...args) {
     pushState.apply(this, args)
     onNavigate()
   }
+  history.replaceState = function (...args) {
+    replaceState.apply(this, args)
+    onNavigate()
+  }
   addEventListener('popstate', onNavigate)
   document.addEventListener('click', onClick)
+  document.addEventListener('auxclick', onClick)
   send('view')
 
   return () => {
     history.pushState = pushState
+    history.replaceState = replaceState
     removeEventListener('popstate', onNavigate)
     document.removeEventListener('click', onClick)
+    document.removeEventListener('auxclick', onClick)
+    active = false
   }
 }

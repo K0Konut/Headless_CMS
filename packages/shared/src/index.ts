@@ -5,7 +5,8 @@ export const collectEventSchema = z.object({
   k: z.string().min(1).max(64),
   t: z.enum(['view', 'cv']),
   p: z.string().startsWith('/').max(512),
-  r: z.hostname().optional(),
+  // Une provenance illisible est écartée sans perdre la vue.
+  r: z.hostname().optional().catch(undefined),
 })
 
 export type CollectEvent = z.infer<typeof collectEventSchema>

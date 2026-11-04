@@ -57,6 +57,13 @@ describe('collecte', () => {
     expect(await db.select().from(events)).toEqual([])
   })
 
+  it('compte un téléphone dont le nom contient « bot »', async () => {
+    await beacon(VIEW, {
+      'User-Agent': 'Mozilla/5.0 (Linux; Android 11; CUBOT X30) Chrome/120.0 Mobile Safari/537.36',
+    }).expect(204)
+    expect(await db.select().from(events)).toHaveLength(1)
+  })
+
   it('limite à 60 événements par minute et par IP', async () => {
     for (let i = 0; i < 60; i++) await beacon(VIEW).expect(204)
     await beacon(VIEW).expect(429)

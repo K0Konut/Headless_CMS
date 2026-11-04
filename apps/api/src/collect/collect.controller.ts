@@ -8,8 +8,9 @@ import type { Db } from '../db/index.js'
 import { events, spaces } from '../db/schema.js'
 
 // shortcut: liste de robots maison, passer au paquet isbot si des robots passent au travers
+// « bot » suivi d'un séparateur (Googlebot/2.1, AhrefsBot;) : un téléphone « CUBOT X30 » reste compté.
 const BOTS =
-  /bot|crawl|spider|slurp|preview|facebookexternalhit|headless|lighthouse|curl|wget|python|httpclient|okhttp|go-http/i
+  /bot[/;)-]|bot$|crawl|spider|slurp|preview|facebookexternalhit|headless|lighthouse|curl|wget|python|httpclient|okhttp|go-http/i
 
 /** Corps envoyé par `sendBeacon` : du JSON dans un `text/plain`, pour éviter la requête CORS
  *  préalable. */

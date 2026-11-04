@@ -52,6 +52,20 @@ describe('initAnalytics', () => {
     ])
   })
 
+  it('compte une redirection du routeur (replaceState)', () => {
+    stop = initAnalytics(OPTIONS)
+    history.replaceState(null, '', '/fr')
+    history.replaceState({ scroll: 120 }, '', '/fr') // mémorisation du défilement : ignorée
+    expect(sent().map((e) => e.p)).toEqual(['/', '/fr'])
+  })
+
+  it('ne compte rien deux fois si on l’appelle deux fois', () => {
+    stop = initAnalytics(OPTIONS)
+    initAnalytics(OPTIONS)
+    history.pushState(null, '', '/projets')
+    expect(sent().map((e) => e.p)).toEqual(['/', '/projets'])
+  })
+
   it('compte un retour arrière', () => {
     stop = initAnalytics(OPTIONS)
     history.replaceState(null, '', '/precedente')
@@ -66,6 +80,15 @@ describe('initAnalytics', () => {
     document.querySelector('span')!.click()
     document.querySelector('a[href="/"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
 
+    expect(sent().map((e) => e.t)).toEqual(['view', 'cv'])
+  })
+
+  it('compte le CV ouvert au clic molette, pas au clic droit', () => {
+    document.body.innerHTML = '<a href="/cv.pdf" data-cms-cv>CV</a>'
+    stop = initAnalytics(OPTIONS)
+    const link = document.querySelector('a')!
+    link.dispatchEvent(new MouseEvent('auxclick', { bubbles: true, button: 1 }))
+    link.dispatchEvent(new MouseEvent('auxclick', { bubbles: true, button: 2 }))
     expect(sent().map((e) => e.t)).toEqual(['view', 'cv'])
   })
 
