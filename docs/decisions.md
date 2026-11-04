@@ -53,3 +53,9 @@
 | 2026-11-04 | Client API dans `src/lib/api.ts` (fonction `api`) plutôt qu'un composable `useApi` | Aucun état réactif à porter : une fonction suffit |
 | 2026-11-04 | Tests de bout en bout Playwright sur une base `cms_e2e` et des ports dédiés (3100, 5174), en CI | Ils ne touchent ni au serveur de dev ni aux données des autres tests |
 | 2026-11-04 | Recherche dans le sélecteur d'espace (plus de 5 espaces) reportée | Inutile avec deux ou trois espaces |
+| 2026-11-04 | Graphiques en barres dessinés à la main plutôt qu'avec Unovis | Unovis embarque d3, three.js, Leaflet et MapLibre (~10 Mo) pour deux graphiques en barres |
+| 2026-11-04 | Vues et CV par jour en deux petits graphiques empilés, pas un graphique à deux axes | Échelles trop différentes (dizaines contre unités) ; couleurs validées pour les daltoniens et le contraste |
+| 2026-11-04 | Flux temps réel : un état initial (`snapshot`) puis chaque événement, battement toutes les 30 s | La reconnexion automatique d'EventSource resynchronise sans requête à part ; le battement traverse le proxy |
+| 2026-11-04 | Agrégats rechargés après un événement en direct, au plus toutes les 2 s, si la période inclut aujourd'hui | Tuiles cohérentes avec le temps réel, sans une requête par événement |
+| 2026-11-04 | Période dans l'URL (`?periode=7j\|30j\|6m` ou `?du=&au=`), 200 jours au plus | Lien partageable ; la rétention est de 6 mois |
+| 2026-11-04 | Export CSV : dates ISO UTC, type brut (`view`, `cv`), BOM UTF-8 | Données brutes réutilisables ; le BOM fait ouvrir le fichier en UTF-8 par Excel |
