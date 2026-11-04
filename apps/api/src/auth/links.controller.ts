@@ -10,7 +10,7 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common'
-import { consumeTokenSchema } from '@cms/shared'
+import { consumeTokenSchema } from '@dashility/shared'
 import type { Request, Response } from 'express'
 import { uuidOr404 } from '../uuid-or-404.pipe.js'
 import { AuthService } from './auth.service.js'

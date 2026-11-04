@@ -1,4 +1,4 @@
-import { emailSchema, passwordSchema } from '@cms/shared'
+import { emailSchema, passwordSchema } from '@dashility/shared'
 import type { z } from 'zod'
 import { createInterface } from 'node:readline/promises'
 import { stdin, stdout } from 'node:process'

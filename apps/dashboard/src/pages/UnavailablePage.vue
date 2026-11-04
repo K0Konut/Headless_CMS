@@ -15,7 +15,7 @@ function retry() {
 <template>
   <AuthShell title="Serveur indisponible">
     <div class="grid gap-4 text-sm">
-      <p>Le CMS ne répond pas pour l’instant. Vos données ne sont pas perdues.</p>
+      <p>Dashility ne répond pas pour l’instant. Vos données ne sont pas perdues.</p>
       <Button class="justify-self-start" @click="retry">Réessayer</Button>
     </div>
   </AuthShell>

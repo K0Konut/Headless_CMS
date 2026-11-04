@@ -12,7 +12,7 @@ import type { Request, Response } from 'express'
 import type { User } from '../db/index.js'
 import { AuthService, SESSION_TTL_MS } from './auth.service.js'
 
-export const SESSION_COOKIE = 'cms_session'
+export const SESSION_COOKIE = 'dashility_session'
 
 export type AuthedRequest = Request & { user: User; sessionToken: string }
 

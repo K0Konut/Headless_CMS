@@ -6,7 +6,7 @@ declare module 'vue-router' {
   interface RouteMeta {
     /** Accessible sans session. */
     public?: boolean
-    /** Premier élément du titre de l'onglet : `<Écran> · <Espace> · CMS`. */
+    /** Premier élément du titre de l'onglet : `<Écran> · <Espace> · Dashility`. */
     title?: string
     /** Réservé au super-admin ; les autres voient « Page introuvable ». */
     superAdmin?: boolean
@@ -130,5 +130,5 @@ router.afterEach((to) => {
   const slug = typeof to.params.espace === 'string' ? to.params.espace : undefined
   const space = session.spaces.find((s) => s.slug === slug)
   if (space) rememberSpace(space.slug)
-  document.title = [to.meta.title, space?.name, 'CMS'].filter(Boolean).join(' · ')
+  document.title = [to.meta.title, space?.name, 'Dashility'].filter(Boolean).join(' · ')
 })

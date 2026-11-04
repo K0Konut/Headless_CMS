@@ -18,7 +18,7 @@ defineProps<{ current?: SpaceSummary; spaces: SpaceSummary[]; canCreate?: boolea
 <template>
   <!-- Un seul espace et rien à créer : un simple titre. -->
   <p v-if="spaces.length <= 1 && !canCreate" class="truncate px-2 py-1.5 font-semibold">
-    {{ current?.name ?? 'CMS' }}
+    {{ current?.name ?? 'Dashility' }}
   </p>
   <SidebarMenu v-else>
     <SidebarMenuItem>

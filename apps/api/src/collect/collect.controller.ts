@@ -1,6 +1,6 @@
 import { Body, Controller, Headers, HttpCode, Inject, Post, UseGuards } from '@nestjs/common'
 import { SkipThrottle, Throttle, ThrottlerGuard } from '@nestjs/throttler'
-import { collectEventSchema } from '@cms/shared'
+import { collectEventSchema } from '@dashility/shared'
 import { eq } from 'drizzle-orm'
 import { LiveService } from '../analytics/live.service.js'
 import { Public } from '../auth/session.guard.js'

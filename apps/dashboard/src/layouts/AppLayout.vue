@@ -85,7 +85,7 @@ const space = computed(() =>
     <SidebarInset>
       <header class="flex h-12 items-center gap-2 border-b px-4 md:hidden">
         <SidebarTrigger aria-label="Ouvrir le menu" />
-        <span class="truncate font-semibold">{{ space?.name ?? 'CMS' }}</span>
+        <span class="truncate font-semibold">{{ space?.name ?? 'Dashility' }}</span>
       </header>
       <main
         id="contenu"

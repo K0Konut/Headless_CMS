@@ -1,5 +1,5 @@
 {
-  "name": "cms",
+  "name": "dashility",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -11,7 +11,7 @@
   },
   "scripts": {
     "db": "docker compose -f docker/compose.yml up -d db",
-    "dev": "npm run dev -w @cms/api",
+    "dev": "npm run dev -w @dashility/api",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

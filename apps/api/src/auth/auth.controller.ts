@@ -12,7 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common'
 import { ThrottlerGuard } from '@nestjs/throttler'
-import { changePasswordSchema, loginSchema } from '@cms/shared'
+import { changePasswordSchema, loginSchema } from '@dashility/shared'
 import type { Request, Response } from 'express'
 import type { User } from '../db/index.js'
 import { AuthService } from './auth.service.js'

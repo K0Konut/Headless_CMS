@@ -5,7 +5,7 @@ const API_PORT = 3100
 const WEB_PORT = 5174
 export const ADMIN_SESSION = 'e2e/.auth/admin.json'
 export const E2E_DATABASE_URL =
-  process.env.E2E_DATABASE_URL ?? 'postgres://cms:cms@localhost:5432/cms_e2e'
+  process.env.E2E_DATABASE_URL ?? 'postgres://dashility:dashility@localhost:5432/dashility_e2e'
 
 export default defineConfig({
   testDir: 'e2e',
@@ -26,7 +26,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      // L'API doit avoir été compilée (npm run build -w @cms/api).
+      // L'API doit avoir été compilée (npm run build -w @dashility/api).
       command: 'node ../api/dist/main.js',
       port: API_PORT,
       env: { PORT: String(API_PORT), DATABASE_URL: E2E_DATABASE_URL },

@@ -1,7 +1,7 @@
 {
-  "name": "@cms/client",
+  "name": "@dashility/client",
   "version": "0.1.0",
-  "description": "Script analytics des sites gérés par le CMS",
+  "description": "Script analytics des sites gérés par Dashility",
   "private": true,
   "type": "module",
   "sideEffects": false,

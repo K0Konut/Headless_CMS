@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import SettingsSection from './SettingsSection.vue'
 
 const props = defineProps<{ siteUrl: string }>()
-const url = (flag: 0 | 1) => `${props.siteUrl}/?cms-ignore=${flag}`
+const url = (flag: 0 | 1) => `${props.siteUrl}/?dashility-ignore=${flag}`
 </script>
 
 <template>

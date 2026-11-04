@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { invitationSchema } from '@cms/shared'
+import { invitationSchema } from '@dashility/shared'
 import { onMounted, ref } from 'vue'
 import CopyField from '@/components/CopyField.vue'
 import FormError from '@/components/FormError.vue'
