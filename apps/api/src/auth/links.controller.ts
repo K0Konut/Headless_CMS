@@ -1,10 +1,21 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Res, UseGuards } from '@nestjs/common'
+import {
+  Body,
+  ConflictException,
+  Controller,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common'
 import { consumeTokenSchema } from '@cms/shared'
-import type { Response } from 'express'
-import { SuperAdminGuard, uuidOr404 } from '../spaces/guards.js'
+import type { Request, Response } from 'express'
+import { uuidOr404 } from '../uuid-or-404.pipe.js'
 import { AuthService } from './auth.service.js'
 import { LinksService } from './links.service.js'
-import { Public, setSessionCookie } from './session.guard.js'
+import { Public, SESSION_COOKIE, SuperAdminGuard, setSessionCookie } from './session.guard.js'
 
 @Controller()
 export class LinksController {
@@ -26,9 +37,19 @@ export class LinksController {
   async consume(
     @Param('token') token: string,
     @Body() body: unknown,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const user = await this.links.consume(token, consumeTokenSchema.parse(body).password)
+    const { password } = consumeTokenSchema.parse(body)
+    const { user, existing } = await this.links.consume(token, password)
+    if (existing) {
+      throw new ConflictException(
+        'Un compte existe déjà pour cet email : il a été ajouté à l’espace, connectez-vous',
+      )
+    }
+    // Une session déjà ouverte dans ce navigateur est remplacée : on la ferme aussi en base.
+    const previous: unknown = req.cookies?.[SESSION_COOKIE]
+    if (typeof previous === 'string') await this.auth.logout(previous)
     setSessionCookie(res, await this.auth.openSession(user.id))
     return this.auth.me(user)
   }

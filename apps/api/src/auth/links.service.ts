@@ -1,4 +1,4 @@
-import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common'
+import { Inject, Injectable, NotFoundException } from '@nestjs/common'
 import argon2 from 'argon2'
 import { and, eq, gt, isNull } from 'drizzle-orm'
 import { DB } from '../db/db.module.js'
@@ -38,10 +38,14 @@ export class LinksService {
     return { ...rest, space: spaceSlug ? { slug: spaceSlug, name: spaceName } : null }
   }
 
-  /** Consomme le lien et renvoie le compte à connecter. Une invitation crée le compte et
-   *  l'ajoute à l'espace ; une réinitialisation change le mot de passe et ferme toutes les
-   *  sessions du compte. */
+  /** Consomme le lien et renvoie le compte concerné. Une réinitialisation change le mot de passe
+   *  et ferme toutes les sessions du compte. Une invitation crée le compte et l'ajoute à
+   *  l'espace ; si le compte existe déjà (invité dans un autre espace, par exemple), il est
+   *  seulement ajouté à l'espace et `existing` vaut `true` : son mot de passe n'est jamais écrasé. */
   async consume(token: string, password: string) {
+    // Vérifier le lien avant le hachage Argon2, coûteux : un jeton inventé ne coûte qu'un SELECT.
+    const [pending] = await this.db.select({ id: tokens.id }).from(tokens).where(this.valid(token))
+    if (!pending) throw new NotFoundException('Ce lien n’est plus valide')
     const passwordHash = await argon2.hash(password)
     return this.db.transaction(async (tx) => {
       // Marquer le lien utilisé d'abord : deux requêtes simultanées ne peuvent pas le consommer.
@@ -59,20 +63,20 @@ export class LinksService {
           .where(eq(users.id, link.userId!))
           .returning()
         await tx.delete(sessions).where(eq(sessions.userId, link.userId!))
-        return user!
+        return { user: user!, existing: false }
       }
 
-      // Le compte a pu être créé depuis l'invitation : on n'écrase jamais son mot de passe.
-      const [user] = await tx
+      const [created] = await tx
         .insert(users)
         .values({ email: link.email, passwordHash })
         .onConflictDoNothing()
         .returning()
-      if (!user) {
-        throw new ConflictException('Un compte existe déjà pour cet email : connectez-vous')
-      }
-      await tx.insert(memberships).values({ userId: user.id, spaceId: link.spaceId! })
-      return user
+      const user = created ?? (await tx.select().from(users).where(eq(users.email, link.email)))[0]!
+      await tx
+        .insert(memberships)
+        .values({ userId: user.id, spaceId: link.spaceId! })
+        .onConflictDoNothing()
+      return { user, existing: !created }
     })
   }
 

@@ -2,7 +2,7 @@ import argon2 from 'argon2'
 import request from 'supertest'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { upsertSuperAdmin } from '../src/auth/super-admin.js'
-import { tokens, users } from '../src/db/schema.js'
+import { memberships, tokens, users } from '../src/db/schema.js'
 import { PASSWORD, db, sessionCookie, useTestApp } from './helpers.js'
 
 const ctx = useTestApp()
@@ -55,6 +55,11 @@ describe('espaces', () => {
       .send({ ...PORTFOLIO, slug: 'Mon Site' })
       .expect(400)
     expect(res.body.error.code).toBe('validation')
+  })
+
+  it('accepte une modification vide sans rien changer', async () => {
+    const res = await api('patch', '/spaces/portfolio', admin).send({}).expect(200)
+    expect(res.body.slug).toBe('portfolio')
   })
 
   it('renomme et change le slug', async () => {
@@ -163,16 +168,62 @@ describe('membres et invitations', () => {
     )
   })
 
-  it('refuse une invitation dont l’email a entre-temps un compte, sans toucher à son mot de passe', async () => {
+  it('ajoute à l’espace un compte créé entre-temps, sans toucher à son mot de passe', async () => {
     const invite = await api('post', '/spaces/portfolio/invitations', admin).send({
       email: 'a@b.fr',
     })
     await db.insert(users).values({ email: 'a@b.fr', passwordHash: await argon2.hash(PASSWORD) })
 
-    await api('post', `/tokens/${invite.body.token}`)
+    const res = await api('post', `/tokens/${invite.body.token}`)
       .send({ password: 'autre-mot-de-passe' })
       .expect(409)
-    await login('a@b.fr')
+    expect(res.headers['set-cookie']).toBeUndefined()
+    const cookie = await login('a@b.fr')
+    await api('get', '/spaces/portfolio', cookie).expect(200)
+  })
+
+  it('permet d’accepter des invitations dans plusieurs espaces', async () => {
+    await api('post', '/spaces', admin).send({ ...PORTFOLIO, slug: 'blog', name: 'Blog' })
+    const a = await api('post', '/spaces/portfolio/invitations', admin).send({ email: 'a@b.fr' })
+    const b = await api('post', '/spaces/blog/invitations', admin).send({ email: 'a@b.fr' })
+
+    await api('post', `/tokens/${a.body.token}`).send({ password: PASSWORD }).expect(200)
+    await api('post', `/tokens/${b.body.token}`).send({ password: PASSWORD }).expect(409)
+
+    const cookie = await login('a@b.fr')
+    await api('get', '/spaces', cookie).expect(200, [
+      { slug: 'blog', name: 'Blog' },
+      { slug: 'portfolio', name: 'Portfolio' },
+    ])
+  })
+
+  it('ajoute directement un compte existant et retire son invitation en attente', async () => {
+    await api('post', '/spaces/portfolio/invitations', admin).send({ email: 'a@b.fr' })
+    await db.insert(users).values({ email: 'a@b.fr', passwordHash: await argon2.hash(PASSWORD) })
+    await api('post', '/spaces/portfolio/invitations', admin)
+      .send({ email: 'a@b.fr' })
+      .expect(201, { status: 'added' })
+
+    const { body } = await api('get', '/spaces/portfolio/members', admin)
+    expect(body.invitations).toEqual([])
+    expect(body.members).toMatchObject([{ email: 'a@b.fr' }])
+  })
+
+  it('n’ajoute pas d’adhésion au super-admin, qui voit déjà tout', async () => {
+    await api('post', '/spaces/portfolio/invitations', admin)
+      .send({ email: 'admin@exemple.fr' })
+      .expect(201, { status: 'added' })
+    expect(await db.select().from(memberships)).toEqual([])
+  })
+
+  it('ferme la session déjà ouverte dans le navigateur qui accepte un lien', async () => {
+    const invite = await api('post', '/spaces/portfolio/invitations', admin).send({
+      email: 'a@b.fr',
+    })
+    await api('post', `/tokens/${invite.body.token}`, admin)
+      .send({ password: PASSWORD })
+      .expect(200)
+    await api('get', '/auth/me', admin).expect(401)
   })
 
   it('refuse un lien expiré', async () => {

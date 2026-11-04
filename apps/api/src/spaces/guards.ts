@@ -1,11 +1,9 @@
 import {
   type CanActivate,
   type ExecutionContext,
-  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
-  ParseUUIDPipe,
 } from '@nestjs/common'
 import { and, eq } from 'drizzle-orm'
 import type { AuthedRequest } from '../auth/session.guard.js'
@@ -40,16 +38,3 @@ export class SpaceAccessGuard implements CanActivate {
     return true
   }
 }
-
-@Injectable()
-export class SuperAdminGuard implements CanActivate {
-  canActivate(ctx: ExecutionContext) {
-    if (!ctx.switchToHttp().getRequest<AuthedRequest>().user.isSuperAdmin) {
-      throw new ForbiddenException('Réservé au super-admin')
-    }
-    return true
-  }
-}
-
-/** Pipe pour les identifiants : un identifiant mal formé désigne une ressource qui n'existe pas. */
-export const uuidOr404 = new ParseUUIDPipe({ exceptionFactory: () => new NotFoundException() })

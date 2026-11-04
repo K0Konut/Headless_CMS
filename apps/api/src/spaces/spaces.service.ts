@@ -28,6 +28,7 @@ export class SpacesService {
   }
 
   async update(space: Space, fields: Partial<SpaceFields>) {
+    if (!Object.keys(fields).length) return space
     const [updated] = await this.uniqueSlug(() =>
       this.db.update(spaces).set(fields).where(eq(spaces.id, space.id)).returning(),
     )
@@ -59,12 +60,21 @@ export class SpacesService {
   /** Ajoute directement un compte existant, sinon crée un lien d'invitation (qui remplace
    *  une éventuelle invitation en attente pour le même email). */
   async invite(space: Space, email: string) {
-    const [user] = await this.db.select({ id: users.id }).from(users).where(eq(users.email, email))
+    const [user] = await this.db
+      .select({ id: users.id, isSuperAdmin: users.isSuperAdmin })
+      .from(users)
+      .where(eq(users.email, email))
     if (user) {
-      await this.db
-        .insert(memberships)
-        .values({ userId: user.id, spaceId: space.id })
-        .onConflictDoNothing()
+      await this.db.transaction(async (tx) => {
+        await tx.delete(tokens).where(and(this.pendingInvitations(space), eq(tokens.email, email)))
+        // Le super-admin voit déjà tous les espaces : une adhésion serait invisible et inutile.
+        if (!user.isSuperAdmin) {
+          await tx
+            .insert(memberships)
+            .values({ userId: user.id, spaceId: space.id })
+            .onConflictDoNothing()
+        }
+      })
       return { status: 'added' as const }
     }
 

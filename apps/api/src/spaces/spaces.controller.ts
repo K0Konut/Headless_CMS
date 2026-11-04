@@ -12,9 +12,10 @@ import {
 } from '@nestjs/common'
 import { createSpaceSchema, invitationSchema, updateSpaceSchema } from '@cms/shared'
 import { AuthService } from '../auth/auth.service.js'
-import { CurrentUser } from '../auth/session.guard.js'
+import { CurrentUser, SuperAdminGuard } from '../auth/session.guard.js'
 import type { User } from '../db/index.js'
-import { type SpaceRequest, SpaceAccessGuard, SuperAdminGuard, uuidOr404 } from './guards.js'
+import { type SpaceRequest, SpaceAccessGuard } from './guards.js'
+import { uuidOr404 } from '../uuid-or-404.pipe.js'
 import { SpacesService } from './spaces.service.js'
 
 @Controller('spaces')
