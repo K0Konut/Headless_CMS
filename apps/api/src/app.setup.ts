@@ -9,5 +9,7 @@ export function setupApp(app: NestExpressApplication) {
   app.set('trust proxy', 'loopback, uniquelocal')
   app.use(helmet())
   app.use(cookieParser())
+  // Corps de la collecte : JSON envoyé en text/plain, quelques centaines d'octets au plus.
+  app.useBodyParser('text', { limit: '2kb' })
   return app
 }

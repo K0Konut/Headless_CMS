@@ -13,10 +13,17 @@ describe('collectEventSchema', () => {
     ['un type inconnu', { t: 'click' }],
     ['un chemin trop long', { p: '/' + 'a'.repeat(512) }],
     ['un chemin relatif', { p: 'projets' }],
-    ['une provenance qui est une URL', { r: 'https://linkedin.com/feed' }],
     ['une clé vide', { k: '' }],
   ])('refuse %s', (_, override) => {
     expect(collectEventSchema.safeParse({ ...valid, ...override }).success).toBe(false)
+  })
+})
+
+it('écarte une provenance illisible sans perdre l’événement', () => {
+  expect(collectEventSchema.parse({ ...valid, r: 'https://linkedin.com/feed' })).toEqual({
+    k: 'pk_test',
+    t: 'view',
+    p: '/projets/cms',
   })
 })
 
