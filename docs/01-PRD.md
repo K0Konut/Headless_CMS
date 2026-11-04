@@ -34,7 +34,7 @@ Je gère seul les espaces de mes propres sites.
 
 ## Périmètre et non-objectifs
 
-Le CMS gère du contenu et mesure l'audience, rien de plus. Les analytics arrivent en premier : le portfolio sortira avec un contenu codé en dur et collectera des stats pendant que je développe la partie contenu (ordre à valider).
+Le CMS gère du contenu et mesure l'audience, rien de plus. Les analytics arrivent en premier : le portfolio sortira avec un contenu codé en dur et collectera des stats pendant que je développe la partie contenu.
 
 | Fonctionnalité | Version |
 | --- | --- |
@@ -54,7 +54,7 @@ Le CMS gère du contenu et mesure l'audience, rien de plus. Les analytics arrive
 | Publication programmée | V3 |
 | Mise en avant automatique des projets | V3 |
 
-Le CMS ne fait pas (à valider) :
+Le CMS ne fait pas :
 
 - le back-end complet d'une application (comptes utilisateurs, commandes, paiements, logique métier) ;
 - d'autres langues que le français et l'anglais ;
@@ -65,7 +65,7 @@ Le CMS ne fait pas (à valider) :
 - les notifications ;
 - les liens tracés par candidature ;
 - des rôles différents au sein d'un même espace ;
-- l'envoi d'emails en V1.
+- l'envoi d'emails en V1 : les liens d'invitation et de réinitialisation sont générés dans le dashboard et transmis à la main.
 
 ## Contenus et édition
 
@@ -157,8 +157,9 @@ Pas de langue, pas de type d'appareil, pas de pays, pas de distinction entre CV 
 Le score d'un projet est son taux de conversion sur les 6 derniers mois : téléchargements du CV depuis sa page, divisés par ses vues. Le classement porte sur des taux, pas des volumes, pour éviter qu'un projet déjà mis en avant le reste parce qu'il est plus vu.
 
 - Les 3 projets au meilleur score sont mis en avant.
-- Un projet n'est classé qu'à partir d'un seuil de vues (20 par défaut, à valider).
+- Un projet n'est classé qu'à partir d'un seuil de vues (20 vues, constante revue une fois que la V1 aura collecté quelques mois de trafic réel).
 - Si moins de 3 projets atteignent le seuil, les places restantes sont tirées au hasard.
+- Le classement et le tirage sont faits au build : tous les visiteurs voient la même sélection, et un rebuild nocturne (cron GitHub Actions) rafraîchit le classement.
 
 ### Onglet analytics
 
@@ -196,9 +197,9 @@ Le dashboard et les sites ne parlent qu'à l'API. À chaque publication, l'API a
 
 | Brique | Choix | Statut |
 | --- | --- | --- |
-| API | Node + TypeScript, NestJS | Langage décidé, framework à valider |
+| API | Node + TypeScript, NestJS | Décidé |
 | Style d'API | REST, documentation OpenAPI générée | Recommandé |
-| Base de données | PostgreSQL ; les entrées en JSONB, validées par le schéma de leur type | Décidé ; ORM à valider |
+| Base de données | PostgreSQL + Drizzle ; les entrées en JSONB, validées par le schéma de leur type | Décidé |
 | Dashboard | Vue 3 + Vite + TypeScript, shadcn-vue | Recommandé |
 | Temps réel de l'onglet analytics | Server-sent events | Recommandé |
 | Images | NAS monté dans le conteneur ; WebP et AVIF en 640, 1280 et 1920 px ; 10 Mo maximum | Recommandé |
@@ -222,7 +223,7 @@ J'héberge le contenu de mes proches et clients et l'audience de leurs sites : j
 
 ## Exigences non fonctionnelles et critères d'acceptation
 
-Les cibles chiffrées ci-dessous sont des propositions à valider ; elles serviront de résultats dans l'étude de cas.
+Les cibles chiffrées ci-dessous sont validées ; elles serviront de résultats dans l'étude de cas.
 
 | Critère | Cible | Vérification |
 | --- | --- | --- |
@@ -256,23 +257,23 @@ Je travaille quelques heures par semaine sur le projet : chaque jalon tient en u
 
 Prochains jalons du cadrage :
 
-1. Trancher les décisions à valider de ce PRD.
+1. ~~Trancher les décisions à valider de ce PRD.~~ Fait le 4 novembre 2026.
 2. Schéma de la base : espaces, membres, types, entrées, médias, événements.
 3. Routes de l'API et format des événements analytics.
 4. Arborescence et wireframes du dashboard.
 5. Initialisation du monorepo, de la CI et du Docker Compose.
 
-## Décisions à valider et questions ouvertes
+## Décisions tranchées et questions ouvertes
 
-Ces points sont des propositions reprises par défaut ; je les coche une fois tranchés.
+Tranchés le 4 novembre 2026 (détail dans `decisions.md`).
 
-- [ ] Ordre des versions : analytics en V1, contenu en V2, confort en V3.
-- [ ] Liste des non-objectifs.
-- [ ] Cibles chiffrées des critères d'acceptation.
-- [ ] Seuil de vues pour classer un projet (20 par défaut).
-- [ ] Framework de l'API : NestJS recommandé, Fastify en alternative plus légère.
-- [ ] ORM : Prisma, Drizzle ou SQL écrit à la main.
-- [ ] Méthode allégée pour le CMS : PRD, architecture et UX, wireframes, code, sans territoire de marque ni DA.
-- [ ] Projets mis en avant : tirage au build (identique pour tous jusqu'au prochain build) ou dans le navigateur (différent à chaque visite).
-- [ ] Nom du CMS.
-- [ ] Types de contenu du portfolio autres que « Projet » : expériences, parcours, compétences, textes du site.
+- [x] Ordre des versions : analytics en V1, contenu en V2, confort en V3.
+- [x] Liste des non-objectifs : validée telle quelle.
+- [x] Cibles chiffrées des critères d'acceptation : validées telles quelles.
+- [x] Seuil de vues pour classer un projet : 20, revu avec les données de la V1.
+- [x] Framework de l'API : NestJS.
+- [x] ORM : Drizzle.
+- [x] Méthode allégée pour le CMS : PRD, architecture et UX, wireframes, code, sans territoire de marque ni DA.
+- [x] Projets mis en avant : tirage au build, avec un rebuild nocturne.
+- [ ] Nom du CMS : reporté, à choisir avant de rendre le dépôt public (nom de code « cms » d'ici là).
+- [ ] Types de contenu du portfolio autres que « Projet » (expériences, parcours, compétences, textes du site) : reportés à la phase architecture et UX.
