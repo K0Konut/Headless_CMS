@@ -14,8 +14,11 @@ export async function login(page: Page, email: string, password = PASSWORD) {
 /** Appels à l'API avec la session du super-admin, pour préparer les données. */
 export async function adminApi(browser: Browser) {
   const context = await browser.newContext({ storageState: ADMIN_SESSION })
-  const call = async (method: 'post' | 'delete', path: string, data?: object) => {
-    const res = await context.request[method](`/api${path}`, { data: data ?? {} })
+  const call = async (method: 'get' | 'post' | 'delete', path: string, data?: object) => {
+    const res = await context.request[method](
+      `/api${path}`,
+      method === 'get' ? {} : { data: data ?? {} },
+    )
     expect(res.ok(), `${method} ${path} : ${res.status()}`).toBe(true)
     return res.status() === 204 ? null : res.json()
   }
