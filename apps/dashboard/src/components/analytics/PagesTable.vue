@@ -40,6 +40,9 @@ function sortBy(key: Key) {
 <template>
   <section aria-labelledby="pages-title" class="min-w-0">
     <h2 id="pages-title" class="text-lg font-semibold">Pages</h2>
+    <p v-if="pages.length >= 100" class="mt-1 text-sm text-muted-foreground">
+      Les 100 pages les plus vues de la période.
+    </p>
     <Table class="mt-2">
       <TableHeader>
         <TableRow>

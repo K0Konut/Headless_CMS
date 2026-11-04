@@ -28,17 +28,22 @@ const summary = ref<Summary | null>(null)
 const loading = ref(true)
 const error = ref('')
 
+let latest = 0
+/** Seule la dernière requête lancée s'affiche : une réponse lente arrivée en retard
+ *  (ancienne période, autre espace) est ignorée. */
 async function load() {
+  const request = ++latest
   loading.value = true
   error.value = ''
   try {
-    summary.value = await api<Summary>(
+    const result = await api<Summary>(
       `/spaces/${encodeURIComponent(slug.value)}/analytics?${query.value}`,
     )
+    if (request === latest) summary.value = result
   } catch {
-    error.value = 'Les statistiques n’ont pas pu être chargées.'
+    if (request === latest) error.value = 'Les statistiques n’ont pas pu être chargées.'
   } finally {
-    loading.value = false
+    if (request === latest) loading.value = false
   }
 }
 watch([slug, query], load, { immediate: true })

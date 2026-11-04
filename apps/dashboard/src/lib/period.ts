@@ -2,10 +2,11 @@ import type { LocationQuery } from 'vue-router'
 
 export type Preset = '7j' | '30j' | '6m'
 
-export const PRESETS: { value: Preset; label: string; days: number }[] = [
+/** `days` absent : depuis la plus ancienne date conservée. */
+export const PRESETS: { value: Preset; label: string; days?: number }[] = [
   { value: '7j', label: '7 derniers jours', days: 7 },
   { value: '30j', label: '30 derniers jours', days: 30 },
-  { value: '6m', label: '6 derniers mois', days: 183 },
+  { value: '6m', label: '6 derniers mois' },
 ]
 
 export interface Period {
@@ -27,18 +28,30 @@ export function addDays(date: string, days: number) {
   return d.toISOString().slice(0, 10)
 }
 
-/** Plus ancienne date encore conservée : les événements sont gardés 6 mois. */
-export const oldestDate = (now = new Date()) => addDays(today(now), -182)
+/** Plus ancienne date entière encore conservée : l'API supprime les événements de plus de
+ *  6 mois (en mois calendaires), le jour limite est donc exclu. */
+export function oldestDate(now = new Date()) {
+  const d = new Date(`${today(now)}T00:00:00Z`)
+  d.setUTCMonth(d.getUTCMonth() - 6)
+  return addDays(d.toISOString().slice(0, 10), 1)
+}
 
 /** Période décrite par l'URL : `?periode=7j|30j|6m`, ou `?du=…&au=…` ; 30 jours par défaut. */
 export function periodFromQuery(query: LocationQuery, now = new Date()): Period {
   const preset = PRESETS.find((p) => p.value === query.periode)
   const { du, au } = query
-  if (!preset && isDate(du) && isDate(au) && du <= au) {
+  if (!preset && isDate(du) && isDate(au)) {
     const oldest = oldestDate(now)
     const last = today(now)
-    return { preset: 'custom', from: du < oldest ? oldest : du, to: au > last ? last : au }
+    const from = du < oldest ? oldest : du
+    const to = au > last ? last : au
+    // Période entièrement hors de la rétention ou dans le futur : période par défaut.
+    if (from <= to) return { preset: 'custom', from, to }
   }
   const { value, days } = preset ?? PRESETS[1]!
-  return { preset: value, from: addDays(today(now), 1 - days), to: today(now) }
+  return {
+    preset: value,
+    from: days ? addDays(today(now), 1 - days) : oldestDate(now),
+    to: today(now),
+  }
 }

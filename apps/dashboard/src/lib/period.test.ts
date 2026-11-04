@@ -20,9 +20,18 @@ describe('periodFromQuery', () => {
   it('borne une période personnalisée à la rétention et à aujourd’hui', () => {
     expect(periodFromQuery({ du: '2025-01-01', au: '2030-01-01' }, NOW)).toEqual({
       preset: 'custom',
-      from: '2026-05-06',
+      from: '2026-05-05',
       to: '2026-11-04',
     })
+  })
+
+  it('prend 6 mois calendaires pour « 6 derniers mois »', () => {
+    expect(periodFromQuery({ periode: '6m' }, NOW)).toMatchObject({ from: '2026-05-05' })
+  })
+
+  it('revient à la période par défaut pour une période hors limites', () => {
+    expect(periodFromQuery({ du: '2026-12-01', au: '2026-12-31' }, NOW).preset).toBe('30j')
+    expect(periodFromQuery({ du: '2025-01-01', au: '2025-02-01' }, NOW).preset).toBe('30j')
   })
 
   it('ignore une période personnalisée invalide', () => {
