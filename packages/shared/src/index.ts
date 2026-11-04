@@ -11,7 +11,7 @@ export const collectEventSchema = z.object({
 export type CollectEvent = z.infer<typeof collectEventSchema>
 
 /** Emails toujours stockés et comparés en minuscules. */
-export const emailSchema = z.string().trim().toLowerCase().pipe(z.email())
+export const emailSchema = z.string().trim().toLowerCase().pipe(z.email('Adresse email invalide'))
 
 /** 128 caractères au plus : au-delà, le hachage Argon2 devient un levier de déni de service. */
 export const passwordSchema = z

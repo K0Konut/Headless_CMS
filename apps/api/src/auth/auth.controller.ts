@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common'
 import { ThrottlerGuard } from '@nestjs/throttler'
 import { changePasswordSchema, loginSchema } from '@cms/shared'
-import type { Response } from 'express'
+import type { Request, Response } from 'express'
 import type { User } from '../db/index.js'
 import { AuthService } from './auth.service.js'
 import {
@@ -39,10 +39,13 @@ export class AuthController {
     return this.auth.me(session.user)
   }
 
+  /** Publique : un cookie dont la session est déjà fermée doit quand même être effacé. */
+  @Public()
   @Post('logout')
   @HttpCode(204)
-  async logout(@Req() req: AuthedRequest, @Res({ passthrough: true }) res: Response) {
-    await this.auth.logout(req.sessionToken)
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const token: unknown = req.cookies?.[SESSION_COOKIE]
+    if (typeof token === 'string') await this.auth.logout(token)
     res.clearCookie(SESSION_COOKIE, { path: '/' })
   }
 

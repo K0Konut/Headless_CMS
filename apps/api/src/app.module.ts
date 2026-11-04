@@ -1,6 +1,7 @@
 import { type MiddlewareConsumer, Module, type NestModule } from '@nestjs/common'
 import { APP_FILTER, APP_GUARD } from '@nestjs/core'
 import { ThrottlerModule } from '@nestjs/throttler'
+import { emailSchema } from '@cms/shared'
 import { AuthController } from './auth/auth.controller.js'
 import { AuthService } from './auth/auth.service.js'
 import { SessionGuard } from './auth/session.guard.js'
@@ -18,7 +19,8 @@ import { requireJson } from './require-json.middleware.js'
         name: 'email',
         ttl: 60_000,
         limit: 5,
-        getTracker: (req) => String(req.body?.email ?? '').toLowerCase(),
+        // Même normalisation qu'à la connexion : « A@b.fr » et « a@b.fr » partagent un compteur.
+        getTracker: (req) => emailSchema.safeParse(req.body?.email).data ?? '',
       },
     ]),
   ],

@@ -7,7 +7,9 @@ export default async function setup() {
   const url = new URL(process.env.DATABASE_URL!)
   const name = url.pathname.slice(1)
 
-  const admin = new pg.Client({ connectionString: url.href.replace(url.pathname, '/postgres') })
+  const adminUrl = new URL(url)
+  adminUrl.pathname = '/postgres'
+  const admin = new pg.Client({ connectionString: adminUrl.href })
   await admin.connect()
   const { rowCount } = await admin.query('select 1 from pg_database where datname = $1', [name])
   if (!rowCount) await admin.query(`create database "${name}"`)

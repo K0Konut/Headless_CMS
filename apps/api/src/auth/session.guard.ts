@@ -50,12 +50,14 @@ export class SessionGuard implements CanActivate {
 
     const req = ctx.switchToHttp().getRequest<AuthedRequest>()
     const token: unknown = req.cookies?.[SESSION_COOKIE]
-    const user = typeof token === 'string' ? await this.auth.userFromSession(token) : null
-    if (!user) throw new UnauthorizedException('Session absente ou expirée')
+    const session = typeof token === 'string' ? await this.auth.userFromSession(token) : null
+    if (!session) throw new UnauthorizedException('Session absente ou expirée')
 
-    req.user = user
+    req.user = session.user
     req.sessionToken = token as string // garanti par le typeof ci-dessus, que TS ne propage pas
-    setSessionCookie(ctx.switchToHttp().getResponse<Response>(), req.sessionToken)
+    if (session.renewed) {
+      setSessionCookie(ctx.switchToHttp().getResponse<Response>(), req.sessionToken)
+    }
     return true
   }
 }

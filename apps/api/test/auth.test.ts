@@ -62,6 +62,13 @@ describe('connexion', () => {
     await login('x@exemple.fr', 'faux').expect(429)
   })
 
+  it('compte les variantes d’un même email (espaces, majuscules) ensemble', async () => {
+    const res = await login(' X@Exemple.fr ', 'faux').expect(401)
+    expect(res.headers['x-ratelimit-remaining-email']).toBe('4')
+    const next = await login('x@exemple.fr  ', 'faux').expect(401)
+    expect(next.headers['x-ratelimit-remaining-email']).toBe('3')
+  })
+
   it('refuse une requête qui modifie des données sans JSON', async () => {
     await request(app.getHttpServer())
       .post('/api/auth/login')
@@ -70,6 +77,14 @@ describe('connexion', () => {
       .expect(415, {
         error: { code: 'unsupported_media_type', message: 'Content-Type: application/json requis' },
       })
+  })
+
+  it('accepte un Content-Type JSON quelle que soit sa casse', async () => {
+    await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .set('Content-Type', 'Application/JSON')
+      .send(JSON.stringify({ email: 'a@b.fr', password: PASSWORD }))
+      .expect(401)
   })
 })
 
@@ -119,6 +134,25 @@ describe('session', () => {
 
     await request(server).post('/api/auth/logout').set('Cookie', cookie).type('json').expect(204)
     await request(server).get('/api/auth/me').set('Cookie', cookie).expect(401)
+  })
+
+  it('efface le cookie à la déconnexion même si la session est déjà fermée', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/auth/logout')
+      .set('Cookie', 'cms_session=inconnu')
+      .type('json')
+      .expect(204)
+    expect([res.headers['set-cookie']].flat().join()).toMatch(/cms_session=;/)
+  })
+
+  it('ne réécrit pas le cookie à chaque requête', async () => {
+    await upsertSuperAdmin(db, 'admin@exemple.fr', PASSWORD)
+    const cookie = sessionCookie(await login('admin@exemple.fr'))
+    const res = await request(app.getHttpServer())
+      .get('/api/auth/me')
+      .set('Cookie', cookie)
+      .expect(200)
+    expect(res.headers['set-cookie']).toBeUndefined()
   })
 })
 

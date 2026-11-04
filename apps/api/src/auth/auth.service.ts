@@ -7,6 +7,7 @@ import { memberships, sessions, spaces, users } from '../db/schema.js'
 import { hashToken, newToken } from './tokens.js'
 
 export const SESSION_TTL_MS = 14 * 24 * 60 * 60 * 1000
+const RENEW_AFTER_MS = 24 * 60 * 60 * 1000
 const expiry = () => new Date(Date.now() + SESSION_TTL_MS)
 
 @Injectable()
@@ -32,17 +33,21 @@ export class AuthService {
     return token
   }
 
-  /** Utilisateur de la session si elle est valide ; la session est alors prolongée. */
+  /** Utilisateur de la session si elle est valide. La session est prolongée au plus une fois par
+   *  jour, pour ne pas écrire en base à chaque requête ; `renewed` l'indique. */
   async userFromSession(token: string) {
     const id = hashToken(token)
     const [row] = await this.db
-      .select({ user: users })
+      .select({ user: users, expiresAt: sessions.expiresAt })
       .from(sessions)
       .innerJoin(users, eq(users.id, sessions.userId))
       .where(and(eq(sessions.id, id), gt(sessions.expiresAt, new Date())))
     if (!row) return null
-    await this.db.update(sessions).set({ expiresAt: expiry() }).where(eq(sessions.id, id))
-    return row.user
+    const renewed = row.expiresAt.getTime() - Date.now() < SESSION_TTL_MS - RENEW_AFTER_MS
+    if (renewed) {
+      await this.db.update(sessions).set({ expiresAt: expiry() }).where(eq(sessions.id, id))
+    }
+    return { user: row.user, renewed }
   }
 
   async logout(token: string) {
@@ -52,13 +57,15 @@ export class AuthService {
   /** Change le mot de passe et ferme toutes les autres sessions du compte. */
   async changePassword(user: User, currentToken: string, current: string, next: string) {
     if (!(await argon2.verify(user.passwordHash, current))) return false
-    await this.db
-      .update(users)
-      .set({ passwordHash: await argon2.hash(next) })
-      .where(eq(users.id, user.id))
-    await this.db
-      .delete(sessions)
-      .where(and(eq(sessions.userId, user.id), ne(sessions.id, hashToken(currentToken))))
+    const passwordHash = await argon2.hash(next)
+    // Une seule transaction : un mot de passe changé sans fermer les autres sessions laisserait
+    // ouverte celle d'un éventuel voleur.
+    await this.db.transaction(async (tx) => {
+      await tx.update(users).set({ passwordHash }).where(eq(users.id, user.id))
+      await tx
+        .delete(sessions)
+        .where(and(eq(sessions.userId, user.id), ne(sessions.id, hashToken(currentToken))))
+    })
     return true
   }
 
