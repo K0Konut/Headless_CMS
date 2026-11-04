@@ -1,22 +1,23 @@
 <script setup lang="ts">
-import { Check, ChevronsUpDown } from '@lucide/vue'
+import { Check, ChevronsUpDown, Plus } from '@lucide/vue'
 import { RouterLink } from 'vue-router'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar'
 import type { SpaceSummary } from '@/lib/types'
 
-defineProps<{ current?: SpaceSummary; spaces: SpaceSummary[] }>()
+defineProps<{ current?: SpaceSummary; spaces: SpaceSummary[]; canCreate?: boolean }>()
 </script>
 
 <template>
-  <!-- Un seul espace : un simple titre, rien à choisir. -->
-  <p v-if="spaces.length <= 1" class="truncate px-2 py-1.5 font-semibold">
+  <!-- Un seul espace et rien à créer : un simple titre. -->
+  <p v-if="spaces.length <= 1 && !canCreate" class="truncate px-2 py-1.5 font-semibold">
     {{ current?.name ?? 'CMS' }}
   </p>
   <SidebarMenu v-else>
@@ -41,6 +42,14 @@ defineProps<{ current?: SpaceSummary; spaces: SpaceSummary[] }>()
               />
             </RouterLink>
           </DropdownMenuItem>
+          <template v-if="canCreate">
+            <DropdownMenuSeparator />
+            <DropdownMenuItem as-child>
+              <RouterLink to="/espaces/nouveau"
+                ><Plus aria-hidden="true" />Nouvel espace</RouterLink
+              >
+            </DropdownMenuItem>
+          </template>
         </DropdownMenuContent>
       </DropdownMenu>
     </SidebarMenuItem>
