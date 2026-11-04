@@ -19,6 +19,7 @@ test('créer un espace, puis inviter un membre qui ne voit que « Ne pas me comp
 
   // Arrivée sur l'intégration, étape suivante du parcours.
   await expect(page).toHaveURL('/espaces/journal-de-bord/reglages#integration')
+  await expect(page.locator('#integration')).toBeInViewport()
   await expect(page.getByLabel('Identifiant public', { exact: true })).toHaveValue(/^pk_/)
   await expect(page.getByLabel('Extrait d’installation', { exact: true })).toContainText(
     'initAnalytics',
@@ -84,4 +85,21 @@ test('renommer le slug, puis supprimer l’espace', async ({ page }) => {
   await expect(page).not.toHaveURL(/archive/)
   await page.goto('/espaces/archive/analytics')
   await expect(page.getByRole('heading', { name: 'Page introuvable' })).toBeVisible()
+})
+
+test('changer d’espace depuis les réglages affiche les membres du nouvel espace', async ({
+  page,
+}) => {
+  // lea@exemple.fr est membre de Blog (parcours.e2e.ts), pas de Portfolio.
+  await page.goto('/espaces/blog/reglages')
+  await expect(page.getByRole('row', { name: /lea@exemple\.fr/ })).toBeVisible()
+
+  // Navigation interne : la page des réglages est réutilisée par le routeur.
+  await page.getByRole('button', { name: /Changer d’espace/ }).click()
+  await page.getByRole('menuitem', { name: 'Portfolio' }).click()
+  await page.getByRole('link', { name: 'Réglages' }).click()
+  await expect(page).toHaveURL('/espaces/portfolio/reglages')
+  await expect(page.getByRole('region', { name: 'Membres' })).toBeVisible()
+  await expect(page.getByRole('row', { name: /lea@exemple\.fr/ })).toHaveCount(0)
+  await expect(page.getByLabel('Nom', { exact: true })).toHaveValue('Portfolio')
 })

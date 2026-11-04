@@ -5,7 +5,7 @@ import FormError from '@/components/FormError.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ApiError, api } from '@/lib/api'
+import { api, errorMessage } from '@/lib/api'
 import type { SpaceDetail } from '@/lib/spaces'
 import { useSessionStore } from '@/stores/session'
 import SettingsSection from './SettingsSection.vue'
@@ -25,7 +25,7 @@ async function remove() {
     await session.load()
     await router.replace('/')
   } catch (err) {
-    error.value = err instanceof ApiError ? err.message : 'Une erreur est survenue'
+    error.value = errorMessage(err)
     pending.value = false
   }
 }

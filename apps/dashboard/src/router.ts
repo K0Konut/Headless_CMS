@@ -15,8 +15,9 @@ declare module 'vue-router' {
 
 export const router = createRouter({
   history: createWebHistory(),
-  // Ancre (#integration) : défile jusqu'à la section.
-  scrollBehavior: (to) => (to.hash ? { el: to.hash } : { top: 0 }),
+  // Retour arrière : position restaurée. Les ancres sont gérées par les pages, une fois leur
+  // contenu chargé.
+  scrollBehavior: (_to, _from, saved) => saved ?? { top: 0 },
   routes: [
     {
       path: '/connexion',
@@ -117,7 +118,9 @@ router.beforeEach(async (to) => {
   // pleine navigation (renommage, suppression) sans démonter l'écran affiché.
   const forbidden = to.meta.superAdmin && !session.me.user.isSuperAdmin
   if (forbidden || (slug && !session.spaces.some((s) => s.slug === slug))) {
-    return { name: 'not-found', params: { chemin: to.path.slice(1).split('/') }, replace: true }
+    // Segments décodés : le routeur les réencode, l'URL reste identique.
+    const chemin = to.path.slice(1).split('/').map(decodeURIComponent)
+    return { name: 'not-found', params: { chemin }, query: to.query, hash: to.hash, replace: true }
   }
   return true
 })

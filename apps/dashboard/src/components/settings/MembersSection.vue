@@ -15,7 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { ApiError, api } from '@/lib/api'
+import { api, errorMessage } from '@/lib/api'
 import { type Members, linkUrl } from '@/lib/spaces'
 import SettingsSection from './SettingsSection.vue'
 
@@ -35,17 +35,24 @@ const expires = (iso: string) =>
 async function load() {
   data.value = await api<Members>(`${base()}/members`)
 }
-onMounted(load)
+onMounted(() => load().catch(() => (error.value = 'La liste des membres n’a pas pu être chargée.')))
+
+/** Une action à la fois : un double clic n'envoie pas deux requêtes. */
+const busy = ref(false)
 
 /** Exécute une action, affiche son erreur éventuelle, puis relit la liste. */
 async function run(action: () => Promise<void>) {
+  if (busy.value) return
+  busy.value = true
   error.value = notice.value = ''
   link.value = null
   try {
     await action()
     await load()
   } catch (err) {
-    error.value = err instanceof ApiError ? err.message : 'Une erreur est survenue'
+    error.value = errorMessage(err)
+  } finally {
+    busy.value = false
   }
 }
 
@@ -110,7 +117,7 @@ const cancel = (invitation: Members['invitations'][number]) =>
         <Label for="invite-email">Email</Label>
         <Input id="invite-email" v-model="email" type="email" autocomplete="off" />
       </div>
-      <Button type="submit">Inviter un membre</Button>
+      <Button type="submit" :disabled="busy">Inviter un membre</Button>
     </form>
 
     <div class="mt-4 grid max-w-2xl grid-cols-1 gap-3">
@@ -138,10 +145,12 @@ const cancel = (invitation: Members['invitations'][number]) =>
           <TableCell class="font-medium">{{ member.email }}</TableCell>
           <TableCell>Actif</TableCell>
           <TableCell class="space-x-1 text-right whitespace-nowrap">
-            <Button variant="ghost" size="sm" @click="reset(member)">
+            <Button variant="ghost" size="sm" :disabled="busy" @click="reset(member)">
               Lien de réinitialisation
             </Button>
-            <Button variant="ghost" size="sm" @click="remove(member)">Retirer</Button>
+            <Button variant="ghost" size="sm" :disabled="busy" @click="remove(member)"
+              >Retirer</Button
+            >
           </TableCell>
         </TableRow>
         <TableRow v-for="invitation in data.invitations" :key="invitation.id">
@@ -150,10 +159,17 @@ const cancel = (invitation: Members['invitations'][number]) =>
             Invité, jusqu’au {{ expires(invitation.expiresAt) }}
           </TableCell>
           <TableCell class="space-x-1 text-right whitespace-nowrap">
-            <Button variant="ghost" size="sm" @click="run(() => invite(invitation.email))">
+            <Button
+              variant="ghost"
+              size="sm"
+              :disabled="busy"
+              @click="run(() => invite(invitation.email))"
+            >
               Régénérer le lien
             </Button>
-            <Button variant="ghost" size="sm" @click="cancel(invitation)">Annuler</Button>
+            <Button variant="ghost" size="sm" :disabled="busy" @click="cancel(invitation)"
+              >Annuler</Button
+            >
           </TableCell>
         </TableRow>
       </TableBody>

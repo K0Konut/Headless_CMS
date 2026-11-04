@@ -39,3 +39,7 @@ export async function api<T = void>(
     payload?.error?.message ?? 'Le serveur ne répond pas. Réessayez dans un instant.',
   )
 }
+
+/** Message à afficher pour une erreur d'appel : celui de l'API, sinon un message générique. */
+export const errorMessage = (err: unknown) =>
+  err instanceof ApiError ? err.message : 'Une erreur est survenue'

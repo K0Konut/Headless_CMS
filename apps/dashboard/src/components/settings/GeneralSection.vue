@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ApiError, api } from '@/lib/api'
+import { api, errorMessage } from '@/lib/api'
 import type { SpaceDetail } from '@/lib/spaces'
 import { useSessionStore } from '@/stores/session'
 import SettingsSection from './SettingsSection.vue'
@@ -34,8 +34,9 @@ async function submit() {
   error.value = parsed.success ? '' : (parsed.error.issues[0]?.message ?? 'Champs invalides')
   if (!parsed.success) return
   pending.value = true
+  const previousSlug = props.space.slug
   try {
-    const updated = await api<SpaceDetail>(`/spaces/${encodeURIComponent(props.space.slug)}`, {
+    const updated = await api<SpaceDetail>(`/spaces/${encodeURIComponent(previousSlug)}`, {
       method: 'PATCH',
       body: parsed.data,
     })
@@ -44,14 +45,14 @@ async function submit() {
     // Nom et slug apparaissent dans la barre latérale : la session doit être relue. Après un
     // renommage, le garde du routeur le fait en voyant le nouveau slug. Relire la session avant
     // de changer d'URL rendrait l'ancien slug introuvable, et la page serait démontée.
-    if (updated.slug !== props.space.slug) {
+    if (updated.slug !== previousSlug) {
       await router.replace(`/espaces/${updated.slug}/reglages`)
     } else {
       await session.load()
     }
     done.value = true
   } catch (err) {
-    error.value = err instanceof ApiError ? err.message : 'Une erreur est survenue'
+    error.value = errorMessage(err)
   } finally {
     pending.value = false
   }

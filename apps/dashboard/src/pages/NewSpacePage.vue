@@ -6,7 +6,7 @@ import FormError from '@/components/FormError.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ApiError, api } from '@/lib/api'
+import { api, errorMessage } from '@/lib/api'
 import { slugify } from '@/lib/slug'
 import type { SpaceDetail } from '@/lib/spaces'
 import { useSessionStore } from '@/stores/session'
@@ -38,7 +38,7 @@ async function submit() {
     // Étape suivante du parcours : installer le script.
     await router.push(`/espaces/${space.slug}/reglages#integration`)
   } catch (err) {
-    error.value = err instanceof ApiError ? err.message : 'Une erreur est survenue'
+    error.value = errorMessage(err)
     pending.value = false
   }
 }

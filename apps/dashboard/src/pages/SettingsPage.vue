@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import DangerSection from '@/components/settings/DangerSection.vue'
 import GeneralSection from '@/components/settings/GeneralSection.vue'
@@ -20,16 +20,26 @@ const isSuperAdmin = computed(() => !!session.me?.user.isSuperAdmin)
 const space = ref<SpaceDetail | null>(null)
 const error = ref('')
 
+let latest = 0
 watch(
   slug,
   async () => {
     error.value = ''
     // Un renommage de slug vient d'être fait ici : l'espace affiché est déjà à jour.
     if (space.value?.slug === slug.value) return
+    // Autre espace : on n'affiche pas l'ancien pendant le chargement, et seule la dernière
+    // réponse compte.
+    const request = ++latest
+    space.value = null
     try {
-      space.value = await api<SpaceDetail>(`/spaces/${encodeURIComponent(slug.value)}`)
+      const loaded = await api<SpaceDetail>(`/spaces/${encodeURIComponent(slug.value)}`)
+      if (request !== latest) return
+      space.value = loaded
+      // Ancre (#integration après une création) : la section n'existe qu'une fois chargée.
+      await nextTick()
+      if (route.hash) document.querySelector(route.hash)?.scrollIntoView()
     } catch {
-      error.value = 'Les réglages n’ont pas pu être chargés.'
+      if (request === latest) error.value = 'Les réglages n’ont pas pu être chargés.'
     }
   },
   { immediate: true },
@@ -43,7 +53,9 @@ watch(
   <Skeleton v-else-if="!space" class="mt-8 h-64 max-w-md" />
 
   <!-- Un membre ne voit que « Ne pas me compter » (document UX). -->
-  <div v-else class="mt-8 grid gap-10">
+  <!-- Clé : la date de création, qui identifie l'espace sans changer au renommage. Changer
+       d'espace recrée les sections (membres, confirmation) ; renommer les garde. -->
+  <div v-else :key="space.createdAt" class="mt-8 grid gap-10">
     <GeneralSection v-if="isSuperAdmin" :space="space" @updated="space = $event" />
     <MembersSection v-if="isSuperAdmin" :slug="space.slug" />
     <IntegrationSection v-if="isSuperAdmin" :space="space" />
