@@ -56,8 +56,8 @@ test('la période se choisit dans l’URL et l’export suit la période', async
   await page.getByRole('combobox', { name: 'Période' }).click()
   await page.getByRole('option', { name: 'Personnalisée' }).click()
   await expect(page).toHaveURL(/du=\d{4}-\d{2}-\d{2}&au=\d{4}-\d{2}-\d{2}/)
-  await expect(page.getByLabel('Du')).toBeVisible()
-  await expect(page.getByLabel('Au')).toBeVisible()
+  await expect(page.getByLabel('Du', { exact: true })).toBeVisible()
+  await expect(page.getByLabel('Au', { exact: true })).toBeVisible()
 })
 
 test('la pause arrête le temps réel', async ({ browser, page }) => {
