@@ -55,3 +55,14 @@ export const invitationSchema = z.object({ email: emailSchema })
 
 /** Corps de `POST /tokens/:token` : le mot de passe choisi par l'invité ou le membre. */
 export const consumeTokenSchema = z.object({ password: passwordSchema })
+
+const MAX_PERIOD_DAYS = 200
+
+/** Période de l'onglet analytics : dates locales (Europe/Paris), bornes incluses. */
+export const analyticsQuerySchema = z
+  .object({ from: z.iso.date(), to: z.iso.date() })
+  .refine((q) => q.from <= q.to, 'La date de début doit précéder la date de fin')
+  .refine(
+    (q) => (Date.parse(q.to) - Date.parse(q.from)) / 86_400_000 < MAX_PERIOD_DAYS,
+    `La période ne peut pas dépasser ${MAX_PERIOD_DAYS} jours`,
+  )
