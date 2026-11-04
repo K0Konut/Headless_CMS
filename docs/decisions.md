@@ -20,3 +20,4 @@
 | 2026-11-04 | Wireframes détaillés pour la V1 seulement ; ceux de la V2 au début de la V2 | Les besoins V2 seront plus clairs avec la V1 en main |
 | 2026-11-04 | Types de contenu du portfolio autres que « Projet » reportés à nouveau, au début de la V2 | Ils dépendent du constructeur de types, conçu en V2 |
 | 2026-11-04 | Interface du dashboard en français uniquement | Seul le contenu géré est bilingue |
+| 2026-11-04 | Double authentification TOTP sortie de la V1, prévue dans une version ultérieure | Choix de l'utilisateur : V1 recentrée sur l'analytics |

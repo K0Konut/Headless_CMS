@@ -20,7 +20,7 @@ Méthode allégée : pas de territoire de marque ni de DA. Le dashboard est neut
 ```mermaid
 flowchart TD
     subgraph Public["Hors connexion"]
-        L["/connexion"] --> T["/connexion/double-authentification"]
+        L["/connexion"]
         I["/invitation/:jeton"]
         R["/reinitialisation/:jeton"]
     end
@@ -46,7 +46,6 @@ flowchart TD
 | URL | Qui | Version |
 | --- | --- | --- |
 | `/connexion` | Tous | V1 |
-| `/connexion/double-authentification` | Comptes avec TOTP | V1 |
 | `/invitation/:jeton` | Invité | V1 |
 | `/reinitialisation/:jeton` | Membre ou super-admin | V1 |
 | `/espaces/nouveau` | Super-admin | V1 |
@@ -101,7 +100,6 @@ flowchart TD
 └──────────────────────────────┘
 ```
 
-- Si le compte a activé le TOTP, on passe à `/connexion/double-authentification` : un champ de code à 6 chiffres (`autocomplete="one-time-code"`).
 - Erreur d'identifiants : un message unique (« Email ou mot de passe incorrect »), sans dire lequel des deux est faux.
 - Trop de tentatives : message « Trop de tentatives, réessayez dans quelques minutes ».
 - Session expirée sur un écran connecté : retour à `/connexion`, puis retour à l'écran d'origine après la connexion.
@@ -174,7 +172,7 @@ Réglages
 
 - **Inviter** : champ email, puis génération d'un lien à usage unique affiché avec un bouton « Copier ». Le membre apparaît « invité » jusqu'à ce qu'il accepte.
 - **Email qui a déjà un compte** : il est ajouté directement à l'espace, sans lien, puisqu'il peut se connecter avec ses identifiants actuels.
-- **Actions par membre** : générer un lien de réinitialisation, désactiver sa double authentification (téléphone perdu), retirer de l'espace, régénérer ou annuler une invitation en attente.
+- **Actions par membre** : générer un lien de réinitialisation, retirer de l'espace, régénérer ou annuler une invitation en attente.
 - **Super-admin** : il n'apparaît pas dans la liste et ne peut pas être retiré.
 
 **Ne pas me compter (lien magique)**
@@ -193,10 +191,6 @@ Champs : nom, slug (pré-rempli depuis le nom), URL du site. Après la création
 
 - Email (lecture seule en V1).
 - Changer le mot de passe : mot de passe actuel, nouveau mot de passe, confirmation.
-- **Double authentification** :
-  - Activation : QR code et clé texte, puis un code de confirmation.
-  - Désactivation : demande le mot de passe.
-  - Récupération : si un membre perd son téléphone, le super-admin désactive son TOTP. Si c'est le super-admin, une commande sur le serveur le fait (à préciser dans l'architecture technique).
 
 ## Parcours utilisateurs
 
@@ -213,7 +207,7 @@ flowchart LR
 
 ### 2. Toi, au quotidien : voir quels projets font de l'effet (V1)
 
-Connexion (et TOTP si activé), arrivée sur l'analytics du portfolio, choix de la période, tri du tableau Pages par taux, puis export CSV si besoin.
+Connexion, arrivée sur l'analytics du portfolio, choix de la période, tri du tableau Pages par taux, puis export CSV si besoin.
 
 ### 3. Toi : ouvrir un espace à un proche (V1)
 
@@ -253,10 +247,11 @@ flowchart LR
 | Réglages › Intégration | Ajout de la clé API en lecture seule et de l'URL de déploiement | V2 |
 | Éditeur d'entrée | Boutons « Prévisualiser » et « Programmer la publication » | V3 |
 | Analytics | Classement des projets par score et projets mis en avant | V3 |
+| Connexion et Mon compte | Double authentification TOTP : étape de code à la connexion, activation dans Mon compte, désactivation par le super-admin si un membre perd son téléphone | Après la V1 |
 
 ## Questions reportées
 
 - Format exact de l'extrait d'installation et de l'identifiant public : architecture technique.
-- Commande serveur de création du super-admin et de récupération de son TOTP : architecture technique.
+- Commande serveur de création du super-admin : architecture technique.
 - Wireframes des écrans V2 (éditeur FR/EN, constructeur de types) : début de la V2.
 - Types de contenu du portfolio autres que « Projet » : début de la V2, avec le constructeur.
