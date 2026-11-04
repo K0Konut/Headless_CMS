@@ -44,3 +44,7 @@
 | 2026-11-04 | Invitation refusée (409) si l'email a obtenu un compte entre-temps | Accepter le lien écraserait le mot de passe d'un compte existant |
 | 2026-11-04 | Une nouvelle invitation ou réinitialisation remplace le lien encore valide pour le même email ou compte | Un seul lien actif à la fois, la liste des invitations reste lisible |
 | 2026-11-04 | Action réservée au super-admin sur un espace accessible : 403 ; espace inaccessible : 404 | Le membre connaît déjà l'espace, rien n'est révélé ; le 404 reste réservé aux espaces cachés |
+| 2026-11-04 | Package client nommé `@cms/client` et marqué privé tant que le nom du CMS n'est pas choisi | Évite une publication npm sous un nom provisoire |
+| 2026-11-04 | Le client n'importe pas `@cms/shared` et recopie la forme de l'événement | Zod ferait dépasser le budget de 2 Ko ; le serveur reste seul juge de la validité |
+| 2026-11-04 | Pas d'en-têtes CORS sur `/api/e` | `sendBeacon` en `text/plain` est une requête simple qui n'en a pas besoin ; la sécurité repose sur la comparaison `Origin` / URL du site |
+| 2026-11-04 | `/api/e` répond toujours 204, sauf au-delà de 60 événements par minute (429) | Un site ne peut pas sonder les clés ou les origines acceptées |
