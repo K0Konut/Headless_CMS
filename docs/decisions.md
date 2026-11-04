@@ -48,3 +48,8 @@
 | 2026-11-04 | Le client n'importe pas `@cms/shared` et recopie la forme de l'événement | Zod ferait dépasser le budget de 2 Ko ; le serveur reste seul juge de la validité |
 | 2026-11-04 | Pas d'en-têtes CORS sur `/api/e` | `sendBeacon` en `text/plain` est une requête simple qui n'en a pas besoin ; la sécurité repose sur la comparaison `Origin` / URL du site |
 | 2026-11-04 | `/api/e` répond toujours 204, sauf au-delà de 60 événements par minute (429) | Un site ne peut pas sonder les clés ou les origines acceptées |
+| 2026-11-04 | Dashboard : thème neutre shadcn-vue (zinc), police Public Sans auto-hébergée, un seul accent bleu encre pour le focus et l'élément actif | Dashboard sans DA (méthode allégée) ; la CSP n'autorise que l'origine du CMS, d'où une police servie localement |
+| 2026-11-04 | `PUT /auth/password` renvoie 400, et non 401, pour un mot de passe actuel incorrect | Le dashboard traite tout 401 comme une session expirée et renverrait à la connexion |
+| 2026-11-04 | Client API dans `src/lib/api.ts` (fonction `api`) plutôt qu'un composable `useApi` | Aucun état réactif à porter : une fonction suffit |
+| 2026-11-04 | Tests de bout en bout Playwright sur une base `cms_e2e` et des ports dédiés (3100, 5174), en CI | Ils ne touchent ni au serveur de dev ni aux données des autres tests |
+| 2026-11-04 | Recherche dans le sélecteur d'espace (plus de 5 espaces) reportée | Inutile avec deux ou trois espaces |
