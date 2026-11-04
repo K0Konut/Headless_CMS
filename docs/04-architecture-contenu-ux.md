@@ -1,4 +1,4 @@
-# Architecture de contenu et UX — dashboard du CMS
+# Architecture de contenu et UX — dashboard de Dashility
 
 4 novembre 2026 · s'appuie sur `01-PRD.md` et `decisions.md`
 
@@ -80,7 +80,7 @@ flowchart TD
 
 - **Sélecteur d'espace** : liste des espaces du compte, recherche si plus de 5 espaces, et une entrée « + Nouvel espace » pour le super-admin. Si le compte n'a qu'un espace, le sélecteur devient un simple titre.
 - Lien d'évitement « Aller au contenu » en premier élément focusable.
-- Titre de l'onglet du navigateur : `<Écran> · <Espace> · CMS`.
+- Titre de l'onglet du navigateur : `<Écran> · <Espace> · Dashility`.
 
 ## Écrans V1
 
@@ -177,7 +177,7 @@ Réglages
 
 **Ne pas me compter (lien magique)**
 
-Le dashboard ne peut pas écrire dans le stockage d'un site qui n'est pas sur son domaine. Le bouton ouvre donc le site dans un nouvel onglet avec le paramètre `?cms-ignore=1`. Le script de collecte lit ce paramètre, enregistre le marqueur dans le `localStorage` du site, retire le paramètre de l'URL et affiche une courte confirmation (« Vos visites ne sont plus comptées sur ce navigateur »). `?cms-ignore=0` annule l'exclusion. L'opération se fait une fois par navigateur et par site.
+Le dashboard ne peut pas écrire dans le stockage d'un site qui n'est pas sur son domaine. Le bouton ouvre donc le site dans un nouvel onglet avec le paramètre `?dashility-ignore=1`. Le script de collecte lit ce paramètre, enregistre le marqueur dans le `localStorage` du site, retire le paramètre de l'URL et affiche une courte confirmation (« Vos visites ne sont plus comptées sur ce navigateur »). `?dashility-ignore=0` annule l'exclusion. L'opération se fait une fois par navigateur et par site.
 
 N'importe qui peut ajouter ce paramètre à l'URL, mais il ne peut exclure que lui-même : il n'y a donc aucun risque.
 

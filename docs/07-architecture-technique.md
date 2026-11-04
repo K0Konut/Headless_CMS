@@ -14,8 +14,8 @@ flowchart LR
         BK["backup · pg_dump quotidien"] --> DB
         BK --> NAS[("NAS")]
     end
-    U["Toi, membres"] -- "cms.domaine/" --> NPM
-    SITE["Portfolio<br/>@scope/cms-client"] -- "POST /api/e<br/>(vues, CV)" --> NPM
+    U["Toi, membres"] -- "dashility.domaine/" --> NPM
+    SITE["Portfolio<br/>@dashility/client"] -- "POST /api/e<br/>(vues, CV)" --> NPM
 ```
 
 - **Un seul conteneur applicatif.** NestJS sert l'API sous `/api` et les fichiers compilés du dashboard sous `/`. Le dashboard et l'API sont sur la même origine, il n'y a donc pas de CORS pour le dashboard et le cookie de session reste en `SameSite=Strict`.
@@ -175,7 +175,7 @@ Toutes les routes sont préfixées par `/api`. Le corps des requêtes et les ré
 
 ## Authentification et sécurité
 
-- **Sessions** : jeton aléatoire de 32 octets dans le cookie `cms_session` (`HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/`). En base, on ne garde que son empreinte. La session dure 14 jours et se prolonge à chaque usage.
+- **Sessions** : jeton aléatoire de 32 octets dans le cookie `dashility_session` (`HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/`). En base, on ne garde que son empreinte. La session dure 14 jours et se prolonge à chaque usage.
 - **Révocation** : changer ou réinitialiser un mot de passe supprime toutes les sessions du compte. Retirer un membre prend effet à la requête suivante, puisque l'appartenance est vérifiée à chaque requête.
 - **CSRF** : on s'appuie sur `SameSite=Strict`, la même origine pour le dashboard et l'API, et le refus des requêtes qui modifient des données sans `Content-Type: application/json`.
 - **Limitation du débit** : `/auth/login` accepte 5 tentatives par minute par IP et par email, et `/e` 60 événements par minute par IP. Les IP ne restent qu'en mémoire, jamais en base.
@@ -188,16 +188,16 @@ Toutes les routes sont préfixées par `/api`. Le corps des requêtes et les ré
 ### Script (`packages/client`)
 
 ```ts
-import { initAnalytics } from '@scope/cms-client'
-initAnalytics({ key: '<clé publique de l\'espace>', endpoint: 'https://cms.domaine/api/e' })
+import { initAnalytics } from '@dashility/client'
+initAnalytics({ key: '<clé publique de l\'espace>', endpoint: 'https://dashility.domaine/api/e' })
 ```
 
 - **Vues** : une vue au chargement de la page, puis une à chaque navigation SPA (interception de `history.pushState` et de `popstate`), car vite-ssg hydrate le site en application Vue.
-- **CV** : un clic sur un lien portant l'attribut `data-cms-cv` envoie un événement `cv`. Le script l'écoute par délégation sur `document`.
+- **CV** : un clic sur un lien portant l'attribut `data-dashility-cv` envoie un événement `cv`. Le script l'écoute par délégation sur `document`.
 - **Envoi** : `navigator.sendBeacon` avec un corps `text/plain` qui contient du JSON. C'est une requête CORS simple, sans requête préalable, qui part même quand on quitte la page.
 - **Données envoyées** : `{ k, t, p, r }`, soit la clé, le type, le chemin sans paramètres ni ancre, et le **domaine** de provenance. La provenance n'est envoyée qu'à la première vue de la visite et seulement si elle est externe.
-- **Rien n'est envoyé** si le marqueur `cms-ignore` est présent dans le `localStorage`, si `navigator.webdriver` est vrai, ou si le site tourne sur `localhost`.
-- **Lien magique** : `?cms-ignore=1` pose le marqueur, `?cms-ignore=0` le retire. Le paramètre est ensuite effacé de l'URL et une confirmation discrète s'affiche.
+- **Rien n'est envoyé** si le marqueur `dashility-ignore` est présent dans le `localStorage`, si `navigator.webdriver` est vrai, ou si le site tourne sur `localhost`.
+- **Lien magique** : `?dashility-ignore=1` pose le marqueur, `?dashility-ignore=0` le retire. Le paramètre est ensuite effacé de l'URL et une confirmation discrète s'affiche.
 - **Budget** : moins de 2 Ko compressé, vérifié en CI.
 - L'endpoint s'appelle `/api/e` plutôt que `/collect` ou `/analytics`, des mots que les bloqueurs de publicité filtrent.
 
@@ -237,9 +237,9 @@ initAnalytics({ key: '<clé publique de l\'espace>', endpoint: 'https://cms.doma
 - `app` : l'image de l'API et du dashboard. Les migrations Drizzle s'appliquent au démarrage.
 - `db` : `postgres:17`, avec un volume persistant.
 - `backup` : un `pg_dump` quotidien vers le NAS, qui garde 7 sauvegardes.
-- Nginx Proxy Manager, déjà en place, redirige `cms.domaine` vers `app:3000`.
+- Nginx Proxy Manager, déjà en place, redirige `dashility.domaine` vers `app:3000`.
 
-**Publication du package** : `packages/client` est publié sur npm à la main (`npm publish`) quand une version change. Le scope définitif dépend du nom du CMS, encore à trouver.
+**Publication du package** : `packages/client` est publié sur npm à la main (`npm publish`) quand une version change. Il est publié sous `@dashility/client`, ce qui suppose d'avoir créé l'organisation `dashility` sur npm.
 `shortcut: publication manuelle, passer à un workflow sur tag si les versions deviennent fréquentes`
 
 ## Ordre de construction de la V1
