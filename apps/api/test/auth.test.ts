@@ -155,7 +155,7 @@ describe('changement de mot de passe', () => {
     const put = (body: object) =>
       request(ctx.app.getHttpServer()).put('/api/auth/password').set('Cookie', cookie).send(body)
 
-    await put({ currentPassword: 'faux', newPassword: 'nouveau-mot-de-passe' }).expect(401)
+    await put({ currentPassword: 'faux', newPassword: 'nouveau-mot-de-passe' }).expect(400)
     const short = await put({ currentPassword: PASSWORD, newPassword: 'court' }).expect(400)
     expect(short.body.error.code).toBe('validation')
   })

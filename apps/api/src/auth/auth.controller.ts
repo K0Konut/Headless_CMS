@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -64,6 +65,7 @@ export class AuthController {
       currentPassword,
       newPassword,
     )
-    if (!ok) throw new UnauthorizedException('Mot de passe actuel incorrect')
+    // 400 et non 401 : la session est valide, seul le champ est faux.
+    if (!ok) throw new BadRequestException('Mot de passe actuel incorrect')
   }
 }
