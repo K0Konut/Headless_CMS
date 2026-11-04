@@ -31,3 +31,6 @@
 | 2026-11-04 | Collecte construite avant le dashboard dans l'ordre de la V1 | Accumuler des données réelles le plus tôt possible |
 | 2026-11-04 | TypeScript fixé sur la 6.0, pas la 7 | typescript-eslint ne supporte pas encore TypeScript 7 (`<6.1`) ; à revoir quand il le supportera |
 | 2026-11-04 | `docs/` exclu de Prettier | Prettier aligne les tableaux Markdown, ce qui rend les documents illisibles en brut et gonfle les diffs |
+| 2026-11-04 | API en modules ES (`"type": "module"`) | NestJS 12 est publié en ESM ; le reste du monorepo l'est déjà |
+| 2026-11-04 | Pilote PostgreSQL : `pg` (node-postgres) | Le plus répandu, pris en charge nativement par Drizzle |
+| 2026-11-04 | Contraintes en base : email en minuscules, invitation liée à un espace, réinitialisation liée à un utilisateur | Une erreur de l'API ne peut pas écrire de données incohérentes |
