@@ -7,10 +7,11 @@
     "packages/*"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=22.18"
   },
   "scripts": {
     "db": "docker compose -f docker/compose.yml up -d db",
+    "dev": "npm run dev -w @cms/api",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
