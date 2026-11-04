@@ -238,7 +238,7 @@ Exigences de qualité, car le projet est une vitrine :
 - CI GitHub Actions sur chaque PR : lint, tests, build.
 - Tests unitaires et d'intégration sur l'API, quelques tests de bout en bout sur le dashboard.
 - Documentation OpenAPI générée et README d'installation.
-- Workflow Git habituel : `main` pour les versions, `dev` pour l'intégration, branches `to-dev/<type>/<nom>`, PR, Conventional Commits en français.
+- Workflow Git habituel : `main` pour les versions, `dev` pour l'intégration, branches `<type>/<cible>/<action>` (ex. `feat/dev/schema_bdd`), PR, Conventional Commits en français.
 - Dépôt privé pendant le développement, publié à la fin sous licence MIT.
 - Dashboard minimaliste et neutre, construit avec une bibliothèque de composants accessibles (par exemple shadcn-vue), sans direction artistique dédiée.
 
