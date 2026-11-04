@@ -29,3 +29,5 @@
 | 2026-11-04 | Endpoint de collecte nommé `/api/e`, envoi par `sendBeacon` en `text/plain` | Évite les filtres des bloqueurs et la requête CORS préalable |
 | 2026-11-04 | Super-admin créé par une commande serveur | Aucun mot de passe dans les variables d'environnement |
 | 2026-11-04 | Collecte construite avant le dashboard dans l'ordre de la V1 | Accumuler des données réelles le plus tôt possible |
+| 2026-11-04 | TypeScript fixé sur la 6.0, pas la 7 | typescript-eslint ne supporte pas encore TypeScript 7 (`<6.1`) ; à revoir quand il le supportera |
+| 2026-11-04 | `docs/` exclu de Prettier | Prettier aligne les tableaux Markdown, ce qui rend les documents illisibles en brut et gonfle les diffs |
