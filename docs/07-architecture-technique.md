@@ -14,7 +14,7 @@ flowchart LR
         BK["backup · pg_dump quotidien"] --> DB
         BK --> NAS[("NAS")]
     end
-    U["Toi, membres"] -- "dashility.domaine/" --> NPM
+    U["Toi, membres"] -- "dashility.costamask.dev/" --> NPM
     SITE["Portfolio<br/>@dashility/client"] -- "POST /api/e<br/>(vues, CV)" --> NPM
 ```
 
@@ -189,7 +189,7 @@ Toutes les routes sont préfixées par `/api`. Le corps des requêtes et les ré
 
 ```ts
 import { initAnalytics } from '@dashility/client'
-initAnalytics({ key: '<clé publique de l\'espace>', endpoint: 'https://dashility.domaine/api/e' })
+initAnalytics({ key: '<clé publique de l\'espace>', endpoint: 'https://dashility.costamask.dev/api/e' })
 ```
 
 - **Vues** : une vue au chargement de la page, puis une à chaque navigation SPA (interception de `history.pushState` et de `popstate`), car vite-ssg hydrate le site en application Vue.
@@ -230,14 +230,16 @@ initAnalytics({ key: '<clé publique de l\'espace>', endpoint: 'https://dashilit
 | --- | --- |
 | Local | `docker compose up db`, puis `npm run dev` (API et dashboard en parallèle, Vite qui relaie `/api`) |
 | CI | GitHub Actions sur chaque PR : `npm ci`, lint, types, tests avec un service PostgreSQL, build, poids du script |
-| Production | Sur le serveur : `git pull`, puis `docker compose up -d --build`, à la main et uniquement sur ta décision |
+| Production | Automatique à chaque release mergée sur `main` : l'image est publiée sur GHCR, le serveur la récupère tout seul (même méthode que le portfolio) |
 
-`compose.yml` en production :
+**Mise en ligne** : au merge sur `main` (le merge de la PR de release vaut confirmation), `deploiement.yml` relance les vérifications du CI, puis publie l'image `ghcr.io/k0konut/dashility` (paquet public) en `latest` et avec l'empreinte du commit. Sur le serveur, une tâche cron lance toutes les 5 minutes `docker compose up -d --pull always --quiet-pull` dans `/srv/docker/Projects/dashility`, ce qui ne recrée le conteneur que si l'image a changé. GitHub n'a aucun accès au serveur : pas de runner, pas de clé SSH. Retour arrière : `IMAGE_TAG=<commit>` dans le `.env` de ce dossier.
+
+`docker/compose.prod.yml` (copié en `compose.yml` dans ce dossier) :
 
 - `app` : l'image de l'API et du dashboard. Les migrations Drizzle s'appliquent au démarrage.
 - `db` : `postgres:17`, avec un volume persistant.
-- `backup` : un `pg_dump` quotidien vers le NAS, qui garde 7 sauvegardes.
-- Nginx Proxy Manager, déjà en place, redirige `dashility.domaine` vers `app:3000`.
+- `backup` : un `pg_dump` quotidien vers le NAS (`/mnt/nas/media/backups/dashility`, monté en NFS sur le serveur), qui garde 7 sauvegardes.
+- Nginx Proxy Manager, déjà en place, redirige `dashility.costamask.dev` vers `app:3000`.
 
 **Publication du package** : `packages/client` est publié sur npm à la main (`npm publish`) quand une version change. Il est publié sous `@dashility/client`, ce qui suppose d'avoir créé l'organisation `dashility` sur npm.
 `shortcut: publication manuelle, passer à un workflow sur tag si les versions deviennent fréquentes`
@@ -254,7 +256,7 @@ Chaque étape correspond à une branche et à une PR vers `dev`.
 6. `feat/dev/dashboard_base` : routeur, mise en page, connexion, invitation, réinitialisation, compte.
 7. `feat/dev/onglet_analytics` : agrégats, écran analytics, export CSV, SSE.
 8. `feat/dev/reglages_espace` : écran des réglages et lien magique « Ne pas me compter ».
-9. `chore/dev/deploiement` : Dockerfile, compose de production, sauvegarde, README d'installation.
+9. `chore/dev/deploiement` : Dockerfile, compose de production, sauvegarde, publication de l'image sur GHCR, README d'installation.
 
 Faire la collecte (étape 5) avant le dashboard permet d'accumuler des données réelles le plus tôt possible.
 
