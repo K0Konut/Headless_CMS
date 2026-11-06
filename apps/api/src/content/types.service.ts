@@ -10,7 +10,7 @@ import {
   frozenFieldChange,
   type updateContentTypeSchema,
 } from '@dashility/shared'
-import { and, asc, eq, max, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, max, sql } from 'drizzle-orm'
 import type { z } from 'zod'
 import { DB } from '../db/db.module.js'
 import { isUniqueViolation } from '../db/errors.js'
@@ -34,11 +34,14 @@ export class TypesService {
   constructor(@Inject(DB) private readonly db: Db) {}
 
   list(space: Space) {
-    return this.db
-      .select(publicColumns)
-      .from(contentTypes)
-      .where(eq(contentTypes.spaceId, space.id))
-      .orderBy(asc(contentTypes.position))
+    return (
+      this.db
+        .select(publicColumns)
+        .from(contentTypes)
+        .where(eq(contentTypes.spaceId, space.id))
+        // Deux créations simultanées peuvent partager une position : la date les départage.
+        .orderBy(asc(contentTypes.position), asc(contentTypes.createdAt))
+    )
   }
 
   async get(space: Space, slug: string) {
@@ -121,7 +124,8 @@ export class TypesService {
         .set({
           position: sql`array_position(${sql.param(slugs)}::text[], ${contentTypes.slug}) - 1`,
         })
-        .where(eq(contentTypes.spaceId, space.id))
+        // Seulement les types vérifiés : un type créé entre-temps garde sa position.
+        .where(and(eq(contentTypes.spaceId, space.id), inArray(contentTypes.slug, slugs)))
     })
   }
 
