@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { FIELD_TYPES, type Field, type FieldType } from '@dashility/shared'
-import { ArrowDown, ArrowUp, ChevronDown, Trash2 } from '@lucide/vue'
+import { ChevronDown, Trash2 } from '@lucide/vue'
 import { nextTick, ref } from 'vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -12,7 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { FIELD_TYPE_LABELS, newField } from '@/lib/content'
+import MoveButtons from '@/components/MoveButtons.vue'
+import { FIELD_TYPE_LABELS, moveItem, newField } from '@/lib/content'
 import FieldForm from './FieldForm.vue'
 
 const props = defineProps<{
@@ -42,15 +43,13 @@ function toggle(field: Field) {
 async function add() {
   const field = newField(newType.value)
   fields.value.push(field)
+  // Lu dans la liste : c'est le proxy réactif, celui que verront idOf et le rendu.
   toggle(fields.value.at(-1)!)
   await nextTick()
   document.getElementById(`${props.idPrefix}-${fields.value.length - 1}-label`)?.focus()
 }
 
-function move(index: number, delta: number) {
-  const [field] = fields.value.splice(index, 1)
-  fields.value.splice(index + delta, 0, field!)
-}
+const title = (field: Field) => field.label || 'Sans libellé'
 
 const savedField = (key: string) => props.saved.find((f) => f.key === key)
 </script>
@@ -81,7 +80,7 @@ const savedField = (key: string) => props.saved.find((f) => f.key === key)
               :class="{ '-rotate-90': !isOpen(field) }"
             />
             <span :id="`${idPrefix}-${i}-title`" class="truncate font-medium">
-              {{ field.label || 'Sans libellé' }}
+              {{ title(field) }}
             </span>
           </button>
           <!-- Sur téléphone, les badges passent sous le nom pour lui laisser la largeur. -->
@@ -94,31 +93,17 @@ const savedField = (key: string) => props.saved.find((f) => f.key === key)
             </Badge>
           </div>
           <div class="flex">
+            <MoveButtons
+              :name="title(field)"
+              :index="i"
+              :length="fields.length"
+              @move="moveItem(fields, i, $event)"
+            />
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              :disabled="i === 0"
-              :aria-label="`Monter « ${field.label || 'Sans libellé'} »`"
-              @click="move(i, -1)"
-            >
-              <ArrowUp aria-hidden="true" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              :disabled="i === fields.length - 1"
-              :aria-label="`Descendre « ${field.label || 'Sans libellé'} »`"
-              @click="move(i, 1)"
-            >
-              <ArrowDown aria-hidden="true" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              :aria-label="`Supprimer « ${field.label || 'Sans libellé'} »`"
+              :aria-label="`Supprimer « ${title(field)} »`"
               @click="fields.splice(i, 1)"
             >
               <Trash2 aria-hidden="true" />

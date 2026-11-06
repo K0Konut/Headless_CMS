@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { ArrowDown, ArrowUp, Plus } from '@lucide/vue'
+import { Plus } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import FormError from '@/components/FormError.vue'
+import MoveButtons from '@/components/MoveButtons.vue'
 import TypeEditor from '@/components/structure/TypeEditor.vue'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api, errorMessage } from '@/lib/api'
-import type { ContentType } from '@/lib/content'
+import { type ContentType, moveItem } from '@/lib/content'
 
 const route = useRoute()
 const router = useRouter()
@@ -41,14 +42,12 @@ watch([types, selected], () => {
 })
 
 const current = computed(() => types.value?.find((t) => t.slug === selected.value))
-const created = ref('')
 
 function onSaved(saved: ContentType) {
   const list = types.value!
   const index = list.findIndex((t) => t.slug === saved.slug)
   if (index === -1) {
     list.push(saved)
-    created.value = saved.slug
     void router.replace(`${base.value}/${saved.slug}`)
   } else {
     list[index] = saved
@@ -60,11 +59,10 @@ function onDeleted(slug: string) {
   void router.replace(base.value)
 }
 
-async function move(index: number, delta: number) {
+async function move(index: number, delta: -1 | 1) {
   const list = types.value!
   const previous = [...list]
-  const [type] = list.splice(index, 1)
-  list.splice(index + delta, 0, type!)
+  moveItem(list, index, delta)
   orderError.value = ''
   try {
     await api(`/spaces/${encodeURIComponent(space.value)}/type-order`, {
@@ -113,26 +111,12 @@ async function move(index: number, delta: number) {
           >
             {{ type.name }}
           </RouterLink>
-          <Button
-            variant="ghost"
-            size="icon"
-            class="size-7"
-            :disabled="i === 0"
-            :aria-label="`Monter « ${type.name} »`"
-            @click="move(i, -1)"
-          >
-            <ArrowUp aria-hidden="true" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            class="size-7"
-            :disabled="i === types.length - 1"
-            :aria-label="`Descendre « ${type.name} »`"
-            @click="move(i, 1)"
-          >
-            <ArrowDown aria-hidden="true" />
-          </Button>
+          <MoveButtons
+            :name="type.name"
+            :index="i"
+            :length="types.length"
+            @move="move(i, $event)"
+          />
         </li>
       </ol>
       <Button variant="outline" size="sm" class="justify-self-start" as-child>
@@ -142,18 +126,9 @@ async function move(index: number, delta: number) {
 
     <div class="min-w-0">
       <TypeEditor
-        v-if="selected === 'nouveau'"
-        key="nouveau"
+        v-if="selected === 'nouveau' || current"
         :space="space"
-        :type="null"
-        @saved="onSaved"
-      />
-      <TypeEditor
-        v-else-if="current"
-        :key="current.slug"
-        :space="space"
-        :type="current"
-        :created="created === current.slug"
+        :type="current ?? null"
         @saved="onSaved"
         @deleted="onDeleted"
       />

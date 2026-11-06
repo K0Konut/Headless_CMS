@@ -2,6 +2,7 @@
 import { createContentTypeSchema, updateContentTypeSchema } from '@dashility/shared'
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
+import ConfirmDelete from '@/components/ConfirmDelete.vue'
 import FormError from '@/components/FormError.vue'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -16,22 +17,46 @@ const props = defineProps<{
   space: string
   /** null : création d'un type. */
   type: ContentType | null
-  /** Le type vient d'être créé : l'éditeur de création a laissé la place à celui-ci. */
-  created?: boolean
 }>()
 const emit = defineEmits<{ saved: [ContentType]; deleted: [string] }>()
 
 const isNew = computed(() => !props.type)
-const blank = { slug: '', kind: 'collection' as const, name: '', entryLabel: '', fields: [] }
-const snapshot = () =>
-  JSON.stringify(props.type ? { ...props.type, entryLabel: props.type.entryLabel ?? '' } : blank)
-const form = reactive(
-  JSON.parse(snapshot()) as Omit<ContentType, 'entryLabel' | 'position' | 'updatedAt'> & {
-    entryLabel: string
-  },
-)
+
+/** Copie modifiable du type ; le nom d'entrée vide d'une page unique devient null à l'envoi. */
+const copyOf = (type: ContentType | null) => {
+  const { slug, kind, name, entryLabel, fields } = type ?? {
+    slug: '',
+    kind: 'collection' as const,
+    name: '',
+    entryLabel: '',
+    fields: [],
+  }
+  return JSON.parse(JSON.stringify({ slug, kind, name, entryLabel: entryLabel ?? '', fields }))
+}
+const form = reactive(copyOf(props.type))
 let initial = JSON.stringify(form)
 const dirty = computed(() => JSON.stringify(form) !== initial)
+
+const error = ref('')
+const deleteError = ref('')
+const done = ref(false)
+const pending = ref(false)
+let removed = false
+
+// Autre type affiché : on repart de lui. Un type qui vient d'être créé (null → lui) garde sa
+// saisie et la confirmation.
+watch(
+  () => props.type?.slug,
+  (slug, previous) => {
+    if (previous === undefined && slug === form.slug) return
+    Object.assign(form, copyOf(props.type))
+    initial = JSON.stringify(form)
+    error.value = ''
+    deleteError.value = ''
+    done.value = false
+    removed = false
+  },
+)
 
 // À la création, l'identifiant suit le nom tant qu'il est celui généré à partir de lui.
 watch(
@@ -41,19 +66,16 @@ watch(
   },
 )
 
-const error = ref('')
-const done = ref(props.created)
-const pending = ref(false)
-
 async function save() {
   done.value = false
   const body = {
+    kind: form.kind,
     name: form.name,
     entryLabel: form.kind === 'collection' ? form.entryLabel : null,
     fields: form.fields,
   }
   const parsed = isNew.value
-    ? createContentTypeSchema.safeParse({ ...body, slug: form.slug, kind: form.kind })
+    ? createContentTypeSchema.safeParse({ ...body, slug: form.slug })
     : updateContentTypeSchema.safeParse(body)
   error.value = parsed.success ? '' : (parsed.error.issues[0]?.message ?? 'Champs invalides')
   if (!parsed.success) return
@@ -79,23 +101,24 @@ function reset() {
   error.value = ''
 }
 
-const confirmation = ref('')
 async function remove() {
   pending.value = true
   try {
     await api(`/spaces/${encodeURIComponent(props.space)}/types/${encodeURIComponent(form.slug)}`, {
       method: 'DELETE',
     })
-    initial = JSON.stringify(form)
+    removed = true
     emit('deleted', form.slug)
   } catch (err) {
-    error.value = errorMessage(err)
+    deleteError.value = errorMessage(err)
+  } finally {
     pending.value = false
   }
 }
 
 // Une structure s'enregistre explicitement : on prévient avant de perdre des modifications.
 const confirmLeave = () =>
+  removed ||
   !dirty.value ||
   window.confirm('Les modifications de ce type ne sont pas enregistrées. Les abandonner ?')
 onBeforeRouteLeave(confirmLeave)
@@ -110,7 +133,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onUnload))
 <template>
   <div class="grid gap-8">
     <form class="grid gap-6" novalidate @submit.prevent="save">
-      <h2 class="text-lg font-semibold">{{ isNew ? 'Nouveau type' : type!.name }}</h2>
+      <h2 class="text-lg font-semibold">{{ type?.name ?? 'Nouveau type' }}</h2>
       <FormError :message="error" />
       <Alert v-if="done && !dirty" role="status">
         <AlertDescription>Type enregistré.</AlertDescription>
@@ -214,29 +237,20 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onUnload))
       </div>
     </form>
 
-    <section
-      v-if="!isNew"
-      aria-labelledby="type-delete-title"
-      class="grid max-w-md gap-4 border-t pt-8"
-    >
+    <section v-if="type" aria-labelledby="type-delete-title" class="grid gap-4 border-t pt-8">
       <h3 id="type-delete-title" class="font-semibold">Supprimer le type</h3>
       <p class="text-sm text-muted-foreground">
         Le type et toutes ses entrées sont supprimés définitivement.
       </p>
-      <form class="grid gap-4" @submit.prevent="remove">
-        <div class="grid gap-1.5">
-          <Label for="type-delete-confirmation">Pour confirmer, tapez « {{ type!.name }} »</Label>
-          <Input id="type-delete-confirmation" v-model="confirmation" autocomplete="off" />
-        </div>
-        <Button
-          type="submit"
-          variant="destructive"
-          class="justify-self-start"
-          :disabled="confirmation !== type!.name || pending"
-        >
-          Supprimer le type
-        </Button>
-      </form>
+      <ConfirmDelete
+        id="type-delete-confirmation"
+        :key="type.slug"
+        :name="type.name"
+        action="Supprimer le type"
+        :error="deleteError"
+        :pending="pending"
+        @confirm="remove"
+      />
     </section>
   </div>
 </template>

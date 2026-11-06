@@ -1,15 +1,13 @@
-import type { Field, FieldType } from '@dashility/shared'
+import type { ContentTypeInput, Field, FieldType } from '@dashility/shared'
 import { slugify } from './slug'
 
 /** Réponse de `GET /spaces/:slug/types`. */
-export interface ContentType {
-  slug: string
-  kind: 'collection' | 'single'
-  name: string
-  entryLabel: string | null
-  position: number
-  fields: Field[]
-  updatedAt: string
+export type ContentType = ContentTypeInput & { position: number; updatedAt: string }
+
+/** Déplace un élément d'une liste d'un rang vers le haut (-1) ou vers le bas (1). */
+export function moveItem<T>(list: T[], index: number, delta: -1 | 1) {
+  const [item] = list.splice(index, 1)
+  list.splice(index + delta, 0, item!)
 }
 
 /** Noms des types de champs, dans l'ordre du document UX. */
