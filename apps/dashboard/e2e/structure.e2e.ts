@@ -94,3 +94,39 @@ test('une modification non enregistrée est signalée avant de quitter', async (
   await page.getByRole('link', { name: 'Réglages' }).click()
   await expect(page).toHaveURL('/espaces/carnet/reglages')
 })
+
+test('un brouillon de nouveau type ne remplace pas un type existant au même identifiant', async ({
+  browser,
+  page,
+}) => {
+  const admin = await adminApi(browser)
+  await admin.call('post', '/spaces', {
+    name: 'Cahier',
+    slug: 'cahier',
+    siteUrl: 'https://cahier.fr',
+  })
+  await admin.call('post', '/spaces/cahier/types', {
+    slug: 'cv',
+    kind: 'single',
+    name: 'CV',
+    entryLabel: null,
+    fields: [{ key: 'tag', label: 'Tag', type: 'text', required: false, translatable: false }],
+  })
+  await admin.close()
+
+  // Brouillon dont l'identifiant reprend celui du type existant, abandonné pour ce type.
+  await page.goto('/espaces/cahier/structure/nouveau')
+  await page.getByLabel('Nom au pluriel').fill('Cv')
+  await expect(page.getByLabel('Identifiant', { exact: true })).toHaveValue('cv')
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByRole('link', { name: 'CV', exact: true }).click()
+  await expect(page).toHaveURL('/espaces/cahier/structure/cv')
+  await expect(page.getByLabel('Nom au pluriel')).toHaveValue('CV')
+  await expect(page.getByRole('listitem', { name: 'Tag' })).toBeVisible()
+
+  // Un champ ajouté dont l'identifiant reprend celui d'un champ enregistré reste modifiable.
+  await page.getByRole('button', { name: 'Ajouter un champ' }).click()
+  await page.keyboard.type('Tag')
+  await expect(page.locator('#field-1-key')).toHaveValue('tag')
+  await expect(page.locator('#field-1-key')).toBeEnabled()
+})
