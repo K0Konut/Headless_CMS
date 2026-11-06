@@ -1,17 +1,9 @@
 import { NestFactory } from '@nestjs/core'
 import type { NestExpressApplication } from '@nestjs/platform-express'
-import { migrate } from 'drizzle-orm/node-postgres/migrator'
 import type { NextFunction, Request, Response } from 'express'
 import { fileURLToPath } from 'node:url'
 import { AppModule } from './app.module.js'
 import { setupApp } from './app.setup.js'
-import { createDb } from './db/index.js'
-
-const migrationDb = createDb()
-await migrate(migrationDb, {
-  migrationsFolder: fileURLToPath(new URL('../drizzle', import.meta.url)),
-})
-await migrationDb.$client.end()
 
 const app = setupApp(await NestFactory.create<NestExpressApplication>(AppModule))
 app.enableShutdownHooks()

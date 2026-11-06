@@ -29,4 +29,5 @@ COPY --from=build /app/apps/dashboard/dist apps/dashboard/dist
 USER node
 WORKDIR /app/apps/api
 EXPOSE 3000
-CMD ["node", "dist/main.js"]
+# Migrations avant l'API ; exec : l'API reçoit directement les signaux d'arrêt de Docker.
+CMD ["sh", "-c", "node dist/migrate.js && exec node dist/main.js"]
