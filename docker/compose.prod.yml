@@ -1,7 +1,7 @@
 # Production, sur le serveur : copié en compose.yml dans /srv/docker/Projects/dashility (README, « Mise en ligne »).
-# Une tâche cron toutes les 5 minutes lance `docker compose up -d --pull always --quiet-pull`,
-# qui ne recrée un conteneur que si son image a changé.
-# Retour arrière : IMAGE_TAG=<empreinte du commit> dans .env, puis la même commande ; retirer la ligne pour revenir à latest.
+# Une tâche cron toutes les 5 minutes récupère l'image de l'app et ne recrée son conteneur que si elle a changé ;
+# la base n'est jamais mise à jour par la tâche (README, « Mise en ligne »).
+# Retour arrière : IMAGE_TAG=<empreinte du commit> dans .env, puis `docker compose up -d` ; retirer la ligne pour revenir à latest.
 name: dashility
 
 services:
@@ -27,7 +27,8 @@ services:
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
-      test: [CMD, pg_isready, -U, dashility]
+      # Par TCP : pendant l'initialisation, le serveur temporaire n'écoute que sur le socket local.
+      test: [CMD, pg_isready, -h, localhost, -U, dashility]
       interval: 5s
       retries: 10
 
@@ -42,7 +43,12 @@ services:
       PGDATABASE: dashility
       PGPASSWORD: ${POSTGRES_PASSWORD:?à définir dans .env}
     volumes:
-      - ${BACKUP_DIR:-/mnt/nas/media/backups/dashility}:/backups
+      # Sans create_host_path, Docker créerait le dossier sur le disque du serveur si le NAS n'est pas monté.
+      - type: bind
+        source: ${BACKUP_DIR:-/mnt/nas/media/backups/dashility}
+        target: /backups
+        bind:
+          create_host_path: false
     depends_on:
       db:
         condition: service_healthy
@@ -50,16 +56,19 @@ services:
       - sh
       - -c
       - |
+        # Lisibles par root seul : la sauvegarde contient les comptes et les empreintes de mots de passe.
+        umask 077
         while :; do
           f=/backups/dashility-$$(date +%F).dump
           # Fichier temporaire : une sauvegarde interrompue n'écrase jamais la précédente.
           if pg_dump -Fc -f "$$f.tmp" && mv "$$f.tmp" "$$f"; then
             echo "Sauvegarde : $$f"
             ls -1t /backups/dashility-*.dump | tail -n +8 | xargs -r rm --
+            sleep 86400
           else
-            echo "Sauvegarde échouée" >&2
+            echo "Sauvegarde échouée, nouvel essai dans 10 minutes" >&2
+            sleep 600
           fi
-          sleep 86400
         done
 
 volumes:

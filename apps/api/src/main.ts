@@ -19,11 +19,17 @@ app.enableShutdownHooks()
 // En production, l'API sert aussi le dashboard compilé : même origine, pas de CORS (architecture technique).
 const dashboard = fileURLToPath(new URL('../../dashboard/dist', import.meta.url))
 // Noms de fichiers à empreinte : jamais modifiés, donc gardés un an par le navigateur.
-app.useStaticAssets(`${dashboard}/assets`, { prefix: '/assets', immutable: true, maxAge: '1y' })
+// fallthrough: false : un ancien fichier disparu après une mise en ligne répond 404, pas index.html.
+app.useStaticAssets(`${dashboard}/assets`, {
+  prefix: '/assets',
+  immutable: true,
+  maxAge: '1y',
+  fallthrough: false,
+})
 app.useStaticAssets(dashboard)
 // Routes du dashboard (/connexion, /espaces/…) : le routeur Vue les résout à partir d'index.html.
 app.use((req: Request, res: Response, next: NextFunction) =>
-  req.method === 'GET' && !req.path.startsWith('/api')
+  req.method === 'GET' && !/^\/api(\/|$)/.test(req.path) && req.accepts('html')
     ? res.sendFile(`${dashboard}/index.html`)
     : next(),
 )

@@ -47,17 +47,19 @@ Chaque merge sur `main` relance les vérifications, puis publie l'image `ghcr.io
 6. Mise à jour automatique, dans la crontab de l'utilisateur qui gère Docker (`crontab -e`) :
 
    ```cron
-   */5 * * * * cd /srv/docker/Projects/dashility && docker compose up -d --pull always --quiet-pull 2>&1 | logger -t dashility-deploy
+   */5 * * * * cd /srv/docker/Projects/dashility && (docker compose pull -q app && docker compose up -d app) 2>&1 | logger -t dashility-deploy
    ```
+
+   Seule l'app est mise à jour : la base (`postgres:17`) ne change de version que sur ta décision, avec `docker compose pull db && docker compose up -d`.
 
    Journal : `journalctl -t dashility-deploy`.
 
 ### Au quotidien
 
-- **Retour arrière** : ajouter `IMAGE_TAG=<empreinte du commit>` dans `.env`, puis `docker compose up -d`. Retirer la ligne pour revenir à `latest`.
+- **Retour arrière** : ajouter `IMAGE_TAG=<empreinte du commit>` dans `.env`, puis `docker compose up -d`. Retirer la ligne pour revenir à `latest`. Les migrations s'appliquent au démarrage et ne reviennent pas en arrière : si la release annulée en contenait une, restaurer aussi la sauvegarde d'avant la release.
 - **`compose.prod.yml` modifié** : le recopier à la main dans le dossier du serveur.
-- **Sauvegardes** : un `pg_dump` au démarrage puis toutes les 24 h dans `/mnt/nas/media/backups/dashility`, en gardant les 7 plus récents (`docker compose logs backup`). Restauration :
+- **Sauvegardes** : un `pg_dump` au démarrage puis toutes les 24 h dans `/mnt/nas/media/backups/dashility`, en gardant les 7 plus récents (`docker compose logs backup`). Les fichiers ne sont lisibles que par root. Si le NAS n'est pas monté, le conteneur `backup` refuse de démarrer au lieu d'écrire sur le disque du serveur. Restauration :
 
   ```sh
-  docker compose exec -T db pg_restore -U dashility -d dashility --clean --if-exists < /mnt/nas/media/backups/dashility/dashility-AAAA-MM-JJ.dump
+  sudo cat /mnt/nas/media/backups/dashility/dashility-AAAA-MM-JJ.dump | docker compose exec -T db pg_restore -U dashility -d dashility --clean --if-exists
   ```
