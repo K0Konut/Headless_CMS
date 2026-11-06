@@ -1,0 +1,41 @@
+# Mise en ligne de chaque release (architecture technique) : merge sur main → vérifications → image sur GHCR.
+# Le serveur vient chercher l'image lui-même (tâche cron) : GitHub n'a aucun accès au serveur.
+name: Déploiement
+
+on:
+  push:
+    branches: [main]
+
+# Une mise en ligne à la fois, jamais annulée en cours de route
+concurrency:
+  group: deploiement
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  image:
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/k0konut/dashility:latest
+            ghcr.io/k0konut/dashility:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -1,0 +1,79 @@
+# Production, sur le serveur : copié en compose.yml dans /srv/docker/Projects/dashility (README, « Mise en ligne »).
+# Une tâche cron toutes les 5 minutes récupère l'image de l'app et ne recrée son conteneur que si elle a changé ;
+# la base n'est jamais mise à jour par la tâche (README, « Mise en ligne »).
+# Retour arrière : IMAGE_TAG=<empreinte du commit> dans .env, puis `docker compose up -d` ; retirer la ligne pour revenir à latest.
+name: dashility
+
+services:
+  app:
+    image: ghcr.io/k0konut/dashility:${IMAGE_TAG:-latest}
+    container_name: dashility-app
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://dashility:${POSTGRES_PASSWORD:?à définir dans .env}@db:5432/dashility
+    depends_on:
+      db:
+        condition: service_healthy
+    # Nginx Proxy Manager joint l'app par son nom (dashility-app:3000) sur son réseau ; la base est sur celui du projet.
+    networks: [npm, default]
+
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dashility
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?à définir dans .env}
+      POSTGRES_DB: dashility
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      # Par TCP : pendant l'initialisation, le serveur temporaire n'écoute que sur le socket local.
+      test: [CMD, pg_isready, -h, localhost, -U, dashility]
+      interval: 5s
+      retries: 10
+
+  # Une sauvegarde au démarrage puis toutes les 24 h, nommée par date ; les 7 plus récentes sont gardées.
+  # shortcut: le rythme dérive à chaque redémarrage du conteneur ; passer à un cron du serveur si l'heure compte.
+  backup:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      PGHOST: db
+      PGUSER: dashility
+      PGDATABASE: dashility
+      PGPASSWORD: ${POSTGRES_PASSWORD:?à définir dans .env}
+    volumes:
+      # Sans create_host_path, Docker créerait le dossier sur le disque du serveur si le NAS n'est pas monté.
+      - type: bind
+        source: ${BACKUP_DIR:-/mnt/nas/media/backups/dashility}
+        target: /backups
+        bind:
+          create_host_path: false
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint:
+      - sh
+      - -c
+      - |
+        # Lisibles par root seul : la sauvegarde contient les comptes et les empreintes de mots de passe.
+        umask 077
+        while :; do
+          f=/backups/dashility-$$(date +%F).dump
+          # Fichier temporaire : une sauvegarde interrompue n'écrase jamais la précédente.
+          if pg_dump -Fc -f "$$f.tmp" && mv "$$f.tmp" "$$f"; then
+            echo "Sauvegarde : $$f"
+            ls -1t /backups/dashility-*.dump | tail -n +8 | xargs -r rm --
+            sleep 86400
+          else
+            echo "Sauvegarde échouée, nouvel essai dans 10 minutes" >&2
+            sleep 600
+          fi
+        done
+
+volumes:
+  db-data:
+
+networks:
+  npm:
+    external: true

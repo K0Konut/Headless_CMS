@@ -3,7 +3,9 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [dev, main]
+    branches: [dev]
+  # Sur main, deploiement.yml l'appelle avant de publier l'image
+  workflow_call:
 
 jobs:
   check:
