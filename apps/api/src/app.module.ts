@@ -12,6 +12,8 @@ import { LinksController } from './auth/links.controller.js'
 import { LinksService } from './auth/links.service.js'
 import { SessionGuard } from './auth/session.guard.js'
 import { CollectController } from './collect/collect.controller.js'
+import { TypesController } from './content/types.controller.js'
+import { TypesService } from './content/types.service.js'
 import { RetentionService } from './collect/retention.service.js'
 import { DbModule } from './db/db.module.js'
 import { ErrorFilter } from './error.filter.js'
@@ -42,6 +44,7 @@ import { SpacesService } from './spaces/spaces.service.js'
     LinksController,
     SpacesController,
     SpaceController,
+    TypesController,
   ],
   providers: [
     AnalyticsService,
@@ -50,6 +53,7 @@ import { SpacesService } from './spaces/spaces.service.js'
     LinksService,
     RetentionService,
     SpacesService,
+    TypesService,
     { provide: APP_GUARD, useClass: SessionGuard },
     { provide: APP_FILTER, useClass: ErrorFilter },
   ],
