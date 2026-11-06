@@ -35,6 +35,10 @@ const idOf = (field: Field) => ids.get(field) ?? (ids.set(field, ++lastId), last
 const open = ref(new Set<number>())
 const isOpen = (field: Field) => open.value.has(idOf(field))
 
+// Champs ajoutés depuis l'ouverture : jamais figés, même si leur identifiant reprend celui
+// d'un champ enregistré (c'est alors un doublon, signalé à l'enregistrement).
+const added = new Set<number>()
+
 function toggle(field: Field) {
   const id = idOf(field)
   if (!open.value.delete(id)) open.value.add(id)
@@ -44,6 +48,7 @@ async function add() {
   const field = newField(newType.value)
   fields.value.push(field)
   // Lu dans la liste : c'est le proxy réactif, celui que verront idOf et le rendu.
+  added.add(idOf(fields.value.at(-1)!))
   toggle(fields.value.at(-1)!)
   await nextTick()
   document.getElementById(`${props.idPrefix}-${fields.value.length - 1}-label`)?.focus()
@@ -51,7 +56,8 @@ async function add() {
 
 const title = (field: Field) => field.label || 'Sans libellé'
 
-const savedField = (key: string) => props.saved.find((f) => f.key === key)
+const savedField = (field: Field) =>
+  added.has(idOf(field)) ? undefined : props.saved.find((f) => f.key === field.key)
 </script>
 
 <template>
@@ -115,7 +121,7 @@ const savedField = (key: string) => props.saved.find((f) => f.key === key)
           :id="`${idPrefix}-${i}-form`"
           v-model="fields[i]!"
           :id-prefix="`${idPrefix}-${i}`"
-          :saved="savedField(field.key)"
+          :saved="savedField(field)"
           class="border-t p-3"
         />
       </li>

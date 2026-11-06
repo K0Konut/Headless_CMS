@@ -59,11 +59,15 @@ function onDeleted(slug: string) {
   void router.replace(base.value)
 }
 
+// Un déplacement à la fois : l'ordre affiché reste celui enregistré, même en cas d'échec.
+const ordering = ref(false)
+
 async function move(index: number, delta: -1 | 1) {
   const list = types.value!
   const previous = [...list]
   moveItem(list, index, delta)
   orderError.value = ''
+  ordering.value = true
   try {
     await api(`/spaces/${encodeURIComponent(space.value)}/type-order`, {
       method: 'PUT',
@@ -72,6 +76,8 @@ async function move(index: number, delta: -1 | 1) {
   } catch (err) {
     types.value = previous
     orderError.value = errorMessage(err)
+  } finally {
+    ordering.value = false
   }
 }
 </script>
@@ -112,6 +118,7 @@ async function move(index: number, delta: -1 | 1) {
             {{ type.name }}
           </RouterLink>
           <MoveButtons
+            :disabled="ordering"
             :name="type.name"
             :index="i"
             :length="types.length"

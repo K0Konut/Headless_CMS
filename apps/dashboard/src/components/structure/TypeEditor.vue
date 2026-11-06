@@ -42,13 +42,16 @@ const deleteError = ref('')
 const done = ref(false)
 const pending = ref(false)
 let removed = false
+/** Identifiant du type que cet éditeur vient de créer. */
+let createdSlug = ''
 
-// Autre type affiché : on repart de lui. Un type qui vient d'être créé (null → lui) garde sa
-// saisie et la confirmation.
+// Autre type affiché : on repart de lui. Seul le type que cet éditeur vient de créer garde sa
+// saisie et la confirmation (et non un type existant qui aurait le même identifiant).
 watch(
   () => props.type?.slug,
   (slug, previous) => {
-    if (previous === undefined && slug === form.slug) return
+    if (previous === undefined && slug === createdSlug) return
+    createdSlug = ''
     Object.assign(form, copyOf(props.type))
     initial = JSON.stringify(form)
     error.value = ''
@@ -88,6 +91,7 @@ async function save() {
     // Avant d'avertir la page : elle change d'URL après une création, sans confirmation à demander.
     initial = JSON.stringify(form)
     done.value = true
+    if (isNew.value) createdSlug = saved.slug
     emit('saved', saved)
   } catch (err) {
     error.value = errorMessage(err)
@@ -213,7 +217,9 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onUnload))
 
       <section aria-labelledby="fields-title" class="grid gap-3">
         <h3 id="fields-title" class="font-semibold">Champs</h3>
+        <!-- Recréée à chaque enregistrement : les champs ajoutés deviennent alors figés. -->
         <FieldList
+          :key="type?.updatedAt ?? 'nouveau'"
           v-model="form.fields"
           id-prefix="field"
           :saved="type?.fields ?? []"

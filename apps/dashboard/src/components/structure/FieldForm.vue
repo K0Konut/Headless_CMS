@@ -34,8 +34,16 @@ function optionalInt(value: string | number) {
 }
 
 // Même règle pour l'identifiant d'un choix, qui suit son libellé français.
-function setChoiceLabel(choice: { key: string; fr: string }, fr: string) {
-  if (choice.key === fieldKey(choice.fr)) choice.key = fieldKey(fr)
+// Un choix enregistré garde son identifiant : les entrées et les sites le stockent.
+const savedChoices = new WeakSet(
+  props.saved?.type === 'choice' && field.value.type === 'choice' ? field.value.choices : [],
+)
+const savedChoiceKeys = props.saved?.type === 'choice' ? props.saved.choices.map((c) => c.key) : []
+const isSavedChoice = (choice: { key: string; fr: string; en: string }) =>
+  savedChoices.has(choice) && savedChoiceKeys.includes(choice.key)
+
+function setChoiceLabel(choice: { key: string; fr: string; en: string }, fr: string) {
+  if (!isSavedChoice(choice) && choice.key === fieldKey(choice.fr)) choice.key = fieldKey(fr)
   choice.fr = fr
 }
 </script>
@@ -121,7 +129,12 @@ function setChoiceLabel(choice: { key: string; fr: string }, fr: string) {
         </div>
         <div class="grid gap-1.5">
           <Label :for="id(`choice-${c}-key`)">Identifiant</Label>
-          <Input :id="id(`choice-${c}-key`)" v-model="choice.key" class="font-mono" />
+          <Input
+            :id="id(`choice-${c}-key`)"
+            v-model="choice.key"
+            :disabled="isSavedChoice(choice)"
+            class="font-mono"
+          />
         </div>
         <Button
           type="button"

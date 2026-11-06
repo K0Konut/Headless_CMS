@@ -28,7 +28,9 @@ export const FIELD_TYPE_LABELS: Record<FieldType, string> = {
 /** Identifiant de champ proposé à partir d'un libellé : « Lien vers le code » → « lien_vers_le_code ». */
 export function fieldKey(label: string) {
   const key = slugify(label).replace(/-/g, '_')
-  return /^[a-z]/.test(key) ? key : key ? `champ_${key}` : ''
+  // 50 caractères au plus, préfixe compris (fieldKeySchema).
+  const prefixed = /^[a-z]/.test(key) || !key ? key : `champ_${key}`
+  return prefixed.slice(0, 50).replace(/_+$/, '')
 }
 
 /** Champ neuf du type choisi, avec les réglages par défaut. */
