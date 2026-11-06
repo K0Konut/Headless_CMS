@@ -1,8 +1,8 @@
 # Architecture de contenu et UX — dashboard de Dashility
 
-4 novembre 2026 · s'appuie sur `01-PRD.md` et `decisions.md`
+4 novembre 2026, complété le 6 novembre 2026 pour la V2 · s'appuie sur `01-PRD.md` et `decisions.md`
 
-Ce document organise les écrans et les parcours du dashboard. Les écrans V1 sont détaillés (wireframes et états) ; la V2 et la V3 ne sont décrites qu'en arborescence et en parcours, leurs wireframes seront faits au début de la V2.
+Ce document organise les écrans et les parcours du dashboard. Les écrans V1 et V2 sont détaillés (wireframes et états) ; la V3 n'est décrite qu'en arborescence et en parcours.
 
 Méthode allégée : pas de territoire de marque ni de DA. Le dashboard est neutre et construit avec shadcn-vue (PRD, « Exigences de qualité »).
 
@@ -31,7 +31,6 @@ flowchart TD
             C["contenu<br/>V2"]
             C --> CT["contenu/:type<br/>liste des entrées ou page unique"]
             CT --> CE["contenu/:type/:entree<br/>éditeur FR/EN"]
-            F["fichiers<br/>V2 · CV FR et EN"]
             S["structure<br/>V2 · super-admin · constructeur de types"]
             G["reglages<br/>V1"]
         end
@@ -53,7 +52,6 @@ flowchart TD
 | `/espaces/:espace/reglages` | Membres de l'espace (sections réduites pour un membre) | V1 |
 | `/compte` | Tous | V1 |
 | `/espaces/:espace/contenu`, `…/contenu/:type`, `…/contenu/:type/:entree` | Membres de l'espace | V2 |
-| `/espaces/:espace/fichiers` | Membres de l'espace | V2 |
 | `/espaces/:espace/structure` | Super-admin | V2 |
 
 `:espace` est le slug de l'espace (ex. `portfolio`).
@@ -66,8 +64,8 @@ flowchart TD
 │                  │                                              │
 │  Analytics       │  (contenu de l'écran)                        │
 │  Contenu    V2   │                                              │
-│  Fichiers   V2   │                                              │
 │  Structure  V2 ★ │                                              │
+│                  │                                              │
 │  Réglages        │                                              │
 │                  │                                              │
 │ ──────────────── │                                              │
@@ -192,6 +190,258 @@ Champs : nom, slug (pré-rempli depuis le nom), URL du site. Après la création
 - Email (lecture seule en V1).
 - Changer le mot de passe : mot de passe actuel, nouveau mot de passe, confirmation.
 
+## Écrans V2
+
+La V2 ajoute le contenu. Le super-admin définit des **types** dans Structure ; les membres remplissent des **entrées** dans Contenu.
+
+### Principes de la V2
+
+- **Le site ne montre jamais un texte à moitié écrit.** La saisie est sauvegardée automatiquement, mais elle reste un brouillon tant qu'on n'a pas cliqué sur « Publier ». Sur une entrée déjà publiée, les modifications sont gardées à part et le site garde l'ancienne version jusqu'à « Publier les modifications ».
+- **FR et EN côte à côte, champ par champ.** Chaque champ traduisible a sa colonne FR et sa colonne EN sur la même ligne : on traduit en regardant l'original. Un champ non traduisible occupe toute la largeur, une seule fois.
+- **Le français est la langue de référence.** Publier exige les champs obligatoires en français. Une version anglaise incomplète n'empêche pas de publier : l'entrée est masquée sur le site en anglais (PRD, « Langues ») et le dashboard le signale partout où elle apparaît.
+- **Pas de médiathèque.** Une image s'envoie directement dans son champ, avec ses textes alternatifs.
+- **Les fichiers sont des champs.** Le CV n'a pas d'écran à lui : c'est une page unique « CV » avec un champ « Fichier PDF » traduisible, donc un fichier FR et un fichier EN. Un espace sans CV n'a pas d'écran inutile.
+
+### Statuts d'une entrée
+
+| Statut | Badge dans les listes | Ce que voit le site |
+| --- | --- | --- |
+| Brouillon | « Brouillon » | Rien |
+| Publié | « Publié » | La version publiée |
+| Publié, avec des modifications en attente | « Publié » + « Modifications non publiées » | La version publiée, sans les modifications |
+
+Le badge « EN incomplet » s'ajoute quand un champ obligatoire traduisible n'a pas sa valeur anglaise (texte alternatif d'une image compris).
+
+### Contenu
+
+```
+Contenu
+┌ Projets ─────────── collection ┐ ┌ Parcours ────────── collection ┐
+│ 4 publiés · 1 brouillon        │ │ 9 publiés                      │
+│ 1 EN incomplet                 │ │                                │
+└────────────────────────────────┘ └────────────────────────────────┘
+┌ Qui je suis ──── page unique ──┐ ┌ CV ──────────── page unique ───┐
+│ Publié                         │ │ Publié · EN incomplet          │
+└────────────────────────────────┘ └────────────────────────────────┘
+```
+
+- Une carte par type, dans l'ordre de Structure. Une collection ouvre la liste de ses entrées ; une page unique ouvre directement l'éditeur.
+- Les types apparaissent aussi sous « Contenu » dans la barre latérale, pour y aller en un clic.
+
+| État | Affichage |
+| --- | --- |
+| Aucun type (super-admin) | « Cet espace n'a pas encore de type de contenu » et bouton « Créer un type » vers Structure |
+| Aucun type (membre) | « Le contenu de cet espace n'est pas encore prêt. Votre administrateur doit d'abord le configurer. » |
+| Chargement | Squelettes des cartes |
+| Erreur | Message et bouton « Réessayer » |
+
+### Liste des entrées d'une collection
+
+```
+Projets                                              [+ Ajouter un projet]
+┌───────────────────────────────┬──────────────────────────┬────────────┐
+│ Titre                         │ Statut                   │ Modifié    │
+├───────────────────────────────┼──────────────────────────┼────────────┤
+│ Dashility                     │ Brouillon · EN incomplet │ il y a 2 h │
+│ Ce portfolio                  │ Publié · Modifs non pub. │ hier       │
+│ API de réservation            │ Publié                   │ 12 oct.    │
+└───────────────────────────────┴──────────────────────────┴────────────┘
+```
+
+- **Titre** : la valeur française du premier champ « texte court » du type, ou « Sans titre ».
+- **Tri** : dernière modification d'abord. L'ordre sur le site est décidé par le site (PRD), pas par cette liste.
+- **Filtre** par statut (Tous, Brouillons, Publiés, EN incomplet) au-dessus du tableau. Pas de recherche en V2 : un portfolio compte quelques dizaines d'entrées.
+- Sur mobile, le tableau devient une liste de cartes (titre, badges, date).
+
+| État | Affichage |
+| --- | --- |
+| Aucune entrée | « Aucun projet pour l'instant » et le bouton « Ajouter un projet » |
+| Filtre sans résultat | « Aucune entrée ne correspond à ce filtre » et lien « Tout afficher » |
+
+### Éditeur d'entrée
+
+```
+← Projets
+Ce portfolio                       Publié · Modifications non publiées
+Enregistré à 14:02                 [Annuler les modifications] [Publier les modifications] [⋯]
+Dernier déploiement : demandé à 13:40 · réussi
+──────────────────────────────────────────────────────────────────────
+Identifiant d'URL   [ce-portfolio          ]   /projets/ce-portfolio
+──────────────────────────────────────────────────────────────────────
+                          Français                 English
+Titre *                   [Ce portfolio      ]     [This portfolio    ]
+Accroche *                [Ce site, de la …  ]     [This site, from … ]
+Type de projet *          [Projet perso ▾]  (libellé EN affiché automatiquement)
+Durée *                   [10/2026] → [     ]  ☑ en cours
+Stack                     [Vue 3 ×] [TypeScript ×] [Vite ×] [+ ajouter]
+Image principale *        ┌──────────┐ Texte alternatif FR […]   EN […]
+                          │  aperçu  │ [Remplacer] [Retirer]
+                          └──────────┘
+Contexte                  ┌ B I 🔗 • 1. H ✦ ┐     ┌ B I 🔗 • 1. H ✦ ┐
+                          │ Étudiant …      │     │ Engineering …    │
+                          └─────────────────┘     └──────────────────┘
+Contraintes               ┌ 1 ─────────────────────────────── ↑ ↓ 🗑 ┐
+                          │ Titre       [Budget : 0 €]  [Budget: €0] │
+                          │ Description [Aucun …     ]  [No paid … ] │
+                          └──────────────────────────────────────────┘
+                          [+ Ajouter une contrainte]
+```
+
+**En-tête**
+
+- Retour à la liste, titre de l'entrée, badge de statut, état de la sauvegarde et état du dernier déploiement.
+- **Actions selon le statut** :
+
+| Statut | Bouton principal | Autres actions (menu ⋯) |
+| --- | --- | --- |
+| Brouillon | « Publier » | Supprimer |
+| Publié | aucun | Dépublier, Supprimer |
+| Publié, avec des modifications en attente | « Publier les modifications » et « Annuler les modifications » | Dépublier, Supprimer |
+
+- « Annuler les modifications » revient à la version publiée, après confirmation.
+- « Dépublier » repasse l'entrée en brouillon et la retire du site au prochain déploiement.
+- « Supprimer » demande une confirmation ; c'est définitif (pas d'historique, PRD). Une page unique ne se supprime pas.
+- Le choix « Brouillon » du scénario du PRD est implicite : tant qu'on ne publie pas, l'entrée reste en brouillon, déjà enregistré.
+
+**Sauvegarde automatique**
+
+- Une seconde après la dernière frappe, et quand on quitte un champ.
+- Indicateur dans l'en-tête : « Enregistrement… », « Enregistré à 14:02 », ou « Non enregistré » avec « Réessayer ». En cas d'échec, l'éditeur réessaie tout seul et prévient avant de quitter la page tant que la saisie n'est pas enregistrée.
+- **Modification ailleurs** : si l'entrée a été modifiée dans un autre onglet ou par un autre membre depuis son ouverture, la sauvegarde s'arrête et un bandeau propose « Recharger la dernière version ». Rien n'est écrasé sans le savoir.
+
+**Publier**
+
+- Les champs obligatoires en français sont vérifiés. S'il en manque, la publication est refusée, chaque champ fautif est signalé et le focus va sur le premier.
+- Si la version anglaise est incomplète, une confirmation prévient : « La version anglaise est incomplète : cette entrée sera masquée sur le site en anglais. Publier quand même ? »
+- Une erreur de format (lien invalide, nombre mal écrit) est signalée sur le champ dès la saisie. Elle n'empêche pas d'enregistrer le brouillon, mais elle empêche de publier.
+
+**Déploiement**
+
+Publier, publier des modifications, dépublier ou supprimer une entrée publiée appelle l'URL de déploiement de l'espace. L'en-tête affiche l'état de cet appel, pas celui du site : le CMS ne sait pas quand le site a fini sa mise en ligne.
+
+| État | Affichage |
+| --- | --- |
+| Pas d'URL de déploiement | « Aucun déploiement configuré » ; lien vers Réglages › Intégration pour le super-admin |
+| Appel en cours | « Déploiement demandé… » |
+| Appel réussi | « Déploiement demandé à 14:02 · réussi » |
+| Appel en échec | « Le déploiement a échoué (le site a répondu 500) » et bouton « Relancer » |
+
+**Identifiant d'URL** (collections uniquement)
+
+- Pré-rempli depuis le titre français tant que l'entrée n'a jamais été publiée, puis figé. Le modifier ensuite reste possible, avec un avertissement : les liens déjà partagés vers l'ancienne adresse ne marcheront plus.
+- Il est unique dans le type ; un doublon est signalé sur le champ.
+
+**Sur mobile** (moins de 768 px) : un sélecteur FR | EN en haut de l'éditeur remplace les deux colonnes ; il bascule tous les champs à la fois.
+
+**Accessibilité**
+
+- Chaque champ a son libellé, avec la langue : « Titre (français) », « Titre (anglais) ». Les champs EN portent `lang="en"`.
+- Les éléments d'un groupe répétable se déplacent avec les boutons ↑ et ↓, pas seulement au glisser-déposer.
+- Les messages de sauvegarde ne sont pas annoncés à chaque frappe : seuls « Non enregistré », « Publié » et les erreurs le sont.
+
+### Les types de champs
+
+| Champ | Saisie | Réglages dans Structure |
+| --- | --- | --- |
+| Texte court | Champ d'une ligne | Longueur maximale (facultatif) |
+| Texte riche | Éditeur visuel : gras, italique, lien, liste à puces, liste numérotée, intertitre, mise en avant (✦, le surlignage du portfolio). Coller depuis un traitement de texte ne garde que ces mises en forme | — |
+| Liste de choix | Liste déroulante | Les choix, chacun avec un libellé FR et EN ; on choisit une seule fois, le libellé anglais suit |
+| Date ou période | Mois et année (ou jour, mois, année) ; pour une période, un début, une fin et une case « en cours » | Date seule ou période ; précision au jour ou au mois |
+| Lien | Champ d'adresse, vérifié (`https://…`) | — |
+| Liste de valeurs | Étiquettes : Entrée pour ajouter, × pour retirer, réordonnables | — |
+| Nombre | Champ numérique | Décimales autorisées ou non |
+| Oui / non | Interrupteur | Valeur par défaut |
+| Image | Glisser-déposer ou « Parcourir », aperçu, textes alternatifs FR et EN obligatoires, « Remplacer » et « Retirer ». JPEG, PNG ou WebP, 10 Mo au plus | — |
+| Fichier PDF | « Parcourir », nom, taille et date du fichier, « Remplacer » (après confirmation, sans historique) et « Télécharger ». 10 Mo au plus | — |
+| Groupe répétable | Cartes numérotées avec leurs sous-champs, « Ajouter », ↑ ↓ et suppression | Les sous-champs (tous les types sauf un autre groupe) ; nombre minimal et maximal d'éléments (facultatifs) |
+
+Tous les champs se règlent aussi en **obligatoire ou facultatif**, et en **traduisible ou non** (sauf le groupe : ce sont ses sous-champs qui sont traduisibles). Dans un groupe, les éléments sont les mêmes en FR et en EN : on ajoute une contrainte une fois, puis on remplit ses deux langues.
+
+« Oui / non » et « Fichier PDF » s'ajoutent à la liste du PRD : le premier pour « à la une » du portfolio, le second pour le CV.
+
+### Structure (super-admin)
+
+```
+Structure                                                   [+ Nouveau type]
+┌ Types ─────────────┐ ┌ Projets ──────────────────────────────────────────┐
+│ ▸ Projets          │ │ Nom au pluriel  [Projets     ]                    │
+│   Parcours         │ │ Une entrée      [un projet   ]  → « Ajouter un projet »
+│   Compétences      │ │ Identifiant     projets (figé)   Nature : collection
+│   Qui je suis      │ │                                                   │
+│   CV               │ │ Champs                                            │
+└────────────────────┘ │ ┌ Titre ─── texte court · obligatoire · trad. ↑↓ ⋯┐
+                       │ ├ Accroche ─ texte court · obligatoire · trad. ↑↓ ⋯┤
+                       │ ├ Contraintes ─ groupe répétable (2 champs)   ↑↓ ⋯┤
+                       │ └──────────────────────────────────────────────────┘
+                       │ [+ Ajouter un champ]                               │
+                       │                         [Annuler] [Enregistrer le type]
+                       └───────────────────────────────────────────────────┘
+```
+
+- **Nouveau type** : nom au pluriel, nom d'une entrée avec son article (« un projet », « une expérience », pour le bouton « Ajouter un projet »), identifiant (généré depuis le nom, modifiable à la création) et nature (collection ou page unique).
+- **Ajouter un champ** : choix du type de champ, libellé, identifiant (généré depuis le libellé), obligatoire, traduisible, puis les réglages propres au type.
+- **Ce qui est figé après la création**, parce que les entrées et les sites en dépendent : l'identifiant et la nature d'un type ; l'identifiant, le type et le caractère traduisible d'un champ. Pour les changer, on supprime et on recrée.
+- **Ce qui reste modifiable** : noms, libellés, ordre des champs, obligatoire ou facultatif (la règle s'applique à la prochaine publication), choix d'une liste (un choix utilisé par des entrées ne peut pas être retiré).
+- **Supprimer un champ ou un type** utilisé par des entrées : la confirmation donne le nombre d'entrées touchées (« Les valeurs de ce champ seront supprimées dans 4 projets ») ; pour un type, il faut retaper son nom.
+- **Enregistrement explicite**, pas automatique : une structure se modifie rarement, et certaines modifications sont destructives. Quitter avec des changements non enregistrés demande une confirmation.
+- Écran pensé pour un ordinateur ; il reste utilisable sur mobile, en une colonne.
+
+| État | Affichage |
+| --- | --- |
+| Aucun type | « Commencez par créer un type : une collection (projets, articles) ou une page unique (accueil, à propos) » et bouton « Nouveau type » |
+| Type sans champ | « Ajoutez au moins un champ » ; le type n'apparaît pas dans Contenu tant qu'il n'a aucun champ |
+| Identifiant déjà pris | Erreur sur le champ |
+
+### Réglages › Intégration (ajouts V2)
+
+```
+Intégration ★
+├─ Identifiant public (analytics)        [Copier]                    V1
+├─ Clé API de lecture                    [Générer une clé]           V2
+│    Créée le 6 nov. 2026                [Régénérer]
+├─ URL de déploiement   [https://…                  ] [Enregistrer]  V2
+│    Dernier appel : 14:02 · réussi      [Lancer un déploiement]
+└─ Extraits d'installation               [Copier]
+```
+
+- **Clé API** : affichée **une seule fois**, juste après sa génération, avec « Copier » et l'avertissement « Elle ne sera plus affichée ». Ensuite, seule sa date de création apparaît. « Régénérer » demande une confirmation : l'ancienne clé cesse aussitôt de fonctionner, et le site devra utiliser la nouvelle.
+- **URL de déploiement** : l'adresse appelée à chaque publication (un hook de build, ou rien pour un site qui lit l'API à chaque visite). « Lancer un déploiement » l'appelle tout de suite, pour tester.
+
+## Les types du portfolio (test d'acceptation de la V2)
+
+La V2 est acceptée quand le super-admin peut créer ces types dans Structure, sans code, et que le portfolio peut en afficher le contenu. Les libellés courts de l'interface du site (menus, boutons) restent dans son code.
+
+**Projets** (collection, « un projet »). Le type « Projet » du PRD, complété par ce que le site utilise aujourd'hui :
+
+| Champ | Type de champ | Obl. | Trad. |
+| --- | --- | --- | --- |
+| Type de projet | Liste de choix : perso, école, entreprise, client | oui | — |
+| Titre | Texte court | oui | oui |
+| Accroche | Texte court | oui | oui |
+| Lien vers le code, lien vers la démo | Lien | non | non |
+| Pourquoi le code n'est pas public | Texte court | non | oui |
+| Rôle, équipe | Texte court | oui | oui |
+| Durée | Période (au mois, avec « en cours ») ; le site trie les projets dessus | oui | — |
+| Stack | Liste de valeurs | oui | non |
+| À la une | Oui / non (remplacé par la mise en avant automatique en V3) | — | — |
+| Image principale | Image | oui | alt. oui |
+| Cadre de la capture | Liste de choix : navigateur, téléphone | oui | — |
+| Contexte, Besoin | Texte court (accroche) + texte riche | oui | oui |
+| Contraintes, Enseignements | Groupe répétable : titre (texte court), description (texte riche) | non | oui |
+| Méthode | Texte court (intro) + groupe répétable : titre, description | non | oui |
+| Choix techniques | Groupe répétable : titre, description, compromis | non | oui |
+| Résultats | Groupe répétable : valeur (texte court), libellé (texte court), avant et après (nombres, facultatifs) ; puis conclusion (texte riche) | non | oui, sauf les nombres |
+
+**Parcours** (collection, « une étape ») : étiquette (liste de choix : lycée, école, échange, stage, job étudiant), période, titre, lieu, texte (texte court), étude de cas liée (texte court : l'identifiant d'URL d'un projet, facultatif). Le site trie les étapes sur la période.
+
+**Compétences** (page unique) : un groupe répétable « Catégories » avec un titre (traduisible) et des compétences (liste de valeurs, non traduisible). La mise en avant des technos utilisées par le site lui-même reste dans le code du portfolio : elle décrit son code, pas son contenu.
+
+**Qui je suis, Mon histoire, Mentions légales, Confidentialité** (pages uniques) : un champ texte riche traduisible, obligatoire.
+
+**Coordonnées** (page unique) : email (texte court), LinkedIn, GitHub, dépôt du site (liens), non traduisibles.
+
+**CV** (page unique) : un champ « Fichier PDF » traduisible et obligatoire.
+
 ## Parcours utilisateurs
 
 ### 1. Toi, premier lancement : brancher le portfolio (V1)
@@ -229,29 +479,40 @@ La page de connexion lui dit de contacter l'administrateur. Toi, dans Réglages 
 flowchart LR
     A["Contenu › Projets"] --> B["Ajouter un projet"]
     B --> C["Saisie FR/EN côte à côte<br/>sauvegarde automatique"]
-    C --> D{"Brouillon<br/>ou Publier"}
-    D -- Publier --> E["Webhook de déploiement<br/>état visible dans l'éditeur"]
+    C --> D{"Publier ?"}
+    D -- "Plus tard" --> G["Reste en brouillon<br/>déjà enregistré"]
+    D -- Publier --> E["Appel de l'URL de déploiement<br/>état visible dans l'éditeur"]
     E --> F["Projet en ligne<br/>en moins de 5 min"]
 ```
 
-## V2 et V3 : ce qui s'ajoute
+### 6. Toi : préparer un nouvel espace pour un client (V2)
+
+```mermaid
+flowchart LR
+    A["+ Nouvel espace"] --> B["Structure<br/>créer les types et leurs champs"]
+    B --> C["Réglages › Intégration<br/>clé API, URL de déploiement"]
+    C --> D["Réglages › Membres<br/>inviter le client"]
+    D --> E["Le client remplit<br/>Contenu, puis publie"]
+```
+
+### 7. Un membre corrige un projet déjà en ligne (V2)
+
+Il ouvre le projet depuis Contenu › Projets et corrige une phrase : la correction est enregistrée, l'entrée affiche « Modifications non publiées », et le site garde l'ancienne version. Il clique sur « Publier les modifications » ; le déploiement est demandé et son état s'affiche dans l'en-tête. S'il change d'avis avant de publier, « Annuler les modifications » le ramène à la version en ligne.
+
+## V3 et au-delà : ce qui s'ajoute
 
 | Écran | Rôle | Version |
 | --- | --- | --- |
-| Contenu | Liste des types de l'espace. Pour chaque type : nombre d'entrées, brouillons, traductions manquantes | V2 |
-| Contenu › type (collection) | Liste des entrées : titre, statut (brouillon, publié), badge « EN incomplet », bouton « Ajouter » | V2 |
-| Contenu › type (page unique) | Ouvre directement l'éditeur | V2 |
-| Éditeur d'entrée | Champs FR et EN côte à côte, sauvegarde automatique, Brouillon ou Publier, état du dernier déploiement | V2 |
-| Fichiers | CV FR et CV EN : remplacer le fichier, sans historique | V2 |
-| Structure | Constructeur de types : collection ou page unique, champs, obligatoire, traduisible | V2 |
-| Réglages › Intégration | Ajout de la clé API en lecture seule et de l'URL de déploiement | V2 |
 | Éditeur d'entrée | Boutons « Prévisualiser » et « Programmer la publication » | V3 |
 | Analytics | Classement des projets par score et projets mis en avant | V3 |
 | Connexion et Mon compte | Double authentification TOTP : étape de code à la connexion, activation dans Mon compte, désactivation par le super-admin si un membre perd son téléphone | Après la V1 |
 
 ## Questions reportées
 
-- Format exact de l'extrait d'installation et de l'identifiant public : architecture technique.
-- Commande serveur de création du super-admin : architecture technique.
-- Wireframes des écrans V2 (éditeur FR/EN, constructeur de types) : début de la V2.
-- Types de contenu du portfolio autres que « Projet » : début de la V2, avec le constructeur.
+À trancher dans l'architecture technique de la V2 :
+
+- Format de stockage du texte riche (HTML restreint ou structure JSON) et bibliothèque de l'éditeur visuel.
+- Images : dossier sur le NAS, variantes générées, et ce qui se passe si le NAS est injoignable ; seconde copie selon le NAS (RAID ou non).
+- Forme de l'API publique de lecture (routes, filtre par langue, entrées masquées en anglais) et extrait d'installation correspondant.
+- Regroupement des appels de déploiement quand plusieurs publications se suivent de près.
+- Migration du contenu actuel du portfolio (Markdown et TypeScript) vers ces types.
