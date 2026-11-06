@@ -80,7 +80,12 @@ describe('types de contenu', () => {
 
   it('modifie noms et champs, mais refuse ce qui est figé', async () => {
     await api('post', '/spaces/portfolio/types', admin).send(PROJECTS).expect(201)
-    const update = { name: 'Réalisations', entryLabel: 'une réalisation', fields: [title] }
+    const update = {
+      kind: 'collection',
+      name: 'Réalisations',
+      entryLabel: 'une réalisation',
+      fields: [title],
+    }
     const res = await api('put', '/spaces/portfolio/types/projets', admin)
       .send({ ...update, fields: [{ ...title, label: 'Nom' }] })
       .expect(200)
@@ -90,6 +95,10 @@ describe('types de contenu', () => {
       .send({ ...update, fields: [{ ...title, type: 'richtext' }] })
       .expect(400)
     expect(changedType.body.error.message).toMatch(/ne peut plus changer/)
+    const changedKind = await api('put', '/spaces/portfolio/types/projets', admin)
+      .send({ ...update, kind: 'single', entryLabel: null })
+      .expect(400)
+    expect(changedKind.body.error.message).toMatch(/nature/)
     await api('put', '/spaces/portfolio/types/projets', admin)
       .send({ ...update, entryLabel: null })
       .expect(400)

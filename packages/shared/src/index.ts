@@ -130,7 +130,14 @@ const simpleFieldSchema = z.discriminatedUnion('type', [
   z.object({
     ...fieldBase,
     type: z.literal('choice'),
-    choices: z.array(choiceSchema).min(1, 'Ajoutez au moins un choix').max(100),
+    choices: z
+      .array(choiceSchema)
+      .min(1, 'Ajoutez au moins un choix')
+      .max(100)
+      .refine(
+        (choices) => new Set(choices.map((c) => c.key)).size === choices.length,
+        'Deux choix ont le même identifiant',
+      ),
   }),
   z.object({
     ...fieldBase,
@@ -148,7 +155,7 @@ const simpleFieldSchema = z.discriminatedUnion('type', [
 
 /** Clés uniques dans une liste de champs, et règles qui ne tiennent pas dans le schéma d'un champ. */
 function checkFields(
-  fields: { key: string; type: FieldType; translatable: boolean; choices?: { key: string }[] }[],
+  fields: { key: string; type: FieldType; translatable: boolean }[],
   ctx: z.RefinementCtx,
 ) {
   const seen = new Set<string>()
@@ -166,14 +173,6 @@ function checkFields(
         code: 'custom',
         path: [i, 'translatable'],
         message: 'Ce type de champ ne se traduit pas',
-      })
-    }
-    const choiceKeys = field.choices?.map((c) => c.key) ?? []
-    if (new Set(choiceKeys).size !== choiceKeys.length) {
-      ctx.addIssue({
-        code: 'custom',
-        path: [i, 'choices'],
-        message: 'Deux choix ont le même identifiant',
       })
     }
   })
@@ -203,28 +202,36 @@ export type GroupField = z.infer<typeof groupFieldSchema>
 
 const fieldsSchema = z.array(fieldSchema).max(100).superRefine(checkFields)
 
-/** Corps de `POST /spaces/:slug/types`. Un type sans champ est permis : il n'apparaît pas dans
- *  Contenu tant qu'il n'en a aucun. */
-export const createContentTypeSchema = z
-  .object({
-    slug: slugSchema,
-    kind: z.enum(['collection', 'single']),
-    name: label,
-    // « un projet » : seulement pour une collection, dans « Ajouter un projet ».
-    entryLabel: z.string().trim().min(1).max(100).nullable(),
-    fields: fieldsSchema,
-  })
-  .refine((t) => (t.kind === 'collection') === (t.entryLabel !== null), {
-    message: 'Une collection a un nom d’entrée, une page unique n’en a pas',
-    path: ['entryLabel'],
-  })
-
-/** Corps de `PUT /spaces/:slug/types/:type` : l'identifiant et la nature sont figés. */
-export const updateContentTypeSchema = z.object({
+const contentTypeSchema = z.object({
+  slug: slugSchema,
+  kind: z.enum(['collection', 'single']),
   name: label,
+  // « un projet » : seulement pour une collection, dans « Ajouter un projet ».
   entryLabel: z.string().trim().min(1).max(100).nullable(),
   fields: fieldsSchema,
 })
+
+/** Une collection a un nom d'entrée (« un projet »), une page unique n'en a pas. */
+const entryLabelMatchesKind = (t: { kind: string; entryLabel: string | null }) =>
+  (t.kind === 'collection') === (t.entryLabel !== null)
+const entryLabelIssue = {
+  message: 'Une collection a un nom d’entrée, une page unique n’en a pas',
+  path: ['entryLabel'],
+}
+
+/** Corps de `POST /spaces/:slug/types`. Un type sans champ est permis : il n'apparaît pas dans
+ *  Contenu tant qu'il n'en a aucun. */
+export const createContentTypeSchema = contentTypeSchema.refine(
+  entryLabelMatchesKind,
+  entryLabelIssue,
+)
+export type ContentTypeInput = z.infer<typeof createContentTypeSchema>
+
+/** Corps de `PUT /spaces/:slug/types/:type`. L'identifiant est dans l'URL ; la nature est
+ *  renvoyée pour que la même règle s'applique, et l'API refuse qu'elle change. */
+export const updateContentTypeSchema = contentTypeSchema
+  .omit({ slug: true })
+  .refine(entryLabelMatchesKind, entryLabelIssue)
 
 /** Corps de `PUT /spaces/:slug/type-order` : tous les types de l'espace, dans le nouvel ordre. */
 export const typeOrderSchema = z.object({ slugs: z.array(slugSchema).max(200) })
