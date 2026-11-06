@@ -1,0 +1,135 @@
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common'
+import {
+  type createContentTypeSchema,
+  frozenFieldChange,
+  type updateContentTypeSchema,
+} from '@dashility/shared'
+import { and, asc, eq, inArray, max, sql } from 'drizzle-orm'
+import type { z } from 'zod'
+import { DB } from '../db/db.module.js'
+import { isUniqueViolation } from '../db/errors.js'
+import type { Db } from '../db/index.js'
+import { contentTypes } from '../db/schema.js'
+import type { Space } from '../spaces/guards.js'
+
+/** Ce que l'API renvoie d'un type : sans identifiants internes. */
+const publicColumns = {
+  slug: contentTypes.slug,
+  kind: contentTypes.kind,
+  name: contentTypes.name,
+  entryLabel: contentTypes.entryLabel,
+  position: contentTypes.position,
+  fields: contentTypes.fields,
+  updatedAt: contentTypes.updatedAt,
+}
+
+@Injectable()
+export class TypesService {
+  constructor(@Inject(DB) private readonly db: Db) {}
+
+  list(space: Space) {
+    return (
+      this.db
+        .select(publicColumns)
+        .from(contentTypes)
+        .where(eq(contentTypes.spaceId, space.id))
+        // Deux créations simultanées peuvent partager une position : la date les départage.
+        .orderBy(asc(contentTypes.position), asc(contentTypes.createdAt))
+    )
+  }
+
+  async get(space: Space, slug: string) {
+    const [type] = await this.db
+      .select(publicColumns)
+      .from(contentTypes)
+      .where(this.bySlug(space, slug))
+    if (!type) throw new NotFoundException('Type introuvable')
+    return type
+  }
+
+  async create(space: Space, body: z.infer<typeof createContentTypeSchema>) {
+    try {
+      // Le nouveau type se place en dernier.
+      const [type] = await this.db
+        .insert(contentTypes)
+        .values({
+          ...body,
+          spaceId: space.id,
+          position: sql`coalesce((${this.db
+            .select({ last: max(contentTypes.position) })
+            .from(contentTypes)
+            .where(eq(contentTypes.spaceId, space.id))}), -1) + 1`,
+        })
+        .returning(publicColumns)
+      return type!
+    } catch (err) {
+      if (isUniqueViolation(err)) throw new ConflictException('Cet identifiant est déjà utilisé')
+      throw err
+    }
+  }
+
+  /** Noms et champs ; l'identifiant et la nature du type, le type et le caractère traduisible
+   *  des champs existants sont figés (document UX, « Structure »). */
+  async update(space: Space, slug: string, body: z.infer<typeof updateContentTypeSchema>) {
+    const [current] = await this.db.select().from(contentTypes).where(this.bySlug(space, slug))
+    if (!current) throw new NotFoundException('Type introuvable')
+    if (body.kind !== current.kind) {
+      throw new BadRequestException('La nature d’un type ne peut plus changer')
+    }
+    const frozen = frozenFieldChange(current.fields, body.fields)
+    if (frozen) throw new BadRequestException(frozen)
+    const [type] = await this.db
+      .update(contentTypes)
+      .set({
+        name: body.name,
+        entryLabel: body.entryLabel,
+        fields: body.fields,
+        updatedAt: new Date(),
+      })
+      .where(eq(contentTypes.id, current.id))
+      .returning(publicColumns)
+    return type!
+  }
+
+  async remove(space: Space, slug: string) {
+    const deleted = await this.db
+      .delete(contentTypes)
+      .where(this.bySlug(space, slug))
+      .returning({ id: contentTypes.id })
+    if (!deleted.length) throw new NotFoundException('Type introuvable')
+  }
+
+  /** `slugs` doit contenir chaque type de l'espace une fois : un ordre partiel ou périmé
+   *  (type créé ou supprimé dans un autre onglet) est refusé plutôt que deviné. */
+  async reorder(space: Space, slugs: string[]) {
+    await this.db.transaction(async (tx) => {
+      const current = await tx
+        .select({ slug: contentTypes.slug })
+        .from(contentTypes)
+        .where(eq(contentTypes.spaceId, space.id))
+      const sameSet =
+        slugs.length === current.length &&
+        new Set(slugs).size === slugs.length &&
+        current.every((t) => slugs.includes(t.slug))
+      if (!sameSet) throw new ConflictException('La liste des types a changé, rechargez la page')
+      // Une seule requête : la position de chaque type est son rang dans `slugs`.
+      await tx
+        .update(contentTypes)
+        .set({
+          position: sql`array_position(${sql.param(slugs)}::text[], ${contentTypes.slug}) - 1`,
+        })
+        // Seulement les types vérifiés : un type créé entre-temps garde sa position.
+        .where(and(eq(contentTypes.spaceId, space.id), inArray(contentTypes.slug, slugs)))
+    })
+  }
+
+  private bySlug(space: Space, slug: string) {
+    return and(eq(contentTypes.spaceId, space.id), eq(contentTypes.slug, slug))
+  }
+}

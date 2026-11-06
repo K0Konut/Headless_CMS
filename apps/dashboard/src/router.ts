@@ -79,6 +79,12 @@ export const router = createRouter({
           meta: { title: 'Analytics' },
         },
         {
+          path: 'espaces/:espace/structure/:type?',
+          name: 'structure',
+          component: () => import('@/pages/StructurePage.vue'),
+          meta: { title: 'Structure', superAdmin: true },
+        },
+        {
           path: 'espaces/:espace/reglages',
           name: 'settings',
           component: () => import('@/pages/SettingsPage.vue'),

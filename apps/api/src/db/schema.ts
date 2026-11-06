@@ -1,13 +1,17 @@
+import type { Field } from '@dashility/shared'
 import { sql } from 'drizzle-orm'
 import {
   bigint,
   boolean,
   check,
   index,
+  integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
   timestamp,
+  unique,
   uuid,
 } from 'drizzle-orm/pg-core'
 
@@ -93,4 +97,26 @@ export const events = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index('events_space_created_idx').on(t.spaceId, t.createdAt)],
+)
+
+/** Types de contenu d'un espace (V2). `slug` et `kind` sont figés après la création ;
+ *  `fields` est validé par `fieldSchema` (packages/shared). */
+export const contentTypes = pgTable(
+  'content_types',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    spaceId: uuid('space_id')
+      .notNull()
+      .references(() => spaces.id, { onDelete: 'cascade' }),
+    slug: text('slug').notNull(),
+    kind: text('kind', { enum: ['collection', 'single'] }).notNull(),
+    name: text('name').notNull(),
+    /** « un projet » pour une collection, null pour une page unique. */
+    entryLabel: text('entry_label'),
+    position: integer('position').notNull(),
+    fields: jsonb('fields').$type<Field[]>().notNull(),
+    createdAt: createdAt(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique('content_types_space_slug').on(t.spaceId, t.slug)],
 )
