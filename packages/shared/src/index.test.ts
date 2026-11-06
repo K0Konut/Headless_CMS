@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   analyticsQuerySchema,
   collectEventSchema,
+  createContentTypeSchema,
   emailSchema,
+  fieldSchema,
+  frozenFieldChange,
   passwordSchema,
   siteUrlSchema,
   slugSchema,
@@ -87,5 +90,79 @@ describe('analyticsQuerySchema', () => {
     ['plus de 200 jours', { from: '2026-01-01', to: '2026-12-31' }],
   ])('refuse %s', (_, query) => {
     expect(analyticsQuerySchema.safeParse(query).success).toBe(false)
+  })
+})
+
+describe('types de contenu', () => {
+  const title = { key: 'title', label: 'Titre', type: 'text', required: true, translatable: true }
+  const projects = {
+    slug: 'projets',
+    kind: 'collection',
+    name: 'Projets',
+    entryLabel: 'un projet',
+    fields: [title],
+  }
+
+  it('accepte une collection et une page unique', () => {
+    expect(createContentTypeSchema.safeParse(projects).success).toBe(true)
+    const page = { ...projects, slug: 'cv', kind: 'single', entryLabel: null, fields: [] }
+    expect(createContentTypeSchema.safeParse(page).success).toBe(true)
+  })
+
+  it.each([
+    ['une collection sans nom d’entrée', { entryLabel: null }],
+    ['une page unique avec un nom d’entrée', { kind: 'single' }],
+    ['deux champs avec le même identifiant', { fields: [title, { ...title, label: 'Autre' }] }],
+    ['un identifiant de champ invalide', { fields: [{ ...title, key: 'Titre du projet' }] }],
+    [
+      'un choix traduisible',
+      {
+        fields: [
+          { ...title, type: 'choice', choices: [{ key: 'perso', fr: 'Perso', en: 'Personal' }] },
+        ],
+      },
+    ],
+    [
+      'une liste de choix vide',
+      { fields: [{ ...title, type: 'choice', translatable: false, choices: [] }] },
+    ],
+    [
+      'un groupe dans un groupe',
+      {
+        fields: [
+          {
+            ...title,
+            type: 'group',
+            translatable: false,
+            fields: [{ ...title, type: 'group', translatable: false, fields: [title] }],
+          },
+        ],
+      },
+    ],
+    [
+      'un groupe dont le minimum dépasse le maximum',
+      {
+        fields: [{ ...title, type: 'group', translatable: false, fields: [title], min: 3, max: 2 }],
+      },
+    ],
+  ])('refuse %s', (_, override) => {
+    expect(createContentTypeSchema.safeParse({ ...projects, ...override }).success).toBe(false)
+  })
+
+  it('repère un changement figé, y compris dans un groupe', () => {
+    const group = {
+      ...title,
+      key: 'steps',
+      type: 'group',
+      translatable: false,
+      fields: [title],
+    } as const
+    const fields = (list: object[]) => fieldSchema.array().parse(list)
+    const before = fields([title, group])
+    const after = (list: object[]) => frozenFieldChange(before, fields(list))
+    expect(after([{ ...title, label: 'Nom' }])).toBeNull()
+    expect(after([{ ...title, type: 'richtext' }])).toMatch(/type du champ « title »/)
+    expect(after([{ ...title, translatable: false }])).toMatch(/non traduisible/)
+    expect(after([{ ...group, fields: [{ ...title, translatable: false }] }])).toMatch(/« title »/)
   })
 })
