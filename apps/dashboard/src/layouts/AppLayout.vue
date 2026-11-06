@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChartColumn, Settings } from '@lucide/vue'
+import { Blocks, ChartColumn, Settings } from '@lucide/vue'
 import { computed } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import SpaceSwitcher from '@/components/SpaceSwitcher.vue'
@@ -60,6 +60,18 @@ const space = computed(() =>
                 >
                   <RouterLink :to="`/espaces/${space.slug}/analytics`">
                     <ChartColumn aria-hidden="true" />Analytics
+                  </RouterLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <!-- Structure : super-admin uniquement (document UX). -->
+              <SidebarMenuItem v-if="session.me?.user.isSuperAdmin">
+                <SidebarMenuButton
+                  as-child
+                  :is-active="route.name === 'structure'"
+                  class="data-[active=true]:text-sidebar-primary"
+                >
+                  <RouterLink :to="`/espaces/${space.slug}/structure`">
+                    <Blocks aria-hidden="true" />Structure
                   </RouterLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
