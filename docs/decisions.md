@@ -73,3 +73,8 @@
 | 2026-11-06 | V2 : deux types de champs s'ajoutent à la liste du PRD, « Oui / non » et « Fichier PDF » | « À la une » du portfolio et le CV |
 | 2026-11-06 | V2 : un champ garde son identifiant, son type et son caractère traduisible après sa création ; un type garde son identifiant et sa nature | Les entrées et les sites en dépendent ; on supprime et on recrée pour les changer |
 | 2026-11-06 | Compétences du portfolio : la mise en avant des technos utilisées par le site reste dans son code | Elle décrit le code du site, pas son contenu ; évite un groupe dans un groupe |
+| 2026-11-06 | Images et PDF directement sur le NAS (`/mnt/nas/media/dashility/medias`), sans seconde copie | QNAP en RAID : une panne de disque ne perd rien. Une suppression accidentelle n'est couverte que par les instantanés du QNAP, s'ils sont activés : risque accepté (PRD) |
+| 2026-11-06 | Entrée : deux colonnes JSONB, `published` et `draft`, sans colonne de statut | Le statut se déduit des deux : il ne peut pas les contredire. Le site ne lit que `published` |
+| 2026-11-06 | Texte riche stocké en JSON Tiptap ; l'API publique renvoie du HTML généré par `@tiptap/html` | Le JSON se valide nœud par nœud ; le HTML produit ne contient que les balises autorisées, sans bibliothèque d'assainissement |
+| 2026-11-06 | Appel de déploiement au format `repository_dispatch` de GitHub, avec un jeton facultatif, regroupé 10 s après la dernière publication | Le portfolio se construit sur GitHub Actions, qui exige un jeton ; un build par série de publications |
+| 2026-11-06 | Nouvelles dépendances V2 : Tiptap (`@tiptap/vue-3`, `@tiptap/html`), `sharp`, `@nestjs/swagger` | Éditeur visuel limité, variantes d'images et vérification du type réel, OpenAPI de l'API publique (PRD) |
