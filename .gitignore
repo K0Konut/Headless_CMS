@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+.env
+*.Zone.Identifier
+**/e2e/.auth/
+test-results/
+playwright-report/

@@ -1,0 +1,17 @@
+# Nom de projet fixe : conteneurs et volume « dashility-… », quel que soit le dossier.
+name: dashility
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: dashility
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dashility}
+      POSTGRES_DB: dashility
+    ports:
+      - 127.0.0.1:5432:5432
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+volumes:
+  db-data:
