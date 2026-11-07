@@ -1,8 +1,8 @@
 # Architecture technique
 
-4 novembre 2026 · s'appuie sur `01-PRD.md`, `04-architecture-contenu-ux.md` et `decisions.md`
+4 novembre 2026, complété le 6 novembre 2026 pour la V2 · s'appuie sur `01-PRD.md`, `04-architecture-contenu-ux.md` et `decisions.md`
 
-Ce document fixe comment la V1 (analytics) est construite. La V2 n'y est qu'esquissée, pour que la V1 ne la bloque pas.
+Ce document fixe comment la V1 (analytics) est construite, puis la V2 (contenu) dans la section « V2 : contenu ».
 
 ## Vue d'ensemble
 
@@ -33,6 +33,8 @@ flowchart LR
 | Validation | Zod, schémas dans `packages/shared`, utilisés par l'API, le dashboard et le client |
 | Mots de passe | Argon2id (paquet `argon2`) |
 | Dashboard | Vue 3, Vite, Vue Router, Pinia, shadcn-vue, Tailwind CSS, graphiques shadcn-vue (Unovis) |
+| Texte riche (V2) | Tiptap (`@tiptap/vue-3`) dans le dashboard, `@tiptap/html` dans l'API pour produire le HTML servi aux sites |
+| Images (V2) | `sharp` : vérification du type réel, variantes WebP et AVIF |
 | Script de collecte | TypeScript sans dépendance, compilé par Vite en mode librairie |
 | Tests | Vitest partout (l'API passe par SWC pour les décorateurs), Playwright pour le dashboard, PostgreSQL réel en CI pour les tests d'intégration |
 | Qualité | ESLint, Prettier, `vue-tsc` et `tsc --noEmit` |
@@ -53,7 +55,11 @@ flowchart LR
 │   │   │   ├── auth/                # login, sessions, guards
 │   │   │   ├── spaces/              # espaces, membres, invitations
 │   │   │   ├── analytics/           # lecture, export CSV, SSE
-│   │   │   └── collect/             # endpoint public /api/e
+│   │   │   ├── collect/             # endpoint public /api/e
+│   │   │   ├── content/             # V2 : types, entrées, publication
+│   │   │   ├── media/               # V2 : envoi et service des images et des PDF
+│   │   │   ├── public-api/          # V2 : API de lecture des sites (/api/v1)
+│   │   │   └── deploy/              # V2 : appel de l'URL de déploiement
 │   │   ├── drizzle/                 # migrations SQL générées
 │   │   └── test/                    # tests d'intégration
 │   └── dashboard/
@@ -132,12 +138,7 @@ erDiagram
 - **Dernier espace ouvert** : il est gardé dans le `localStorage` du dashboard, pas en base. Ce n'est qu'une commodité.
 - **Suppression d'un espace** : en cascade sur ses `memberships`, `tokens` et `events`.
 
-### Esquisse V2 (à détailler au début de la V2)
-
-- `content_types` : `space_id`, `slug`, `name`, `kind` (`collection` ou `single`), `fields` en JSONB.
-- `entries` : `type_id`, `status` (`draft` ou `published`), `data` en JSONB validé par un schéma Zod construit à partir de `fields`, `published_at`.
-- `media` : `space_id`, chemin sur le NAS, texte alternatif FR et EN, variantes générées.
-- `spaces` gagne `api_key_hash` et `deploy_url`.
+Le modèle de données de la V2 est décrit dans la section « V2 : contenu ».
 
 ## API (V1)
 
@@ -224,6 +225,162 @@ initAnalytics({ key: '<clé publique de l\'espace>', endpoint: 'https://dashilit
 - Le temps réel utilise `EventSource` sur `/api/spaces/:slug/analytics/live`, avec reconnexion automatique et un bouton pause.
 - L'accessibilité vise WCAG 2.2 AA : composants shadcn-vue (Reka UI), une alternative en tableau pour la courbe, et des tests Playwright au clavier sur les parcours V1.
 
+## V2 : contenu
+
+S'appuie sur le document UX, section « Écrans V2 », et sur les décisions du 6 novembre 2026.
+
+### Modèle de données
+
+```mermaid
+erDiagram
+    spaces ||--o{ content_types : définit
+    content_types ||--o{ entries : contient
+    spaces ||--o{ media : stocke
+    content_types {
+        uuid id PK
+        uuid space_id FK
+        text slug "unique dans l'espace, figé"
+        text kind "collection ou single, figé"
+        text name "au pluriel"
+        text entry_label "« un projet »"
+        int position
+        jsonb fields "définitions des champs"
+    }
+    entries {
+        uuid id PK
+        uuid type_id FK
+        text slug "collections ; unique dans le type"
+        jsonb published "version en ligne, null si jamais publiée"
+        jsonb draft "modifications en attente, null s'il n'y en a pas"
+        bool en_complete "calculé à chaque écriture"
+        int version "contrôle des écritures concurrentes"
+        timestamptz published_at
+        timestamptz updated_at
+        uuid updated_by FK
+    }
+    media {
+        uuid id PK
+        uuid space_id FK
+        text kind "image ou pdf"
+        text original_name
+        int width
+        int height
+        int bytes
+        timestamptz created_at
+    }
+```
+
+`spaces` gagne `api_key_hash`, `api_key_created_at`, `deploy_url`, `deploy_token` et le résultat du dernier appel (`deploy_called_at`, `deploy_status`).
+
+**Statut d'une entrée**, déduit des deux colonnes JSONB, sans colonne `status` qui pourrait les contredire :
+
+| `published` | `draft` | Statut (document UX) |
+| --- | --- | --- |
+| null | rempli | Brouillon |
+| rempli | null | Publié |
+| rempli | rempli | Publié, avec des modifications en attente |
+
+- **Sauvegarde automatique** : elle écrit toujours dans `draft`. « Publier » copie `draft` dans `published` et vide `draft` ; « Annuler les modifications » vide `draft` ; « Dépublier » remet `published` dans `draft` et vide `published`. Le site ne lit que `published`.
+- **Écritures concurrentes** : chaque écriture envoie la `version` lue ; si elle ne correspond plus, l'API répond `409` et l'éditeur affiche « Recharger la dernière version ».
+- **Ordre des types** : `position`, modifiable dans Structure. L'ordre des entrées est laissé aux sites (PRD).
+
+### Définition des champs et valeurs
+
+`fields` est un tableau, validé par un schéma Zod de `packages/shared` :
+
+```ts
+type Field = {
+  key: string          // identifiant, figé ; sert de clé dans les valeurs et dans l'API
+  label: string
+  type: 'text' | 'richtext' | 'choice' | 'date' | 'link' | 'list' | 'number' | 'boolean' | 'image' | 'pdf' | 'group'
+  required: boolean
+  translatable: boolean // figé ; ignoré pour group, porté par les sous-champs
+  options?: …           // selon le type : maxLength, choix { key, fr, en }, période et précision, min et max d'un groupe, sous-champs
+}
+```
+
+- **Valeurs** : un objet indexé par `key`. Un champ traduisible vaut `{ fr, en }`, un champ non traduisible vaut sa valeur. Un groupe vaut un tableau d'objets, construits de la même façon pour ses sous-champs : les éléments sont communs aux deux langues (document UX).
+- **Valeurs par type** : `choice` garde la clé du choix (le libellé vient de la définition), `date` vaut `{ start, end?, ongoing? }` en ISO (`2026-10`), `image` vaut `{ id, alt: { fr, en } }`, `pdf` vaut l'`id` du fichier (un par langue si traduisible), `richtext` vaut un document Tiptap (JSON).
+- **Un seul schéma Zod, construit à partir de `fields`**, sert à l'API et au dashboard, en deux modes : *brouillon* (types et formats seulement, tout peut être vide) et *publication* (champs obligatoires en français, en plus). `en_complete` vérifie les champs obligatoires traduisibles en anglais.
+- **Modification de la structure** : supprimer un champ retire sa clé de `published` et de `draft` de toutes les entrées du type, dans une transaction. Ajouter un champ obligatoire ne touche pas aux entrées : la règle s'applique à la prochaine publication (document UX). Ce qui est figé est refusé par l'API, pas seulement masqué dans le dashboard.
+
+### Texte riche
+
+- **Saisie** : Tiptap, limité aux extensions du document UX (paragraphe, gras, italique, lien, listes, intertitre `h2` et `h3`, mise en avant). Le collage ne garde que ces éléments, puisque Tiptap retire ce que son schéma ne connaît pas.
+- **Stockage** : le document JSON de Tiptap. L'API le valide contre la même liste de nœuds et de marques (`richtextSchema` de `packages/shared`, sans dépendance à Tiptap) ; un lien doit être en `http(s)` ou `mailto`, les listes s'imbriquent sur 4 niveaux au plus, et les attributs inconnus sont retirés. Un document sans texte compte comme vide pour la règle « obligatoire » et pour la version anglaise.
+- **Chargement** : l'éditeur (environ 120 Ko compressés) est chargé à la demande, seulement quand une entrée a un champ de texte riche.
+- **Lecture par les sites** : l'API publique renvoie du HTML généré à partir du JSON par `@tiptap/html`, avec les mêmes extensions. Le HTML ne contient donc que ces balises, et le texte est échappé. La mise en avant devient `<mark>` ; le site lui donne son style.
+
+### Médias
+
+- **Stockage** : sur le NAS, dans `/mnt/nas/media/dashility/medias`, monté dans le conteneur `app` en `/data/medias` (variable `MEDIA_DIR`), avec `create_host_path: false` comme pour les sauvegardes. Un fichier par dossier : `<id de l'espace>/<id>/original.<ext>` (l'identifiant de l'espace, pas son slug, qui peut changer), et pour une image `640.webp`, `640.avif`, `1280.webp`… Le NAS est en RAID : une panne de disque ne perd rien.
+- **Envoi** : `POST /api/spaces/:slug/media` en `multipart/form-data` (multer, déjà fourni par `@nestjs/platform-express`), 10 Mo au plus. Le type réel est vérifié : `sharp` doit savoir lire une image (JPEG, PNG ou WebP), et un PDF doit commencer par `%PDF-`. Le nom du fichier n'est jamais utilisé comme chemin.
+- **Variantes** : à l'envoi, en WebP et en AVIF, en 640, 1280 et 1920 px de large, sans agrandir une image plus petite. Les métadonnées EXIF (lieu de la photo) sont retirées.
+- **Service** : `GET /api/media/:id/:fichier`, public, avec `Cache-Control: public, max-age=31536000, immutable`. Un nouveau fichier a toujours un nouvel `id`, donc une adresse en cache n'a jamais besoin d'être invalidée.
+  `shortcut: un média est public dès qu'il est envoyé, même s'il n'est utilisé que dans un brouillon ; son id (UUID aléatoire) ne se devine pas. Servir seulement les médias publiés si un espace a du contenu confidentiel`
+- **Fichiers orphelins** : remplacer ou retirer une image n'efface rien tout de suite, puisque `published` peut encore l'utiliser. Une tâche quotidienne supprime les médias de plus de 24 h qui n'apparaissent ni dans `published` ni dans `draft` d'aucune entrée de leur espace.
+- **NAS injoignable** : l'envoi répond `503` (« Le stockage des fichiers est indisponible »), le service répond `404`. L'édition du texte continue.
+- **Sauvegarde** : les fichiers ne sont pas dans le `pg_dump`. Ils sont protégés des pannes de disque par le RAID du NAS, pas d'une suppression : les instantanés (snapshots) du QNAP sur ce dossier, s'ils sont activés, couvrent ce cas. Risque accepté (PRD : « une perte de données est acceptable »).
+
+### API du dashboard (V2)
+
+Mêmes règles que la V1 : session, `SpaceAccessGuard`, 404 pour un espace inaccessible, format d'erreur unique.
+
+| Méthode et route | Accès | Rôle |
+| --- | --- | --- |
+| `GET /spaces/:slug/types` | Membre | Types de l'espace, avec leurs compteurs (entrées, publiées, EN incomplet) ; chaque route qui renvoie un type renvoie aussi ses compteurs |
+| `POST /spaces/:slug/types` | Super-admin | Crée un type |
+| `PUT /spaces/:slug/types/:type` | Super-admin | Enregistre le type (noms, champs, ordre) ; refuse ce qui est figé |
+| `DELETE /spaces/:slug/types/:type` | Super-admin | Supprime le type et ses entrées |
+| `PUT /spaces/:slug/type-order` | Super-admin | Ordre des types (hors de `/types/`, où `order` pourrait être un type) |
+| `GET /spaces/:slug/types/:type/entries` | Membre | Liste : id, titre, slug, statut, EN complet, date de modification (le filtre par statut se fait dans le dashboard) |
+| `POST /spaces/:slug/types/:type/entries` | Membre | Crée une entrée (brouillon) |
+| `GET /spaces/:slug/types/:type/entries/:id` | Membre | Entrée complète (`published`, `draft`, `version`) ; pour une page unique, `:id` vaut `single` |
+| `PATCH /spaces/:slug/types/:type/entries/:id` | Membre | Sauvegarde automatique : `{ version, data, slug? }` dans `draft` |
+| `POST /spaces/:slug/types/:type/entries/:id/publish` | Membre | `{ version }` : publie le brouillon après les contrôles de publication ; sinon 400 `publication_invalid` avec la liste des champs fautifs (`issues`) |
+| `POST /spaces/:slug/types/:type/entries/:id/discard` | Membre | `{ version }` : annule les modifications en attente |
+| `POST /spaces/:slug/types/:type/entries/:id/unpublish` | Membre | `{ version }` : dépublie, en gardant le contenu (et les modifications en attente) en brouillon |
+| `DELETE /spaces/:slug/types/:type/entries/:id` | Membre | Supprime (sauf une page unique) |
+| `POST /spaces/:slug/media` | Membre | Envoie une image ou un PDF |
+| `POST /spaces/:slug/api-key` | Super-admin | Génère ou régénère la clé ; la renvoie une seule fois |
+| `PUT /spaces/:slug/deploy` | Super-admin | `{ url, token? }` |
+| `POST /spaces/:slug/deploy` | Super-admin | Lance un déploiement tout de suite |
+
+- **Ce qui est réservé au super-admin est vérifié par l'API**, pas seulement caché dans le dashboard.
+- **Publier, dépublier ou supprimer une entrée publiée** demande un déploiement (voir plus bas).
+
+### API publique de lecture (`/api/v1`)
+
+```
+GET /api/v1/content/:type?locale=fr          collection : tableau des entrées publiées ; page unique : l'entrée
+GET /api/v1/content/:type/:slug?locale=fr    une entrée d'une collection
+Authorization: Bearer <clé API de l'espace>
+```
+
+- **La clé identifie l'espace**, il n'y a donc pas d'espace dans l'URL. Elle fait 32 octets aléatoires, préfixée par `dly_` pour être reconnue dans un dépôt de code par erreur ; on ne stocke que son empreinte SHA-256, comme les sessions.
+- **Lecture côté serveur uniquement** : elle sert au build des sites (GitHub Actions) ou à leur serveur. Pas de CORS, puisque la clé ne doit jamais être dans un navigateur.
+- **Réponse résolue pour la langue** : un champ traduisible renvoie la valeur de `locale` ; un choix renvoie `{ key, label }` ; le texte riche renvoie `{ html }` ; une image renvoie `{ alt, width, height, src, srcset: { webp, avif } }` avec des URL absolues ; un PDF renvoie `{ url, bytes }`.
+- **`locale=en`** n'inclut que les entrées dont la version anglaise est complète (PRD, « Langues »).
+- **Valeur par défaut** : un champ « oui / non » jamais touché n'a pas de valeur enregistrée ; l'API renvoie sa valeur par défaut, celle que l'éditeur affiche.
+- **Chaque entrée** porte aussi `slug` (collections), `publishedAt` et `updatedAt`.
+- Limitée à 120 requêtes par minute par clé. Documentée en OpenAPI sur `/api/docs` (`@nestjs/swagger`, prévu dans la stack depuis la V1 et pas encore en place, arrive avec cette API).
+
+### Déploiement à la publication
+
+- **Appel** : `POST deploy_url` avec le corps JSON `{ "event_type": "dashility-publish", "client_payload": { "space": "<slug>" } }` et, si un jeton est enregistré, l'en-tête `Authorization: Bearer <jeton>`. Ce format est celui de `repository_dispatch` de GitHub ; les hooks de build qui n'attendent rien (Netlify, Vercel…) ignorent le corps.
+- **Regroupement** : l'appel part 10 secondes après la dernière publication de l'espace. Publier trois entrées à la suite ne lance qu'un build.
+  `shortcut: minuteur en mémoire, perdu si l'API redémarre pendant ces 10 s et valable pour une seule instance ; le bouton « Lancer un déploiement » rattrape le cas`
+- **Résultat** : le statut HTTP (ou « injoignable ») et l'heure sont enregistrés sur l'espace et affichés dans l'éditeur. Délai de 10 s, pas de nouvel essai automatique : le bouton « Relancer » suffit.
+- **Sécurité** : `deploy_url` doit être en `https`, et seul le super-admin la règle. Le jeton n'est jamais renvoyé par l'API après son enregistrement (l'écran affiche « Jeton enregistré »). Il est stocké en clair, puisqu'il faut l'envoyer ; il doit donc avoir le moins de droits possible (pour GitHub : un jeton à grain fin limité au dépôt du site, permission « Contents » en écriture, la seule qui autorise `repository_dispatch`).
+
+### Le portfolio (migration, dans son propre dépôt)
+
+À faire après la V2, sur demande du propriétaire :
+
+- `.github/workflows/contenu.yml` sur `repository_dispatch` (`dashility-publish`) : il lit le contenu par l'API publique (clé dans un secret GitHub), télécharge les images, build et publie l'image Docker sans relancer les tests. Les images restent servies par le site lui-même : sa CSP `img-src 'self'` ne change pas.
+- **Objectif de moins de 5 minutes** (PRD) : environ 2 à 3 min de build, puis la tâche cron du serveur. Elle passe de 5 minutes à 1 minute pour le portfolio, sinon l'attente seule peut dépasser l'objectif.
+- Le contenu Markdown et TypeScript actuel est recopié dans les types du document UX, puis lu par l'API au build.
+
 ## Environnements et déploiement
 
 | Environnement | Comment |
@@ -236,7 +393,7 @@ initAnalytics({ key: '<clé publique de l\'espace>', endpoint: 'https://dashilit
 
 `docker/compose.prod.yml` (copié en `compose.yml` dans ce dossier) :
 
-- `app` : l'image de l'API et du dashboard. Les migrations Drizzle s'appliquent au démarrage.
+- `app` : l'image de l'API et du dashboard. Les migrations Drizzle s'appliquent au démarrage. En V2, le dossier des médias du NAS y est monté (`/data/medias`).
 - `db` : `postgres:17`, avec un volume persistant.
 - `backup` : un `pg_dump` quotidien vers le NAS (`/mnt/nas/media/backups/dashility`, monté en NFS sur le serveur), qui garde 7 sauvegardes.
 - Nginx Proxy Manager, déjà en place, redirige `dashility.costamask.dev` vers `app:3000`.
@@ -270,3 +427,17 @@ Faire la collecte (étape 5) avant le dashboard permet d'accumuler des données 
 | CMS hors ligne | Les sites restent en ligne ; seuls les événements de cette période sont perdus (accepté par le PRD) |
 | Perte du serveur | `pg_dump` quotidien sur le NAS |
 | Mot de passe du super-admin oublié | La commande serveur permet aussi de le réinitialiser |
+
+## Ordre de construction de la V2
+
+Même principe : une branche et une PR vers `dev` par étape, et chaque étape laisse le dashboard utilisable.
+
+1. `feat/dev/types_contenu` : tables, schéma Zod des champs, API et écran Structure.
+2. `feat/dev/entrees` : API des entrées, écrans Contenu, liste et éditeur, avec les champs simples (texte court, choix, date, lien, liste de valeurs, nombre, oui / non, groupe répétable), la sauvegarde automatique et les écritures concurrentes.
+3. `feat/dev/publication` : publier, annuler les modifications, dépublier, supprimer, contrôles de publication et EN incomplet.
+4. `feat/dev/texte_riche` : Tiptap dans l'éditeur et validation côté API.
+5. `feat/dev/medias` : envoi, variantes, service, nettoyage, champs image et PDF, montage du NAS dans le compose de production.
+6. `feat/dev/api_publique` : clé API, `/api/v1`, HTML du texte riche, OpenAPI.
+7. `feat/dev/deploiement_publication` : URL de déploiement, regroupement, état dans l'éditeur et dans Réglages.
+
+Puis la release, et la migration du portfolio (dans son dépôt), à la demande du propriétaire.

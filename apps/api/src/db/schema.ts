@@ -1,13 +1,17 @@
+import type { EntryData, Field } from '@dashility/shared'
 import { sql } from 'drizzle-orm'
 import {
   bigint,
   boolean,
   check,
   index,
+  integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
   timestamp,
+  unique,
   uuid,
 } from 'drizzle-orm/pg-core'
 
@@ -93,4 +97,80 @@ export const events = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index('events_space_created_idx').on(t.spaceId, t.createdAt)],
+)
+
+/** Types de contenu d'un espace (V2). `slug` et `kind` sont figés après la création ;
+ *  `fields` est validé par `fieldSchema` (packages/shared). */
+export const contentTypes = pgTable(
+  'content_types',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    spaceId: uuid('space_id')
+      .notNull()
+      .references(() => spaces.id, { onDelete: 'cascade' }),
+    slug: text('slug').notNull(),
+    kind: text('kind', { enum: ['collection', 'single'] }).notNull(),
+    name: text('name').notNull(),
+    /** « un projet » pour une collection, null pour une page unique. */
+    entryLabel: text('entry_label'),
+    position: integer('position').notNull(),
+    fields: jsonb('fields').$type<Field[]>().notNull(),
+    createdAt: createdAt(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique('content_types_space_slug').on(t.spaceId, t.slug)],
+)
+
+/** Entrées d'un type (V2). Le statut se déduit de `published` et `draft` (architecture technique,
+ *  « Modèle de données ») : le site ne lit que `published`. Une page unique a une seule entrée,
+ *  créée avec son type ; `slug` ne sert qu'aux collections (null tant qu'il n'est pas choisi). */
+export const entries = pgTable(
+  'entries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    typeId: uuid('type_id')
+      .notNull()
+      .references(() => contentTypes.id, { onDelete: 'cascade' }),
+    slug: text('slug'),
+    published: jsonb('published').$type<EntryData>(),
+    draft: jsonb('draft').$type<EntryData>(),
+    /** Calculé à chaque écriture, sur la version la plus récente (brouillon, sinon publiée). */
+    enComplete: boolean('en_complete').notNull(),
+    /** Contrôle des écritures concurrentes : chaque sauvegarde envoie la version lue. */
+    version: integer('version').notNull().default(1),
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  },
+  (t) => [
+    unique('entries_type_slug').on(t.typeId, t.slug),
+    check('entries_has_data', sql`${t.published} is not null or ${t.draft} is not null`),
+  ],
+)
+
+/** Images et PDF envoyés dans les champs des entrées (V2). Les fichiers sont sur le NAS, dans
+ *  `<MEDIA_DIR>/<id de l'espace>/<id>/` ; la table n'en garde que la description. */
+export const media = pgTable(
+  'media',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    spaceId: uuid('space_id')
+      .notNull()
+      .references(() => spaces.id, { onDelete: 'cascade' }),
+    kind: text('kind', { enum: ['image', 'pdf'] }).notNull(),
+    /** Nom du fichier envoyé, pour l'affichage et le téléchargement ; jamais utilisé comme chemin. */
+    originalName: text('original_name').notNull(),
+    width: integer('width'),
+    height: integer('height'),
+    bytes: integer('bytes').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('media_space_created_idx').on(t.spaceId, t.createdAt),
+    check(
+      'media_image_size',
+      sql`(${t.kind} = 'image') = (${t.width} is not null and ${t.height} is not null)`,
+    ),
+  ],
 )

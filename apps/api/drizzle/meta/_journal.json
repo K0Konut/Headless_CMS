@@ -8,6 +8,34 @@
       "when": 1793795236219,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793980798716,
+      "tag": "0001_content_types",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794017108529,
+      "tag": "0002_entries",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794018681328,
+      "tag": "0003_single_entries",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794073949103,
+      "tag": "0004_media",
+      "breakpoints": true
     }
   ]
 }
