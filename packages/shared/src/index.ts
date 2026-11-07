@@ -335,19 +335,42 @@ export function isEnComplete(fields: Field[], data: EntryData): boolean {
   })
 }
 
-/** Ne garde que les valeurs encore valides pour la définition : un champ supprimé, un choix
- *  retiré ou un sous-champ disparu perdent leur valeur quand la structure change. */
-export function pruneEntryData(fields: Field[], data: EntryData): EntryData {
-  const kept: EntryData = {}
-  for (const field of fields) {
-    let value = data[field.key]
-    if (value === undefined) continue
-    if (field.type === 'group' && Array.isArray(value)) {
-      value = value.map((item: EntryData) => pruneEntryData(field.fields, item))
+/** Élagueur des valeurs d'une entrée : il ne garde que les valeurs encore valides pour la
+ *  définition (un champ supprimé, un choix retiré ou un sous-champ disparu perdent leur valeur
+ *  quand la structure change). Les schémas sont construits une fois, pour toutes les entrées. */
+export function entryPruner(fields: Field[]): (data: EntryData) => EntryData {
+  const rules = fields.map((field) => ({
+    field,
+    schema: fieldValueSchema(field),
+    items: field.type === 'group' ? entryPruner(field.fields) : undefined,
+  }))
+  return (data) => {
+    const kept: EntryData = {}
+    for (const { field, schema, items } of rules) {
+      let value = data[field.key]
+      if (value === undefined) continue
+      if (items && Array.isArray(value)) value = value.map((item: EntryData) => items(item))
+      if (schema.safeParse(value).success) kept[field.key] = value
     }
-    if (fieldValueSchema(field).safeParse(value).success) kept[field.key] = value
+    return kept
   }
-  return kept
+}
+
+export type EntryStatus = 'draft' | 'published' | 'modified'
+
+/** Statut affiché (document UX, « Statuts d'une entrée »), déduit des deux versions. */
+export const entryStatus = (entry: {
+  published: EntryData | null
+  draft: EntryData | null
+}): EntryStatus => (!entry.published ? 'draft' : entry.draft ? 'modified' : 'published')
+
+/** Adresse d'un champ « lien » acceptée à la publication. */
+export function isValidLink(value: string) {
+  try {
+    return ['http:', 'https:', 'mailto:'].includes(new URL(value).protocol)
+  } catch {
+    return false
+  }
 }
 
 /** Titre d'une entrée dans les listes : la valeur française du premier champ « texte court ». */

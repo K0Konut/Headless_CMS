@@ -7,10 +7,12 @@ import {
   entryDataSchema,
   entryTitle,
   fieldSchema,
+  entryPruner,
+  entryStatus,
   frozenFieldChange,
   isEnComplete,
+  isValidLink,
   passwordSchema,
-  pruneEntryData,
   siteUrlSchema,
   slugSchema,
 } from './index'
@@ -236,7 +238,7 @@ describe('valeurs des entrées', () => {
     const kept = fields.filter((f) => f.key !== 'stack')
     const choice = kept[1]!
     if (choice.type === 'choice') choice.choices = [{ key: 'ecole', fr: 'École', en: 'School' }]
-    expect(pruneEntryData(kept, data)).toEqual({
+    expect(entryPruner(kept)(data)).toEqual({
       title: data.title,
       period: data.period,
       steps: data.steps,
@@ -246,5 +248,22 @@ describe('valeurs des entrées', () => {
   it('prend le titre français du premier texte court', () => {
     expect(entryTitle(fields, data)).toBe('Ce portfolio')
     expect(entryTitle(fields, {})).toBe('')
+  })
+})
+
+it('déduit le statut des deux versions', () => {
+  expect(entryStatus({ published: null, draft: {} })).toBe('draft')
+  expect(entryStatus({ published: {}, draft: null })).toBe('published')
+  expect(entryStatus({ published: {}, draft: {} })).toBe('modified')
+})
+
+describe('isValidLink', () => {
+  it.each([
+    ['https://github.com/K0Konut', true],
+    ['mailto:moi@exemple.fr', true],
+    ['github.com/K0Konut', false],
+    ['javascript:alert(1)', false],
+  ])('%s → %s', (value, valid) => {
+    expect(isValidLink(value)).toBe(valid)
   })
 })
