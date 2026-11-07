@@ -43,3 +43,25 @@ export async function api<T = void>(
 /** Message à afficher pour une erreur d'appel : celui de l'API, sinon un message générique. */
 export const errorMessage = (err: unknown) =>
   err instanceof ApiError ? err.message : 'Une erreur est survenue'
+
+/** Envoi d'un fichier en `multipart/form-data` (images et PDF des entrées). L'en-tête
+ *  `X-Requested-With` remplace, pour cette route, la règle « JSON obligatoire » de l'API (CSRF). */
+export async function uploadFile<T>(path: string, file: File): Promise<T> {
+  const body = new FormData()
+  body.append('file', file)
+  const res = await fetch(`/api${path}`, {
+    method: 'POST',
+    headers: { 'X-Requested-With': 'dashility' },
+    body,
+  })
+  if (res.ok) return (await res.json()) as T
+  const payload = (await res.json().catch(() => null)) as {
+    error?: { code: string; message: string }
+  } | null
+  if (res.status === 401) onUnauthorized?.()
+  throw new ApiError(
+    res.status,
+    payload?.error?.code ?? 'error',
+    payload?.error?.message ?? 'Le serveur ne répond pas. Réessayez dans un instant.',
+  )
+}

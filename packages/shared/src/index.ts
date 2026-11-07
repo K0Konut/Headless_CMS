@@ -356,6 +356,65 @@ export function richtextHasText(node: unknown): boolean {
   return Array.isArray(content) && content.some(richtextHasText)
 }
 
+// ── Médias : images et PDF ────────────────────────────────────────────────────────────
+
+/** 10 Mo au plus par fichier (document UX, « Les types de champs »). */
+export const MAX_MEDIA_BYTES = 10 * 1024 * 1024
+/** Types d'image acceptés ; le type réel est vérifié par l'API, pas seulement l'extension. */
+export const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
+
+/** Largeurs des variantes d'une image : 640, 1280 et 1920 px, sans agrandir une image plus
+ *  petite ; la plus grande variante est l'image elle-même quand elle fait moins de 1920 px.
+ *  Les fichiers s'appellent `<largeur>.webp` et `<largeur>.avif`. */
+export function imageWidths(width: number): number[] {
+  const largest = Math.min(width, 1920)
+  return [...[640, 1280].filter((w) => w < largest), largest]
+}
+
+/** Valeur d'un champ image : le fichier et ses textes alternatifs FR et EN. */
+export const imageValueSchema = z
+  .object({
+    id: z.uuid(),
+    alt: z.object({ fr: z.string().max(500), en: z.string().max(500) }).strict(),
+  })
+  .strict()
+export type ImageValue = z.infer<typeof imageValueSchema>
+
+/** Fichier envoyé, tel que l'API le décrit. */
+export interface Media {
+  id: string
+  kind: 'image' | 'pdf'
+  originalName: string
+  width: number | null
+  height: number | null
+  bytes: number
+  createdAt: string
+}
+
+/** Médias cités par des valeurs : l'API vérifie qu'ils appartiennent à l'espace et ont le bon
+ *  type. */
+export function mediaRefs(
+  fields: Field[],
+  data: EntryData,
+): { id: string; kind: 'image' | 'pdf' }[] {
+  return fields.flatMap((field) => {
+    const value = data[field.key]
+    if (field.type === 'group') {
+      return ((value as EntryData[] | undefined) ?? []).flatMap((item) =>
+        mediaRefs(field.fields, item),
+      )
+    }
+    if (field.type !== 'image' && field.type !== 'pdf') return []
+    const values = field.translatable
+      ? Object.values((value as Record<string, unknown> | undefined) ?? {})
+      : [value]
+    return values.flatMap((v) => {
+      const id = field.type === 'image' ? (v as ImageValue | null)?.id : v
+      return typeof id === 'string' ? [{ id, kind: field.type as 'image' | 'pdf' }] : []
+    })
+  })
+}
+
 /** Valeur d'un champ dans une langue, en brouillon : seule la forme est vérifiée, tout peut être
  *  vide. Le format d'un lien et les champs obligatoires sont vérifiés à la publication. */
 function languageValueSchema(field: Field): z.ZodType {
@@ -384,9 +443,10 @@ function languageValueSchema(field: Field): z.ZodType {
       return z.array(entryDataSchema(field.fields)).max(100)
     case 'richtext':
       return richtextSchema.nullable()
-    default:
-      // shortcut: image et PDF arrivent à l'étape 5 de la V2 ; d'ici là, un tel champ reste vide
-      return z.never()
+    case 'image':
+      return imageValueSchema.nullable()
+    case 'pdf':
+      return z.uuid().nullable()
   }
 }
 
@@ -428,6 +488,10 @@ export function isEnComplete(fields: Field[], data: EntryData): boolean {
       return ((value as EntryData[] | undefined) ?? []).every((item) =>
         isEnComplete(field.fields, item),
       )
+    }
+    // Une image a toujours ses deux textes alternatifs (document UX, « Statuts d'une entrée »).
+    if (field.type === 'image') {
+      return !value || isFilled((value as ImageValue).alt?.en)
     }
     return (
       !field.required ||
@@ -551,11 +615,6 @@ function isMissing(field: Field, value: unknown) {
   return !isFilled(value)
 }
 
-/** Champs qui ne se remplissent pas encore dans le dashboard. */
-// shortcut: image et PDF arrivent à l'étape 5 de la V2 ; d'ici là, leur caractère obligatoire
-// n'est pas vérifié, sinon aucune entrée qui en a ne pourrait être publiée
-const NOT_YET_EDITABLE: FieldType[] = ['image', 'pdf']
-
 function collectIssues(fields: Field[], data: EntryData, prefix: string, out: PublicationIssue[]) {
   for (const field of fields) {
     const value = data[field.key]
@@ -581,11 +640,15 @@ function collectIssues(fields: Field[], data: EntryData, prefix: string, out: Pu
       : [{ path, value, lang: 'fr' as const }]
     for (const v of langs) {
       // Le français est la langue de référence : l'anglais manquant ne bloque pas (EN incomplet).
-      if (v.lang === 'fr' && field.required && !NOT_YET_EDITABLE.includes(field.type)) {
+      if (v.lang === 'fr' && field.required) {
         if (isMissing(field, v.value)) {
           out.push({ path: v.path, message: 'Champ obligatoire' })
           continue
         }
+      }
+      // Le texte alternatif français d'une image présente est obligatoire, même si l'image ne l'est pas.
+      if (field.type === 'image' && v.value && !isFilled((v.value as ImageValue).alt?.fr)) {
+        out.push({ path: `${v.path}.alt.fr`, message: 'Texte alternatif obligatoire' })
       }
       const format = formatIssue(field, v.value)
       if (format) {

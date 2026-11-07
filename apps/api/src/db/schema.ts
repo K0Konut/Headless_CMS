@@ -148,3 +148,29 @@ export const entries = pgTable(
     check('entries_has_data', sql`${t.published} is not null or ${t.draft} is not null`),
   ],
 )
+
+/** Images et PDF envoyés dans les champs des entrées (V2). Les fichiers sont sur le NAS, dans
+ *  `<MEDIA_DIR>/<id de l'espace>/<id>/` ; la table n'en garde que la description. */
+export const media = pgTable(
+  'media',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    spaceId: uuid('space_id')
+      .notNull()
+      .references(() => spaces.id, { onDelete: 'cascade' }),
+    kind: text('kind', { enum: ['image', 'pdf'] }).notNull(),
+    /** Nom du fichier envoyé, pour l'affichage et le téléchargement ; jamais utilisé comme chemin. */
+    originalName: text('original_name').notNull(),
+    width: integer('width'),
+    height: integer('height'),
+    bytes: integer('bytes').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('media_space_created_idx').on(t.spaceId, t.createdAt),
+    check(
+      'media_image_size',
+      sql`(${t.kind} = 'image') = (${t.width} is not null and ${t.height} is not null)`,
+    ),
+  ],
+)

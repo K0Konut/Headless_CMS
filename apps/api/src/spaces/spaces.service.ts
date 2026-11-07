@@ -2,6 +2,7 @@ import { ConflictException, Inject, Injectable, NotFoundException } from '@nestj
 import { randomBytes } from 'node:crypto'
 import { and, asc, eq, gt, isNull } from 'drizzle-orm'
 import { hashToken, newToken } from '../auth/tokens.js'
+import { removeSpaceMedia } from '../media/storage.js'
 import { DB } from '../db/db.module.js'
 import { isUniqueViolation } from '../db/errors.js'
 import type { Db } from '../db/index.js'
@@ -37,6 +38,8 @@ export class SpacesService {
 
   async remove(space: Space) {
     await this.db.delete(spaces).where(eq(spaces.id, space.id))
+    // Les descriptions des médias disparaissent avec l'espace ; leurs fichiers aussi.
+    await removeSpaceMedia(space.id)
   }
 
   /** Membres (hors super-admins, qui voient tout sans adhésion) et invitations en attente. */

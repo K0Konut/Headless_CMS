@@ -17,6 +17,8 @@ import { EntriesService } from './content/entries.service.js'
 import { TypesController } from './content/types.controller.js'
 import { TypesService } from './content/types.service.js'
 import { RetentionService } from './collect/retention.service.js'
+import { PublicMediaController, SpaceMediaController } from './media/media.controller.js'
+import { MediaService } from './media/media.service.js'
 import { DbModule } from './db/db.module.js'
 import { ErrorFilter } from './error.filter.js'
 import { requireJson } from './require-json.middleware.js'
@@ -44,6 +46,8 @@ import { SpacesService } from './spaces/spaces.service.js'
     AuthController,
     CollectController,
     LinksController,
+    PublicMediaController,
+    SpaceMediaController,
     SpacesController,
     SpaceController,
     TypesController,
@@ -54,6 +58,7 @@ import { SpacesService } from './spaces/spaces.service.js'
     AuthService,
     LiveService,
     LinksService,
+    MediaService,
     RetentionService,
     SpacesService,
     TypesService,
@@ -65,6 +70,13 @@ import { SpacesService } from './spaces/spaces.service.js'
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     // La collecte reçoit du text/plain (sendBeacon) ; elle n'utilise ni session ni cookie.
-    consumer.apply(requireJson).exclude({ path: 'e', method: RequestMethod.POST }).forRoutes('*')
+    // L'envoi d'un média est en multipart ; sa protection CSRF est dans son contrôleur.
+    consumer
+      .apply(requireJson)
+      .exclude(
+        { path: 'e', method: RequestMethod.POST },
+        { path: 'spaces/:slug/media', method: RequestMethod.POST },
+      )
+      .forRoutes('*')
   }
 }

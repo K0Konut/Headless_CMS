@@ -11,6 +11,7 @@ import {
   entryStatus,
   entryTitle,
   isEnComplete,
+  mediaRefs,
   publicationIssues,
   type saveEntrySchema,
 } from '@dashility/shared'
@@ -21,6 +22,7 @@ import { isUniqueViolation } from '../db/errors.js'
 import type { Db, User } from '../db/index.js'
 import { contentTypes, entries } from '../db/schema.js'
 import type { Space } from '../spaces/guards.js'
+import { MediaService } from '../media/media.service.js'
 import { TypesService } from './types.service.js'
 
 type ContentType = typeof contentTypes.$inferSelect
@@ -45,6 +47,7 @@ export class EntriesService {
   constructor(
     @Inject(DB) private readonly db: Db,
     private readonly types: TypesService,
+    private readonly media: MediaService,
   ) {}
 
   /** Entrées d'une collection, la dernière modifiée d'abord. */
@@ -101,6 +104,8 @@ export class EntriesService {
   ) {
     const type = await this.types.row(space, typeSlug)
     const data = entryDataSchema(type.fields).parse(body.data)
+    // Une image ou un PDF cité doit avoir été envoyé dans cet espace.
+    await this.media.checkRefs(space, mediaRefs(type.fields, data))
     if (type.kind === 'single' && body.slug !== undefined) {
       throw new BadRequestException('Une page unique n’a pas d’identifiant d’URL')
     }
