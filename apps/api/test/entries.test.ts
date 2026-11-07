@@ -91,7 +91,7 @@ describe('entrées', () => {
     expect(current.body.draft).toEqual({ stack: ['Vue'] })
   })
 
-  it('refuse des valeurs qui ne correspondent pas au type, et un identifiant d’URL en double', async () => {
+  it('refuse des valeurs qui ne correspondent pas au type ; un identifiant pris n’empêche pas d’enregistrer', async () => {
     const first = await api('post', BASE, member).expect(201)
     const second = await api('post', BASE, member).expect(201)
     await api('patch', `${BASE}/${first.body.id}`, member)
@@ -100,10 +100,16 @@ describe('entrées', () => {
     await api('patch', `${BASE}/${first.body.id}`, member)
       .send({ version: 1, data: {}, slug: 'cms' })
       .expect(200)
+    // Identifiant déjà pris : le contenu est enregistré, l'identifiant reste l'ancien.
     const duplicate = await api('patch', `${BASE}/${second.body.id}`, member)
-      .send({ version: 1, data: {}, slug: 'cms' })
-      .expect(400)
-    expect(duplicate.body.error.message).toMatch(/déjà utilisé/)
+      .send({ version: 1, data: { stack: ['Vue'] }, slug: 'cms' })
+      .expect(200)
+    expect(duplicate.body).toMatchObject({ slug: null, draft: { stack: ['Vue'] }, version: 2 })
+    expect(duplicate.body.slugError).toMatch(/déjà utilisé/)
+    // « nouveau » n'est réservé que pour les espaces.
+    await api('patch', `${BASE}/${second.body.id}`, member)
+      .send({ version: 2, data: {}, slug: 'nouveau' })
+      .expect(200)
   })
 
   it('une page unique a son entrée dès sa création', async () => {
@@ -129,6 +135,19 @@ describe('entrées', () => {
       .expect(200)
     const entry = await api('get', `${BASE}/${body.id}`, member).expect(200)
     expect(entry.body).toMatchObject({ draft: { title: { fr: 'CMS' } }, version: 3 })
+  })
+
+  it('un changement de champs fait recharger tous les éditeurs ouverts, même sans valeur effacée', async () => {
+    const { body } = await api('post', BASE, member).expect(201)
+    await api('put', '/spaces/portfolio/types/projets', admin)
+      .send({ ...PROJECTS, slug: undefined, fields: [title] })
+      .expect(200)
+    await api('patch', `${BASE}/${body.id}`, member).send({ version: 1, data: {} }).expect(409)
+    // Un simple renommage ne dérange personne.
+    await api('put', '/spaces/portfolio/types/projets', admin)
+      .send({ ...PROJECTS, slug: undefined, name: 'Réalisations', fields: [title] })
+      .expect(200)
+    await api('patch', `${BASE}/${body.id}`, member).send({ version: 2, data: {} }).expect(200)
   })
 
   it('n’existe pas hors de son espace ni avec un identifiant mal formé', async () => {

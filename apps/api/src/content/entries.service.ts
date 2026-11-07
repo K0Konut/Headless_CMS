@@ -12,7 +12,7 @@ import {
   isEnComplete,
   type saveEntrySchema,
 } from '@dashility/shared'
-import { and, desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, ne, sql } from 'drizzle-orm'
 import type { z } from 'zod'
 import { DB } from '../db/db.module.js'
 import { isUniqueViolation } from '../db/errors.js'
@@ -102,33 +102,48 @@ export class EntriesService {
     if (type.kind === 'single' && body.slug !== undefined) {
       throw new BadRequestException('Une page unique n’a pas d’identifiant d’URL')
     }
+    const [current] = await this.db
+      .select({ id: entries.id, slug: entries.slug })
+      .from(entries)
+      .where(this.byId(type, id))
+    if (!current) throw new NotFoundException('Entrée introuvable')
+
+    // Un identifiant d'URL déjà pris n'empêche pas d'enregistrer le contenu : l'entrée garde son
+    // identifiant actuel et la réponse le signale.
+    let slug = body.slug
+    let slugError: string | undefined
+    if (slug && slug !== current.slug) {
+      const [taken] = await this.db
+        .select({ id: entries.id })
+        .from(entries)
+        .where(and(eq(entries.typeId, type.id), eq(entries.slug, slug), ne(entries.id, current.id)))
+      if (taken) {
+        slug = undefined
+        slugError = 'Cet identifiant d’URL est déjà utilisé par une autre entrée'
+      }
+    }
     try {
       const [entry] = await this.db
         .update(entries)
         .set({
           draft: data,
-          ...(body.slug !== undefined && { slug: body.slug }),
+          ...(slug !== undefined && { slug }),
           enComplete: isEnComplete(type.fields, data),
           version: sql`${entries.version} + 1`,
           updatedAt: new Date(),
           updatedBy: user.id,
         })
-        .where(and(this.byId(type, id), eq(entries.version, body.version)))
+        .where(and(eq(entries.id, current.id), eq(entries.version, body.version)))
         .returning(entryColumns)
-      if (entry) return entry
+      if (!entry) throw new ConflictException('Cette entrée a été modifiée ailleurs')
+      return slugError ? { ...entry, slugError } : entry
     } catch (err) {
+      // Pris entre la vérification et l'écriture : cas rare, signalé sans perdre la suite.
       if (isUniqueViolation(err)) {
         throw new BadRequestException('Cet identifiant d’URL est déjà utilisé par une autre entrée')
       }
       throw err
     }
-    // Aucune ligne modifiée : l'entrée n'existe pas (404), ou sa version a changé (409).
-    const [exists] = await this.db
-      .select({ id: entries.id })
-      .from(entries)
-      .where(this.byId(type, id))
-    if (!exists) throw new NotFoundException('Entrée introuvable')
-    throw new ConflictException('Cette entrée a été modifiée ailleurs')
   }
 
   /** `single` désigne l'entrée d'une page unique, la seule de son type. */

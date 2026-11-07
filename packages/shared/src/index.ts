@@ -381,10 +381,16 @@ export function entryTitle(fields: Field[], data: EntryData): string {
   return typeof text === 'string' ? text.trim() : ''
 }
 
+/** Identifiant d'URL d'une entrée de collection (`/projets/ce-portfolio` sur le site). */
+export const entrySlugSchema = z
+  .string()
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Minuscules, chiffres et tirets uniquement')
+  .max(100)
+
 /** Corps de `PATCH …/entries/:id` (sauvegarde automatique). `version` est celle lue : si l'entrée a
  *  changé depuis, l'API répond 409. `data` est validé avec `entryDataSchema` du type. */
 export const saveEntrySchema = z.object({
   version: z.int().min(1),
   data: z.record(z.string(), z.unknown()),
-  slug: slugSchema.nullable().optional(),
+  slug: entrySlugSchema.nullable().optional(),
 })

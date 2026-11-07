@@ -113,8 +113,13 @@ export class TypesService {
 
       // Champs inchangés (renommage, ordre des types…) : les entrées ne bougent pas.
       if (isDeepStrictEqual(current.fields, body.fields)) return
-      // Les valeurs des champs ou des choix supprimés disparaissent des entrées. Une entrée
-      // modifiée change de version : un éditeur ouvert dessus devra la recharger.
+      // Champs modifiés : toutes les entrées changent de version, pour qu'un éditeur ouvert sur
+      // l'ancienne structure recharge au lieu d'envoyer des valeurs qu'elle ne connaît plus.
+      await tx
+        .update(entries)
+        .set({ version: sql`${entries.version} + 1` })
+        .where(eq(entries.typeId, current.id))
+      // Les valeurs des champs ou des choix supprimés disparaissent des entrées.
       const rows = await tx.select().from(entries).where(eq(entries.typeId, current.id))
       const pruner = entryPruner(body.fields)
       for (const entry of rows) {
@@ -126,12 +131,7 @@ export class TypesService {
         if (!changed && enComplete === entry.enComplete) continue
         await tx
           .update(entries)
-          .set({
-            published,
-            draft,
-            enComplete,
-            version: changed ? sql`${entries.version} + 1` : entry.version,
-          })
+          .set({ published, draft, enComplete })
           .where(eq(entries.id, entry.id))
       }
     })
