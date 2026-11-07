@@ -2,6 +2,7 @@ import { ConflictException, Inject, Injectable, NotFoundException } from '@nestj
 import { randomBytes } from 'node:crypto'
 import { and, asc, eq, gt, isNull } from 'drizzle-orm'
 import { hashToken, newToken } from '../auth/tokens.js'
+import { generateApiKey, hashApiKey } from '../public-api/api-key.js'
 import { removeSpaceMedia } from '../media/storage.js'
 import { DB } from '../db/db.module.js'
 import { isUniqueViolation } from '../db/errors.js'
@@ -12,6 +13,13 @@ import type { Space } from './guards.js'
 const INVITATION_TTL_MS = 72 * 60 * 60 * 1000
 
 type SpaceFields = { name: string; slug: string; siteUrl: string }
+
+/** Un espace tel que l'API le renvoie : jamais l'empreinte de sa clé API. */
+export function withoutSecrets(space: Space) {
+  const { apiKeyHash, ...rest } = space
+  void apiKeyHash
+  return rest
+}
 
 @Injectable()
 export class SpacesService {
@@ -25,15 +33,27 @@ export class SpacesService {
         .values({ ...fields, publicKey })
         .returning(),
     )
-    return space!
+    return withoutSecrets(space!)
   }
 
   async update(space: Space, fields: Partial<SpaceFields>) {
-    if (!Object.keys(fields).length) return space
+    if (!Object.keys(fields).length) return withoutSecrets(space)
     const [updated] = await this.uniqueSlug(() =>
       this.db.update(spaces).set(fields).where(eq(spaces.id, space.id)).returning(),
     )
-    return updated!
+    return withoutSecrets(updated!)
+  }
+
+  /** Génère ou régénère la clé de l'API de lecture. Elle n'est renvoyée qu'ici, une seule fois ;
+   *  l'ancienne cesse aussitôt de fonctionner (document UX, « Réglages › Intégration »). */
+  async regenerateApiKey(space: Space) {
+    const key = generateApiKey()
+    const [updated] = await this.db
+      .update(spaces)
+      .set({ apiKeyHash: hashApiKey(key), apiKeyCreatedAt: new Date() })
+      .where(eq(spaces.id, space.id))
+      .returning({ createdAt: spaces.apiKeyCreatedAt })
+    return { key, createdAt: updated!.createdAt! }
   }
 
   async remove(space: Space) {

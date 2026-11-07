@@ -1,6 +1,8 @@
 import type { NestExpressApplication } from '@nestjs/platform-express'
 import cookieParser from 'cookie-parser'
+import { SwaggerModule } from '@nestjs/swagger'
 import helmet from 'helmet'
+import { openApiDocument } from './public-api/openapi.js'
 
 /** Configuration commune au serveur et aux tests. */
 export function setupApp(app: NestExpressApplication) {
@@ -11,5 +13,7 @@ export function setupApp(app: NestExpressApplication) {
   app.use(cookieParser())
   // Corps de la collecte : JSON envoyé en text/plain, quelques centaines d'octets au plus.
   app.useBodyParser('text', { limit: '2kb' })
+  // Documentation de l'API de lecture des sites : /api/docs (et /api/docs-json).
+  SwaggerModule.setup('api/docs', app, openApiDocument)
   return app
 }
