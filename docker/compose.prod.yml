@@ -11,6 +11,15 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgres://dashility:${POSTGRES_PASSWORD:?à définir dans .env}@db:5432/dashility
+      MEDIA_DIR: /data/medias
+    volumes:
+      # Images et PDF des entrées, sur le NAS (RAID). Comme pour les sauvegardes, sans create_host_path :
+      # si le NAS n'est pas monté, l'app refuse de démarrer au lieu d'écrire sur le disque du serveur.
+      - type: bind
+        source: ${MEDIA_HOST_DIR:-/mnt/nas/media/dashility/medias}
+        target: /data/medias
+        bind:
+          create_host_path: false
     depends_on:
       db:
         condition: service_healthy

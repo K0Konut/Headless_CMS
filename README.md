@@ -28,6 +28,15 @@ Chaque merge sur `main` relance les vérifications, puis publie l'image `ghcr.io
 
    Si la commande échoue, autoriser l'écriture sur ce dossier côté NAS (réglages NFS ou droits du dossier). Le fichier `test` peut ensuite être supprimé.
 
+   Même vérification pour les images et les PDF des entrées, écrits par l'utilisateur `node` (uid 1000) de l'image :
+
+   ```sh
+   mkdir -p /mnt/nas/media/dashility/medias
+   docker run --rm --user 1000 -v /mnt/nas/media/dashility/medias:/m node:22-alpine touch /m/test && echo OK
+   ```
+
+   Si elle échoue : `chown 1000 /mnt/nas/media/dashility/medias`, ou les droits équivalents côté NAS.
+
 3. Préparer le dossier :
 
    ```sh
@@ -58,6 +67,7 @@ Chaque merge sur `main` relance les vérifications, puis publie l'image `ghcr.io
 
 - **Retour arrière** : ajouter `IMAGE_TAG=<empreinte du commit>` dans `.env`, puis `docker compose up -d`. Retirer la ligne pour revenir à `latest`. Les migrations s'appliquent au démarrage et ne reviennent pas en arrière : si la release annulée en contenait une, restaurer aussi la sauvegarde d'avant la release.
 - **`compose.prod.yml` modifié** : le recopier à la main dans le dossier du serveur.
+- **Images et PDF** : dans `/mnt/nas/media/dashility/medias`, un dossier par espace puis par fichier. Ils ne sont pas dans le `pg_dump` : le RAID du NAS couvre une panne de disque, et ses instantanés, s'ils sont activés, une suppression. Les fichiers qu'aucune entrée n'utilise plus sont supprimés chaque nuit, 24 h après leur envoi. Si le NAS n'est pas monté, l'app refuse de démarrer ; s'il devient injoignable en cours de route, l'envoi de fichiers répond « stockage indisponible » et le reste du dashboard continue.
 - **Sauvegardes** : un `pg_dump` au démarrage puis toutes les 24 h dans `/mnt/nas/media/backups/dashility`, en gardant les 7 plus récents (`docker compose logs backup`). Les fichiers ne sont lisibles que par root. Si le NAS n'est pas monté, le conteneur `backup` refuse de démarrer au lieu d'écrire sur le disque du serveur. Restauration :
 
   ```sh

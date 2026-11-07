@@ -24,11 +24,12 @@ const translated = (field: Field, lang: 'fr' | 'en') =>
 function setTranslated(field: Field, lang: 'fr' | 'en', value: unknown) {
   data.value[field.key] = { ...(data.value[field.key] as object | undefined), [lang]: value }
 }
-/** Erreur d'une valeur ; une date peut l'avoir sur son début ou sa fin. */
+/** Erreur d'une valeur ; une date peut l'avoir sur son début ou sa fin, une image sur son texte
+ *  alternatif. */
 function errorOf(field: Field, lang?: 'fr' | 'en') {
   const at = `${props.path ?? ''}${field.key}${lang ? `.${lang}` : ''}`
   const errors = props.errors ?? {}
-  return errors[at] ?? errors[`${at}.start`] ?? errors[`${at}.end`]
+  return errors[at] ?? errors[`${at}.start`] ?? errors[`${at}.end`] ?? errors[`${at}.alt.fr`]
 }
 
 const id = (field: Field, lang?: string) =>

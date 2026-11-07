@@ -11,6 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import ImageInput from './ImageInput.vue'
+import PdfInput from './PdfInput.vue'
 
 /** L'éditeur de texte riche (Tiptap, environ 300 Ko) n'est chargé qu'avec un champ qui l'utilise. */
 const RichTextInput = defineAsyncComponent(() => import('./RichTextInput.vue'))
@@ -204,10 +206,28 @@ function addItem() {
       :describedby="describedby"
     />
 
-    <p v-else class="text-sm text-muted-foreground">
-      La saisie de ce champ arrive dans une prochaine version du dashboard.
-    </p>
+    <ImageInput
+      v-else-if="field.type === 'image'"
+      :id="id"
+      v-model="value"
+      :label="label"
+      :error="error"
+    />
 
-    <p v-if="shownError" :id="`${id}-error`" class="text-sm text-destructive">{{ shownError }}</p>
+    <PdfInput
+      v-else-if="field.type === 'pdf'"
+      :id="id"
+      v-model="value"
+      :label="label"
+      :error="error"
+    />
+
+    <p
+      v-if="shownError && field.type !== 'image' && field.type !== 'pdf'"
+      :id="`${id}-error`"
+      class="text-sm text-destructive"
+    >
+      {{ shownError }}
+    </p>
   </div>
 </template>

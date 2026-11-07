@@ -29,3 +29,12 @@ export const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? 's' : 
 
 /** Instant ISO → « 7 nov. », jour de Paris (une modification à 0 h 30 compte pour ce jour-là). */
 export const formatDate = (iso: string) => parisDay.format(new Date(iso))
+
+const decimal = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 })
+
+/** Taille d'un fichier : « 820 octets », « 340 Ko », « 1,2 Mo ». */
+export function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} octets`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} Ko`
+  return `${decimal.format(bytes / 1024 / 1024)} Mo`
+}

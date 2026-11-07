@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  imageWidths,
+  mediaRefs,
   richtextSchema,
   type Field,
   publicationIssues,
@@ -300,7 +302,7 @@ describe('publicationIssues', () => {
         translatable: false,
         defaultValue: false,
       },
-      { key: 'cover', label: 'Image', type: 'image', required: true, translatable: false },
+      { key: 'cover', label: 'Image', type: 'image', required: false, translatable: false },
       {
         key: 'duration',
         label: 'Durée',
@@ -434,5 +436,69 @@ describe('richtextSchema', () => {
     expect(issues({ body: { fr: empty } })).toEqual(['body.fr'])
     expect(issues({ body: { fr: DOC } })).toEqual([])
     expect(isEnComplete(fields, { body: { fr: DOC, en: empty } })).toBe(false)
+  })
+})
+
+describe('médias', () => {
+  const ID = '00000000-0000-4000-8000-000000000001'
+  const PDF = '00000000-0000-4000-8000-000000000002'
+  const fields = [
+    { key: 'cover', label: 'Image', type: 'image', required: true, translatable: false },
+    { key: 'cv', label: 'CV', type: 'pdf', required: true, translatable: true },
+    {
+      key: 'shots',
+      label: 'Captures',
+      type: 'group',
+      required: false,
+      translatable: false,
+      fields: [
+        { key: 'img', label: 'Capture', type: 'image', required: false, translatable: false },
+      ],
+    },
+  ] as Field[]
+  const image = (fr: string, en: string) => ({ id: ID, alt: { fr, en } })
+
+  it('calcule les largeurs des variantes sans agrandir', () => {
+    expect(imageWidths(3000)).toEqual([640, 1280, 1920])
+    expect(imageWidths(1500)).toEqual([640, 1280, 1500])
+    expect(imageWidths(1280)).toEqual([640, 1280])
+    expect(imageWidths(400)).toEqual([400])
+  })
+
+  it('liste les médias cités, groupes et langues compris', () => {
+    expect(
+      mediaRefs(fields, {
+        cover: image('a', 'b'),
+        cv: { fr: PDF, en: null },
+        shots: [{ img: image('c', '') }],
+      }),
+    ).toEqual([
+      { id: ID, kind: 'image' },
+      { id: PDF, kind: 'pdf' },
+      { id: ID, kind: 'image' },
+    ])
+  })
+
+  it('exige l’image, le PDF français et le texte alternatif français à la publication', () => {
+    const paths = (data: Record<string, unknown>) =>
+      publicationIssues({ kind: 'single', fields }, data, null).map((i) => i.path)
+    expect(paths({})).toEqual(['cover', 'cv.fr'])
+    expect(
+      paths({ cover: image('', ''), cv: { fr: PDF }, shots: [{ img: image(' ', '') }] }),
+    ).toEqual(['cover.alt.fr', 'shots.0.img.alt.fr'])
+    expect(paths({ cover: image('Capture', ''), cv: { fr: PDF } })).toEqual([])
+  })
+
+  it('compte le texte alternatif anglais et le PDF anglais dans la version anglaise', () => {
+    expect(isEnComplete(fields, { cover: image('a', ''), cv: { fr: PDF, en: PDF } })).toBe(false)
+    expect(isEnComplete(fields, { cover: image('a', 'b'), cv: { fr: PDF } })).toBe(false)
+    expect(isEnComplete(fields, { cover: image('a', 'b'), cv: { fr: PDF, en: PDF } })).toBe(true)
+  })
+
+  it('refuse une image sans identifiant valide', () => {
+    expect(
+      entryDataSchema(fields).safeParse({ cover: { id: 'x', alt: { fr: '', en: '' } } }).success,
+    ).toBe(false)
+    expect(entryDataSchema(fields).safeParse({ cv: { fr: '../etc/passwd' } }).success).toBe(false)
   })
 })
