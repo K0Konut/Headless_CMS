@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import { type EntryData, entryStatus, entryTitle, isEnComplete } from '@dashility/shared'
+import {
+  type EntryData,
+  entrySlugSchema,
+  entryStatus,
+  entryTitle,
+  isEnComplete,
+} from '@dashility/shared'
 import { ArrowLeft } from '@lucide/vue'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
@@ -34,6 +40,12 @@ let version = 0
 type SaveState = 'saved' | 'saving' | 'error' | 'conflict'
 const state = ref<SaveState>('saved')
 const saveError = ref('')
+/** Identifiant d'URL refusé (déjà pris) : le contenu est enregistré, pas l'identifiant. */
+const slugError = ref('')
+/** Format invalide : l'identifiant n'est pas envoyé, l'entrée garde le précédent. */
+const slugInvalid = computed(() =>
+  slug.value ? !entrySlugSchema.safeParse(slug.value).success : false,
+)
 // Ce qui a été chargé ou enregistré en dernier : la saisie est « en attente » tant qu'elle en
 // diffère (revenir à la valeur enregistrée n'a donc rien à envoyer).
 const snapshot = () => JSON.stringify([data.value, slug.value])
@@ -41,6 +53,8 @@ const lastSaved = ref('')
 const pending = computed(() => !!entry.value && snapshot() !== lastSaved.value)
 let timer: ReturnType<typeof setTimeout> | undefined
 let loading = false
+/** Sauvegarde en cours : partir de l'écran l'attend au lieu de croire la saisie perdue. */
+let inFlight: Promise<void> | null = null
 
 async function load() {
   loading = true
@@ -55,6 +69,7 @@ async function load() {
     slug.value = loaded.slug ?? ''
     lastSaved.value = snapshot()
     state.value = 'saved'
+    slugError.value = ''
   } catch (err) {
     loadError.value = errorMessage(err)
   }
@@ -78,25 +93,30 @@ watch(snapshot, () => {
   if (pending.value) timer = setTimeout(save, 1000)
 })
 
-async function save() {
+function save(): Promise<void> {
   clearTimeout(timer)
-  if (!pending.value || state.value === 'saving' || state.value === 'conflict') return
+  if (inFlight) return inFlight
+  if (!pending.value || state.value === 'conflict') return Promise.resolve()
+  inFlight = send().finally(() => (inFlight = null))
+  return inFlight
+}
+
+async function send() {
   const sent = snapshot()
   state.value = 'saving'
+  // Identifiant mal formé : on garde le précédent plutôt que de refuser tout l'enregistrement.
+  const nextSlug = slugInvalid.value ? entry.value!.slug : slug.value || null
   try {
-    const saved = await api<Entry>(base.value, {
+    const saved = await api<Entry & { slugError?: string }>(base.value, {
       method: 'PATCH',
-      body: {
-        version,
-        data: data.value,
-        ...(isCollection.value && { slug: slug.value || null }),
-      },
+      body: { version, data: data.value, ...(isCollection.value && { slug: nextSlug }) },
     })
     version = saved.version
     entry.value = saved
     lastSaved.value = sent
     state.value = 'saved'
     saveError.value = ''
+    slugError.value = saved.slugError ?? ''
   } catch (err) {
     const conflict = err instanceof ApiError && err.status === 409
     state.value = conflict ? 'conflict' : 'error'
@@ -177,7 +197,16 @@ onBeforeUnmount(() => {
 
     <div v-if="isCollection" class="grid max-w-md gap-1.5">
       <Label for="entry-slug">Identifiant d’URL</Label>
-      <Input id="entry-slug" v-model="slug" class="font-mono" aria-describedby="entry-slug-hint" />
+      <Input
+        id="entry-slug"
+        v-model="slug"
+        class="font-mono"
+        :aria-invalid="slugInvalid || !!slugError || undefined"
+        aria-describedby="entry-slug-hint entry-slug-error"
+      />
+      <p v-if="slugInvalid || slugError" id="entry-slug-error" class="text-sm text-destructive">
+        {{ slugInvalid ? 'Minuscules, chiffres et tirets uniquement.' : slugError }}
+      </p>
       <p id="entry-slug-hint" class="text-sm text-muted-foreground">
         {{
           entry.publishedAt

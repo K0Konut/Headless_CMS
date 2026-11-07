@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/table'
 import { api, errorMessage } from '@/lib/api'
 import type { ContentType, Entry, EntrySummary } from '@/lib/content'
-import { formatDay } from '@/lib/format'
+import { formatDate } from '@/lib/format'
 
 /** Un type : la liste de ses entrées pour une collection, l'éditeur pour une page unique ou
  *  pour l'entrée de l'URL (`/contenu/:type/:entree`). */
@@ -45,10 +45,12 @@ const entries = ref<EntrySummary[] | null>(null)
 const error = ref('')
 
 // Le type, et en parallèle la liste quand l'URL ne désigne pas une entrée (une page unique
-// renvoie une liste d'une entrée, ignorée).
+// renvoie une liste d'une entrée, ignorée). Seule la réponse de la dernière navigation compte.
+let latest = 0
 watch(
   [base, entryParam],
   async ([url, entry], previous) => {
+    const request = ++latest
     const sameType = previous?.[0] === url && type.value
     if (!sameType) type.value = null
     entries.value = null
@@ -58,10 +60,11 @@ watch(
         sameType ? type.value! : api<ContentType>(url),
         entry ? null : api<EntrySummary[]>(`${url}/entries`),
       ])
+      if (request !== latest) return
       type.value = loaded
       entries.value = list
     } catch (err) {
-      error.value = errorMessage(err)
+      if (request === latest) error.value = errorMessage(err)
     }
   },
   { immediate: true },
@@ -87,6 +90,8 @@ async function add() {
     await router.push(`/espaces/${space.value}/contenu/${typeSlug.value}/${created.id}`)
   } catch (err) {
     error.value = errorMessage(err)
+  } finally {
+    // La page reste montée pour l'entrée créée : le bouton doit resservir au retour à la liste.
     adding.value = false
   }
 }
@@ -148,7 +153,7 @@ async function add() {
               <StatusBadges :status="entry.status" :en-complete="entry.enComplete" />
             </TableCell>
             <TableCell class="hidden text-muted-foreground sm:table-cell">
-              {{ formatDay(entry.updatedAt.slice(0, 10)) }}
+              {{ formatDate(entry.updatedAt) }}
             </TableCell>
           </TableRow>
         </TableBody>

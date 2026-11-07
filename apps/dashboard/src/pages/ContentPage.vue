@@ -15,15 +15,19 @@ const space = computed(() => String(route.params.espace))
 
 const types = ref<ContentType[] | null>(null)
 const error = ref('')
+// Changement d'espace pendant un chargement : seule la dernière réponse compte.
+let latest = 0
 watch(
   space,
   async () => {
+    const request = ++latest
     types.value = null
     error.value = ''
     try {
-      types.value = await api<ContentType[]>(`/spaces/${encodeURIComponent(space.value)}/types`)
+      const loaded = await api<ContentType[]>(`/spaces/${encodeURIComponent(space.value)}/types`)
+      if (request === latest) types.value = loaded
     } catch (err) {
-      error.value = errorMessage(err)
+      if (request === latest) error.value = errorMessage(err)
     }
   },
   { immediate: true },
