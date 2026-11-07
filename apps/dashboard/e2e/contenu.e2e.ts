@@ -128,3 +128,31 @@ test('supprimer un champ utilisé demande une confirmation', async ({ browser, p
     .toContain('« Stack » seront supprimées des entrées qui en ont (le type en compte 1 entrée)')
   await expect(page.getByRole('status')).toHaveCount(0)
 })
+
+test('un identifiant d’URL déjà pris n’empêche pas d’enregistrer le contenu', async ({
+  browser,
+  page,
+}) => {
+  const admin = await setup(browser, 'atelier-doublon')
+  const first = await admin.call('post', '/spaces/atelier-doublon/types/projets/entries')
+  await admin.call('patch', `/spaces/atelier-doublon/types/projets/entries/${first.id}`, {
+    version: 1,
+    data: { titre: { fr: 'Test' } },
+    slug: 'test',
+  })
+  await admin.close()
+
+  await page.goto('/espaces/atelier-doublon/contenu/projets')
+  await page.getByRole('button', { name: 'Ajouter un projet' }).click()
+  await page.getByLabel('Titre (français)').fill('Test')
+  await expect(
+    page.getByText('Cet identifiant d’URL est déjà utilisé par une autre entrée'),
+  ).toBeVisible()
+  await expect(page.getByText(/^Enregistré à/)).toBeVisible()
+  await page.reload()
+  await expect(page.getByLabel('Titre (français)')).toHaveValue('Test')
+
+  // Le bouton « Ajouter » ressert au retour à la liste.
+  await page.getByRole('link', { name: 'Projets' }).click()
+  await expect(page.getByRole('button', { name: 'Ajouter un projet' })).toBeEnabled()
+})
