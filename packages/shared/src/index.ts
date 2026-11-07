@@ -259,6 +259,103 @@ export function frozenFieldChange(before: Field[], after: Field[]): string | nul
 /** Date au mois (`2026-10`) ou au jour (`2026-10-14`). */
 const partialDate = z.string().regex(/^\d{4}-\d{2}(-\d{2})?$/, 'Date invalide')
 
+// ── Texte riche : document Tiptap (JSON) ──────────────────────────────────────────────
+
+/** Adresse d'un lien de texte riche : http(s) ou mailto (architecture, « Texte riche »). */
+const richtextHref = z
+  .string()
+  .max(2048)
+  .refine((href) => isValidLink(href), 'Lien invalide : http(s) ou mailto uniquement')
+
+/** Marques permises : gras, italique, lien, mise en avant (`<mark>` sur le site). Les attributs
+ *  inconnus d'une marque ou d'un nœud sont retirés, pas refusés. */
+const richtextMark = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('bold') }).strict(),
+  z.object({ type: z.literal('italic') }).strict(),
+  z.object({ type: z.literal('highlight') }).strict(),
+  z.object({ type: z.literal('link'), attrs: z.object({ href: richtextHref }) }).strict(),
+])
+
+const richtextText = z
+  .object({
+    type: z.literal('text'),
+    text: z.string().min(1).max(10_000),
+    marks: z.array(richtextMark).max(4).optional(),
+  })
+  .strict()
+
+const inlineContent = z.array(richtextText).max(1000).optional()
+
+type RichtextBlock =
+  | { type: 'paragraph'; content?: z.infer<typeof richtextText>[] }
+  | { type: 'heading'; attrs: { level: 2 | 3 }; content?: z.infer<typeof richtextText>[] }
+  | { type: 'bulletList'; content: RichtextListItem[] }
+  | { type: 'orderedList'; attrs?: { start?: number }; content: RichtextListItem[] }
+type RichtextListItem = { type: 'listItem'; content: RichtextBlock[] }
+
+const richtextParagraph = z
+  .object({ type: z.literal('paragraph'), content: inlineContent })
+  .strict()
+
+/** Un élément de liste contient des paragraphes et des listes imbriquées ; la profondeur est
+ *  bornée pour qu'un document ne puisse pas épuiser la pile de validation. */
+function listSchemas(depth: number): z.ZodType<RichtextBlock>[] {
+  if (depth === 0) return []
+  const item = z
+    .object({
+      type: z.literal('listItem'),
+      content: z
+        .array(z.union([richtextParagraph, ...listSchemas(depth - 1)]))
+        .min(1)
+        .max(100),
+    })
+    .strict()
+  const items = z.array(item).min(1).max(500)
+  return [
+    z.object({ type: z.literal('bulletList'), content: items }).strict(),
+    z
+      .object({
+        type: z.literal('orderedList'),
+        attrs: z.object({ start: z.int().min(0).max(100_000).optional() }).optional(),
+        content: items,
+      })
+      .strict(),
+  ] as z.ZodType<RichtextBlock>[]
+}
+
+/** Document de texte riche : paragraphes, intertitres (h2, h3) et listes, avec les marques
+ *  ci-dessus. C'est la liste de l'éditeur du dashboard : un document qui en sort n'est jamais
+ *  refusé, et l'API refuse tout le reste. */
+export const richtextSchema = z
+  .object({
+    type: z.literal('doc'),
+    content: z
+      .array(
+        z.union([
+          richtextParagraph,
+          z
+            .object({
+              type: z.literal('heading'),
+              attrs: z.object({ level: z.union([z.literal(2), z.literal(3)]) }),
+              content: inlineContent,
+            })
+            .strict(),
+          ...listSchemas(4),
+        ]),
+      )
+      .max(1000),
+  })
+  .strict()
+export type RichtextDoc = z.infer<typeof richtextSchema>
+
+/** Un document de texte riche contient-il du texte ? Un paragraphe vide ne compte pas. */
+export function richtextHasText(node: unknown): boolean {
+  if (!node || typeof node !== 'object') return false
+  const { text, content } = node as { text?: unknown; content?: unknown }
+  if (typeof text === 'string' && text.trim()) return true
+  return Array.isArray(content) && content.some(richtextHasText)
+}
+
 /** Valeur d'un champ dans une langue, en brouillon : seule la forme est vérifiée, tout peut être
  *  vide. Le format d'un lien et les champs obligatoires sont vérifiés à la publication. */
 function languageValueSchema(field: Field): z.ZodType {
@@ -285,9 +382,10 @@ function languageValueSchema(field: Field): z.ZodType {
       return z.boolean()
     case 'group':
       return z.array(entryDataSchema(field.fields)).max(100)
+    case 'richtext':
+      return richtextSchema.nullable()
     default:
-      // shortcut: texte riche, image et PDF arrivent aux étapes 4 et 5 de la V2 ; d'ici là, un
-      // tel champ reste vide
+      // shortcut: image et PDF arrivent à l'étape 5 de la V2 ; d'ici là, un tel champ reste vide
       return z.never()
   }
 }
@@ -312,6 +410,10 @@ export function entryDataSchema(fields: Field[]): z.ZodType<Record<string, unkno
 export type EntryData = Record<string, unknown>
 
 const isFilled = (value: unknown) =>
+  // Un document de texte riche sans texte (un paragraphe vide) est vide.
+  !(value && typeof value === 'object' && (value as { type?: unknown }).type === 'doc'
+    ? !richtextHasText(value)
+    : false) &&
   value !== undefined &&
   value !== null &&
   !(typeof value === 'string' && !value.trim()) &&
@@ -450,9 +552,9 @@ function isMissing(field: Field, value: unknown) {
 }
 
 /** Champs qui ne se remplissent pas encore dans le dashboard. */
-// shortcut: texte riche, image et PDF arrivent aux étapes 4 et 5 de la V2 ; d'ici là, leur
-// caractère obligatoire n'est pas vérifié, sinon aucune entrée qui en a ne pourrait être publiée
-const NOT_YET_EDITABLE: FieldType[] = ['richtext', 'image', 'pdf']
+// shortcut: image et PDF arrivent à l'étape 5 de la V2 ; d'ici là, leur caractère obligatoire
+// n'est pas vérifié, sinon aucune entrée qui en a ne pourrait être publiée
+const NOT_YET_EDITABLE: FieldType[] = ['image', 'pdf']
 
 function collectIssues(fields: Field[], data: EntryData, prefix: string, out: PublicationIssue[]) {
   for (const field of fields) {

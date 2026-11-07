@@ -132,3 +132,25 @@
   --series-views: #2a78d6;
   --series-cvs: #eb6834;
 }
+
+/* Texte riche (éditeur Tiptap) : la remise à zéro de Tailwind retire titres et puces. */
+@layer components {
+  .richtext > * + * {
+    margin-top: 0.5em;
+  }
+  .richtext h2 {
+    font-size: 1.125rem;
+    font-weight: 600;
+  }
+  .richtext h3 {
+    font-weight: 600;
+  }
+  .richtext ul {
+    list-style: disc;
+    padding-left: 1.5rem;
+  }
+  .richtext ol {
+    list-style: decimal;
+    padding-left: 1.5rem;
+  }
+}
