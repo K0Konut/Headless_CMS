@@ -253,3 +253,115 @@ export function frozenFieldChange(before: Field[], after: Field[]): string | nul
   }
   return null
 }
+
+// ── Contenu (V2) : valeurs des entrées ─────────────────────────────────────────────────
+
+/** Date au mois (`2026-10`) ou au jour (`2026-10-14`). */
+const partialDate = z.string().regex(/^\d{4}-\d{2}(-\d{2})?$/, 'Date invalide')
+
+/** Valeur d'un champ dans une langue, en brouillon : seule la forme est vérifiée, tout peut être
+ *  vide. Le format d'un lien et les champs obligatoires sont vérifiés à la publication. */
+function languageValueSchema(field: Field): z.ZodType {
+  switch (field.type) {
+    case 'text':
+      return z.string().max(10_000)
+    case 'link':
+      return z.string().max(2048)
+    case 'list':
+      return z.array(z.string().trim().min(1).max(200)).max(200)
+    case 'choice':
+      return z.enum(field.choices.map((c) => c.key) as [string, ...string[]]).nullable()
+    case 'date':
+      return z
+        .object({
+          start: partialDate.optional(),
+          end: partialDate.optional(),
+          ongoing: z.boolean().optional(),
+        })
+        .strict()
+    case 'number':
+      return z.number().finite().nullable()
+    case 'boolean':
+      return z.boolean()
+    case 'group':
+      return z.array(entryDataSchema(field.fields)).max(100)
+    default:
+      // shortcut: texte riche, image et PDF arrivent aux étapes 4 et 5 de la V2 ; d'ici là, un
+      // tel champ reste vide
+      return z.never()
+  }
+}
+
+const fieldValueSchema = (field: Field) =>
+  field.translatable
+    ? z
+        .object({
+          fr: languageValueSchema(field).optional(),
+          en: languageValueSchema(field).optional(),
+        })
+        .strict()
+    : languageValueSchema(field)
+
+/** Valeurs d'une entrée (brouillon) : un objet indexé par identifiant de champ, sans clé inconnue. */
+export function entryDataSchema(fields: Field[]): z.ZodType<Record<string, unknown>> {
+  return z
+    .object(Object.fromEntries(fields.map((f) => [f.key, fieldValueSchema(f).optional()])))
+    .strict()
+}
+
+export type EntryData = Record<string, unknown>
+
+const isFilled = (value: unknown) =>
+  value !== undefined &&
+  value !== null &&
+  !(typeof value === 'string' && !value.trim()) &&
+  !(Array.isArray(value) && !value.length)
+
+/** Les champs obligatoires traduisibles ont leur valeur anglaise, dans les groupes aussi : sinon
+ *  l'entrée est masquée sur le site en anglais (PRD, « Langues »). */
+export function isEnComplete(fields: Field[], data: EntryData): boolean {
+  return fields.every((field) => {
+    const value = data[field.key]
+    if (field.type === 'group') {
+      return ((value as EntryData[] | undefined) ?? []).every((item) =>
+        isEnComplete(field.fields, item),
+      )
+    }
+    return (
+      !field.required ||
+      !field.translatable ||
+      isFilled((value as { en?: unknown } | undefined)?.en)
+    )
+  })
+}
+
+/** Ne garde que les valeurs encore valides pour la définition : un champ supprimé, un choix
+ *  retiré ou un sous-champ disparu perdent leur valeur quand la structure change. */
+export function pruneEntryData(fields: Field[], data: EntryData): EntryData {
+  const kept: EntryData = {}
+  for (const field of fields) {
+    let value = data[field.key]
+    if (value === undefined) continue
+    if (field.type === 'group' && Array.isArray(value)) {
+      value = value.map((item: EntryData) => pruneEntryData(field.fields, item))
+    }
+    if (fieldValueSchema(field).safeParse(value).success) kept[field.key] = value
+  }
+  return kept
+}
+
+/** Titre d'une entrée dans les listes : la valeur française du premier champ « texte court ». */
+export function entryTitle(fields: Field[], data: EntryData): string {
+  const field = fields.find((f) => f.type === 'text')
+  const value = field && data[field.key]
+  const text = field?.translatable ? (value as { fr?: string } | undefined)?.fr : value
+  return typeof text === 'string' ? text.trim() : ''
+}
+
+/** Corps de `PATCH …/entries/:id` (sauvegarde automatique). `version` est celle lue : si l'entrée a
+ *  changé depuis, l'API répond 409. `data` est validé avec `entryDataSchema` du type. */
+export const saveEntrySchema = z.object({
+  version: z.int().min(1),
+  data: z.record(z.string(), z.unknown()),
+  slug: slugSchema.nullable().optional(),
+})
