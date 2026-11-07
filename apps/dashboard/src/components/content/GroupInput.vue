@@ -8,7 +8,16 @@ import { moveItem, stableIds } from '@/lib/content'
 import FieldRows from './FieldRows.vue'
 
 /** Groupe répétable : des éléments communs aux deux langues, chacun avec ses sous-champs. */
-const props = defineProps<{ field: GroupField; idPrefix: string; lang: 'fr' | 'en' }>()
+const props = defineProps<{
+  field: GroupField
+  idPrefix: string
+  lang: 'fr' | 'en'
+  /** Erreurs de publication de toute l'entrée, et le chemin de ce groupe (`steps.`). */
+  errors?: Record<string, string>
+  path: string
+  /** Erreur du groupe lui-même (nombre d'éléments). */
+  error?: string
+}>()
 const items = defineModel<EntryData[] | undefined>()
 
 // Identifiant stable par élément : l'ordre peut changer.
@@ -30,7 +39,14 @@ const name = (index: number) => `${props.field.label} ${index + 1}`
 </script>
 
 <template>
-  <div class="grid gap-3">
+  <!-- Cible du focus quand la publication signale le groupe lui-même. -->
+  <div
+    :id="idPrefix"
+    tabindex="-1"
+    class="grid gap-3 outline-none"
+    :aria-describedby="error ? `${idPrefix}-error` : undefined"
+  >
+    <p v-if="error" :id="`${idPrefix}-error`" class="text-sm text-destructive">{{ error }}</p>
     <p v-if="!list.length" class="text-sm text-muted-foreground">Aucun élément.</p>
     <ol v-else class="grid gap-3">
       <li
@@ -57,6 +73,8 @@ const name = (index: number) => `${props.field.label} ${index + 1}`
           :fields="field.fields"
           :id-prefix="`${idPrefix}-${i}`"
           :lang="lang"
+          :errors="errors"
+          :path="`${path}${i}.`"
         />
       </li>
     </ol>

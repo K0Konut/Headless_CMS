@@ -6,10 +6,12 @@ import {
   NotFoundException,
 } from '@nestjs/common'
 import {
+  type EntryData,
   entryDataSchema,
   entryStatus,
   entryTitle,
   isEnComplete,
+  publicationIssues,
   type saveEntrySchema,
 } from '@dashility/shared'
 import { and, desc, eq, ne, sql } from 'drizzle-orm'
@@ -144,6 +146,102 @@ export class EntriesService {
       }
       throw err
     }
+  }
+
+  /** « Publier » : la version en cours d'édition (`draft`) devient la version en ligne, après les
+   *  contrôles de publication (document UX, « Publier »). */
+  async publish(space: Space, typeSlug: string, id: EntryRef, version: number, user: User) {
+    const type = await this.types.row(space, typeSlug)
+    const current = await this.current(type, id, version)
+    if (!current.draft)
+      throw new BadRequestException('Rien à publier : aucune modification en attente')
+    const issues = publicationIssues(type, current.draft, current.slug)
+    if (issues.length) {
+      throw new BadRequestException({
+        code: 'publication_invalid',
+        message:
+          issues.length === 1
+            ? `Publication impossible : ${issues[0]!.message.toLowerCase()}`
+            : `Publication impossible : ${issues.length} champs à corriger`,
+        issues,
+      })
+    }
+    return this.write(current.id, version, user, {
+      published: current.draft,
+      draft: null,
+      enComplete: isEnComplete(type.fields, current.draft),
+      publishedAt: new Date(),
+    })
+  }
+
+  /** « Annuler les modifications » : on revient à la version en ligne. */
+  async discard(space: Space, typeSlug: string, id: EntryRef, version: number, user: User) {
+    const type = await this.types.row(space, typeSlug)
+    const current = await this.current(type, id, version)
+    if (!current.published || !current.draft) {
+      throw new BadRequestException('Aucune modification en attente à annuler')
+    }
+    return this.write(current.id, version, user, {
+      draft: null,
+      enComplete: isEnComplete(type.fields, current.published),
+    })
+  }
+
+  /** « Dépublier » : l'entrée redevient un brouillon, avec ses modifications en attente s'il y en
+   *  a, et disparaît du site au prochain déploiement. */
+  async unpublish(space: Space, typeSlug: string, id: EntryRef, version: number, user: User) {
+    const type = await this.types.row(space, typeSlug)
+    const current = await this.current(type, id, version)
+    if (!current.published) throw new BadRequestException('Cette entrée n’est pas publiée')
+    return this.write(current.id, version, user, {
+      published: null,
+      draft: current.draft ?? current.published,
+    })
+  }
+
+  /** Suppression définitive (pas d'historique, PRD). Une page unique ne se supprime pas : elle
+   *  disparaît avec son type. */
+  async remove(space: Space, typeSlug: string, id: EntryRef) {
+    const type = await this.types.row(space, typeSlug)
+    if (type.kind === 'single') throw new BadRequestException('Une page unique ne se supprime pas')
+    const deleted = await this.db
+      .delete(entries)
+      .where(this.byId(type, id))
+      .returning({ id: entries.id })
+    if (!deleted.length) throw new NotFoundException('Entrée introuvable')
+  }
+
+  /** L'entrée, à condition que la version lue soit toujours la sienne. */
+  private async current(type: ContentType, id: EntryRef, version: number) {
+    const [entry] = await this.db.select().from(entries).where(this.byId(type, id))
+    if (!entry) throw new NotFoundException('Entrée introuvable')
+    if (entry.version !== version)
+      throw new ConflictException('Cette entrée a été modifiée ailleurs')
+    return entry
+  }
+
+  /** Écrit un changement de statut, seulement si personne n'a modifié l'entrée entre-temps. */
+  private async write(
+    id: string,
+    version: number,
+    user: User,
+    change: Partial<Record<'published' | 'draft', EntryData | null>> & {
+      enComplete?: boolean
+      publishedAt?: Date
+    },
+  ) {
+    const [entry] = await this.db
+      .update(entries)
+      .set({
+        ...change,
+        version: sql`${entries.version} + 1`,
+        updatedAt: new Date(),
+        updatedBy: user.id,
+      })
+      .where(and(eq(entries.id, id), eq(entries.version, version)))
+      .returning(entryColumns)
+    if (!entry) throw new ConflictException('Cette entrée a été modifiée ailleurs')
+    return entry
   }
 
   /** `single` désigne l'entrée d'une page unique, la seule de son type. */

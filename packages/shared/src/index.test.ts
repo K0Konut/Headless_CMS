@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  type Field,
+  publicationIssues,
   analyticsQuerySchema,
   collectEventSchema,
   createContentTypeSchema,
@@ -265,5 +267,98 @@ describe('isValidLink', () => {
     ['javascript:alert(1)', false],
   ])('%s → %s', (value, valid) => {
     expect(isValidLink(value)).toBe(valid)
+  })
+})
+
+describe('publicationIssues', () => {
+  const PROJECT = {
+    kind: 'collection' as const,
+    fields: [
+      {
+        key: 'title',
+        label: 'Titre',
+        type: 'text',
+        required: true,
+        translatable: true,
+        maxLength: 20,
+      },
+      { key: 'code', label: 'Code', type: 'link', required: false, translatable: false },
+      {
+        key: 'year',
+        label: 'Année',
+        type: 'number',
+        required: false,
+        translatable: false,
+        decimals: false,
+      },
+      {
+        key: 'featured',
+        label: 'À la une',
+        type: 'boolean',
+        required: true,
+        translatable: false,
+        defaultValue: false,
+      },
+      { key: 'cover', label: 'Image', type: 'image', required: true, translatable: false },
+      {
+        key: 'duration',
+        label: 'Durée',
+        type: 'date',
+        required: true,
+        translatable: false,
+        period: true,
+        precision: 'month',
+      },
+      {
+        key: 'steps',
+        label: 'Étapes',
+        type: 'group',
+        required: true,
+        translatable: false,
+        max: 2,
+        fields: [{ key: 'name', label: 'Nom', type: 'text', required: true, translatable: true }],
+      },
+    ] as Field[],
+  }
+  const VALID = {
+    title: { fr: 'Ce portfolio' },
+    code: 'https://github.com/moi/site',
+    year: 2026,
+    duration: { start: '2026-10', ongoing: true },
+    steps: [{ name: { fr: 'Cadrage' } }],
+  }
+  const paths = (data: Record<string, unknown>, slug: string | null = 'ce-portfolio') =>
+    publicationIssues(PROJECT, data, slug).map((i) => i.path)
+
+  it('accepte une entrée complète en français, même sans anglais', () => {
+    expect(paths(VALID)).toEqual([])
+  })
+
+  it('exige les champs obligatoires en français, sous-champs compris, et l’identifiant d’URL', () => {
+    expect(paths({ steps: [{ name: { en: 'Scoping' } }] }, null)).toEqual([
+      'slug',
+      'title.fr',
+      'duration',
+      'steps.0.name.fr',
+    ])
+    expect(paths({ ...VALID, steps: [] })).toEqual(['steps'])
+  })
+
+  it('refuse les erreurs de format, en anglais aussi', () => {
+    expect(
+      paths({
+        ...VALID,
+        title: { fr: 'Ce portfolio', en: 'a'.repeat(21) },
+        code: 'github.com/moi',
+        year: 20.5,
+        duration: { start: '2026-10', end: '2026-02' },
+        steps: [VALID.steps[0], VALID.steps[0], VALID.steps[0]],
+      }),
+    ).toEqual(['title.en', 'code', 'year', 'duration.end', 'steps'])
+    expect(paths({ ...VALID, duration: { start: '2026-13' } })).toEqual(['duration.start'])
+  })
+
+  it('ne demande pas d’identifiant d’URL à une page unique', () => {
+    expect(publicationIssues({ ...PROJECT, kind: 'single' }, VALID, null)).toEqual([])
   })
 })

@@ -23,8 +23,13 @@ export class ErrorFilter implements ExceptionFilter {
     }
     if (err instanceof HttpException) {
       const status = err.getStatus()
-      const code = (HttpStatus[status] ?? 'error').toLowerCase()
-      return res.status(status).json({ error: { code, message: err.message } })
+      // Détails facultatifs d'une erreur : un code précis et, pour une publication refusée, la
+      // liste des champs fautifs.
+      const body = err.getResponse() as { code?: unknown; issues?: unknown }
+      const code =
+        typeof body?.code === 'string' ? body.code : (HttpStatus[status] ?? 'error').toLowerCase()
+      const issues = Array.isArray(body?.issues) ? { issues: body.issues } : {}
+      return res.status(status).json({ error: { code, message: err.message, ...issues } })
     }
     this.logger.error(err)
     res.status(500).json({ error: { code: 'internal_server_error', message: 'Erreur interne' } })

@@ -394,3 +394,127 @@ export const saveEntrySchema = z.object({
   data: z.record(z.string(), z.unknown()),
   slug: entrySlugSchema.nullable().optional(),
 })
+
+// ── Contenu (V2) : publication ─────────────────────────────────────────────────────────
+
+/** Ce qui empêche de publier : `path` mène à la valeur fautive (`title.fr`,
+ *  `constraints.0.name.fr`, `slug` pour l'identifiant d'URL). */
+export interface PublicationIssue {
+  path: string
+  message: string
+}
+
+const MONTH_DATE = /^\d{4}-(0[1-9]|1[0-2])$/
+const DAY_DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/
+
+/** Date existante à la précision du champ (pas de 31 février). */
+function isValidPartialDate(value: string, precision: 'day' | 'month') {
+  if (precision === 'month') return MONTH_DATE.test(value)
+  return DAY_DATE.test(value) && new Date(`${value}T00:00:00Z`).toISOString().startsWith(value)
+}
+
+/** Erreurs de format d'une valeur dans une langue. Une valeur vide n'en a pas. */
+function formatIssue(field: Field, value: unknown): { suffix?: string; message: string } | null {
+  if (field.type === 'link' && typeof value === 'string' && value && !isValidLink(value)) {
+    return { message: 'Adresse invalide : elle doit commencer par https://' }
+  }
+  if (field.type === 'text' && field.maxLength && typeof value === 'string') {
+    if (value.length > field.maxLength) {
+      return { message: `${field.maxLength} caractères au plus` }
+    }
+  }
+  if (field.type === 'number' && typeof value === 'number' && !field.decimals) {
+    if (!Number.isInteger(value)) return { message: 'Nombre entier attendu' }
+  }
+  if (field.type === 'date' && value) {
+    const { start, end, ongoing } = value as { start?: string; end?: string; ongoing?: boolean }
+    if (start && !isValidPartialDate(start, field.precision)) {
+      return { suffix: 'start', message: 'Date de début invalide' }
+    }
+    if (field.period && !ongoing && end) {
+      if (!isValidPartialDate(end, field.precision)) {
+        return { suffix: 'end', message: 'Date de fin invalide' }
+      }
+      if (start && end < start) return { suffix: 'end', message: 'La fin précède le début' }
+    }
+  }
+  return null
+}
+
+/** Valeur absente pour la règle « obligatoire ». Une date a au moins son début ; un oui / non a
+ *  toujours une valeur (sa valeur par défaut). */
+function isMissing(field: Field, value: unknown) {
+  if (field.type === 'boolean') return false
+  if (field.type === 'date') return !(value as { start?: string } | undefined)?.start
+  return !isFilled(value)
+}
+
+/** Champs qui ne se remplissent pas encore dans le dashboard. */
+// shortcut: texte riche, image et PDF arrivent aux étapes 4 et 5 de la V2 ; d'ici là, leur
+// caractère obligatoire n'est pas vérifié, sinon aucune entrée qui en a ne pourrait être publiée
+const NOT_YET_EDITABLE: FieldType[] = ['richtext', 'image', 'pdf']
+
+function collectIssues(fields: Field[], data: EntryData, prefix: string, out: PublicationIssue[]) {
+  for (const field of fields) {
+    const value = data[field.key]
+    const path = `${prefix}${field.key}`
+    if (field.type === 'group') {
+      const items = Array.isArray(value) ? (value as EntryData[]) : []
+      if (field.required && !items.length) {
+        out.push({ path, message: 'Ajoutez au moins un élément' })
+      } else if (items.length && field.min !== undefined && items.length < field.min) {
+        out.push({ path, message: `Au moins ${field.min} éléments` })
+      } else if (field.max !== undefined && items.length > field.max) {
+        out.push({ path, message: `${field.max} éléments au plus` })
+      }
+      items.forEach((item, i) => collectIssues(field.fields, item, `${path}.${i}.`, out))
+      continue
+    }
+    const langs = field.translatable
+      ? (['fr', 'en'] as const).map((lang) => ({
+          path: `${path}.${lang}`,
+          value: (value as Record<string, unknown> | undefined)?.[lang],
+          lang,
+        }))
+      : [{ path, value, lang: 'fr' as const }]
+    for (const v of langs) {
+      // Le français est la langue de référence : l'anglais manquant ne bloque pas (EN incomplet).
+      if (v.lang === 'fr' && field.required && !NOT_YET_EDITABLE.includes(field.type)) {
+        if (isMissing(field, v.value)) {
+          out.push({ path: v.path, message: 'Champ obligatoire' })
+          continue
+        }
+      }
+      const format = formatIssue(field, v.value)
+      if (format) {
+        out.push({
+          path: format.suffix ? `${v.path}.${format.suffix}` : v.path,
+          message: format.message,
+        })
+      }
+    }
+  }
+}
+
+/** Contrôles de publication (document UX, « Publier ») : champs obligatoires en français, formats
+ *  (lien, nombre entier, dates, longueur, nombre d'éléments d'un groupe) et, pour une
+ *  collection, l'identifiant d'URL. Liste vide : l'entrée peut être publiée. */
+export function publicationIssues(
+  type: { kind: 'collection' | 'single'; fields: Field[] },
+  data: EntryData,
+  slug: string | null,
+): PublicationIssue[] {
+  const issues: PublicationIssue[] = []
+  if (type.kind === 'collection') {
+    if (!slug) issues.push({ path: 'slug', message: 'Identifiant d’URL obligatoire pour publier' })
+    else if (!entrySlugSchema.safeParse(slug).success) {
+      issues.push({ path: 'slug', message: 'Minuscules, chiffres et tirets uniquement' })
+    }
+  }
+  collectIssues(type.fields, data, '', issues)
+  return issues
+}
+
+/** Corps des actions de publication (`publish`, `discard`, `unpublish`) : la version lue, pour
+ *  ne pas publier ou annuler autre chose que ce que le membre a sous les yeux. */
+export const entryActionSchema = z.object({ version: z.int().min(1) })

@@ -7,7 +7,7 @@ import { PASSWORD, db, sessionCookie, useTestApp } from './helpers.js'
 
 const ctx = useTestApp()
 
-function api(method: 'get' | 'post' | 'put' | 'patch', path: string, cookie: string) {
+function api(method: 'get' | 'post' | 'put' | 'patch' | 'delete', path: string, cookie: string) {
   return request(ctx.app.getHttpServer())[method](`/api${path}`).type('json').set('Cookie', cookie)
 }
 
@@ -157,5 +157,112 @@ describe('entrées', () => {
       .send({ name: 'Blog', slug: 'blog', siteUrl: 'https://blog.fr' })
       .expect(201)
     await api('get', `/spaces/blog/types/projets/entries/${body.id}`, admin).expect(404)
+  })
+})
+
+describe('publication', () => {
+  const READY = { title: { fr: 'Ce portfolio', en: 'This portfolio' } }
+
+  /** Entrée de collection enregistrée avec ces valeurs ; renvoie son état. */
+  async function entryWith(data: object, slug: string | null = 'ce-portfolio') {
+    const { body } = await api('post', BASE, member).expect(201)
+    const saved = await api('patch', `${BASE}/${body.id}`, member)
+      .send({ version: body.version, data, slug })
+      .expect(200)
+    return saved.body as { id: string; version: number }
+  }
+  const act = (id: string, action: string, version: number) =>
+    api('post', `${BASE}/${id}/${action}`, member).send({ version })
+
+  it('publie, puis garde les modifications à part jusqu’à « Publier les modifications »', async () => {
+    const entry = await entryWith(READY)
+    const published = await act(entry.id, 'publish', entry.version).expect(200)
+    expect(published.body).toMatchObject({ published: READY, draft: null, enComplete: true })
+    expect(published.body.publishedAt).toBeTruthy()
+
+    const changed = { title: { fr: 'Nouveau titre', en: 'This portfolio' } }
+    const saved = await api('patch', `${BASE}/${entry.id}`, member)
+      .send({ version: published.body.version, data: changed })
+      .expect(200)
+    expect(saved.body).toMatchObject({ published: READY, draft: changed })
+    const list = await api('get', BASE, member).expect(200)
+    expect(list.body[0]).toMatchObject({ status: 'modified', title: 'Nouveau titre' })
+
+    const again = await act(entry.id, 'publish', saved.body.version).expect(200)
+    expect(again.body).toMatchObject({ published: changed, draft: null })
+  })
+
+  it('refuse de publier sans les champs obligatoires en français, et dit lesquels', async () => {
+    const entry = await entryWith({ title: { en: 'Only English' } }, null)
+    const res = await act(entry.id, 'publish', entry.version).expect(400)
+    expect(res.body.error).toMatchObject({
+      code: 'publication_invalid',
+      issues: [
+        { path: 'slug', message: 'Identifiant d’URL obligatoire pour publier' },
+        { path: 'title.fr', message: 'Champ obligatoire' },
+      ],
+    })
+    const unchanged = await api('get', `${BASE}/${entry.id}`, member).expect(200)
+    expect(unchanged.body.published).toBeNull()
+  })
+
+  it('publie une version anglaise incomplète, signalée par « EN incomplet »', async () => {
+    const entry = await entryWith({ title: { fr: 'Seulement en français' } })
+    const res = await act(entry.id, 'publish', entry.version).expect(200)
+    expect(res.body.enComplete).toBe(false)
+    const types = await api('get', '/spaces/portfolio/types', member).expect(200)
+    expect(types.body[0].counts).toEqual({ total: 1, published: 1, enIncomplete: 1 })
+  })
+
+  it('annule les modifications en revenant à la version en ligne', async () => {
+    const entry = await entryWith(READY)
+    const published = await act(entry.id, 'publish', entry.version).expect(200)
+    await act(entry.id, 'discard', published.body.version).expect(400)
+    const saved = await api('patch', `${BASE}/${entry.id}`, member)
+      .send({ version: published.body.version, data: { title: { fr: 'Brouillon' } } })
+      .expect(200)
+    const discarded = await act(entry.id, 'discard', saved.body.version).expect(200)
+    expect(discarded.body).toMatchObject({ published: READY, draft: null, enComplete: true })
+  })
+
+  it('dépublie en gardant le contenu, modifications en attente comprises', async () => {
+    const entry = await entryWith(READY)
+    const published = await act(entry.id, 'publish', entry.version).expect(200)
+    const changed = { title: { fr: 'Modifié' } }
+    const saved = await api('patch', `${BASE}/${entry.id}`, member)
+      .send({ version: published.body.version, data: changed })
+      .expect(200)
+    const res = await act(entry.id, 'unpublish', saved.body.version).expect(200)
+    expect(res.body).toMatchObject({ published: null, draft: changed })
+    await act(entry.id, 'unpublish', res.body.version).expect(400)
+  })
+
+  it('refuse une action sur une version périmée', async () => {
+    const entry = await entryWith(READY)
+    await act(entry.id, 'publish', entry.version - 1).expect(409)
+    await act(entry.id, 'inconnue', entry.version).expect(404)
+  })
+
+  it('supprime une entrée de collection, jamais une page unique', async () => {
+    const entry = await entryWith(READY)
+    await api('delete', `${BASE}/${entry.id}`, member).expect(204)
+    await api('get', `${BASE}/${entry.id}`, member).expect(404)
+
+    await api('post', '/spaces/portfolio/types', admin)
+      .send({ slug: 'cv', kind: 'single', name: 'CV', entryLabel: null, fields: [title] })
+      .expect(201)
+    await api('delete', '/spaces/portfolio/types/cv/entries/single', member).expect(400)
+  })
+
+  it('publie une page unique, sans identifiant d’URL', async () => {
+    await api('post', '/spaces/portfolio/types', admin)
+      .send({ slug: 'cv', kind: 'single', name: 'CV', entryLabel: null, fields: [title] })
+      .expect(201)
+    const single = '/spaces/portfolio/types/cv/entries/single'
+    const { body } = await api('get', single, member).expect(200)
+    const saved = await api('patch', single, member)
+      .send({ version: body.version, data: READY })
+      .expect(200)
+    await api('post', `${single}/publish`, member).send({ version: saved.body.version }).expect(200)
   })
 })
