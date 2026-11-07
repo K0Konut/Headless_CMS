@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { type EntryData, entryTitle, isEnComplete } from '@dashility/shared'
+import { type EntryData, entryStatus, entryTitle, isEnComplete } from '@dashility/shared'
 import { ArrowLeft } from '@lucide/vue'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { RouterLink, onBeforeRouteLeave } from 'vue-router'
+import { RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import FormError from '@/components/FormError.vue'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError, api, errorMessage } from '@/lib/api'
-import { type ContentType, type Entry, statusOf } from '@/lib/content'
+import type { ContentType, Entry } from '@/lib/content'
 import { formatTime } from '@/lib/format'
 import { slugify } from '@/lib/slug'
 import FieldRows from './FieldRows.vue'
@@ -34,8 +34,11 @@ let version = 0
 type SaveState = 'saved' | 'saving' | 'error' | 'conflict'
 const state = ref<SaveState>('saved')
 const saveError = ref('')
-/** Des modifications attendent d'être envoyées. */
-const pending = ref(false)
+// Ce qui a été chargé ou enregistré en dernier : la saisie est « en attente » tant qu'elle en
+// diffère (revenir à la valeur enregistrée n'a donc rien à envoyer).
+const snapshot = () => JSON.stringify([data.value, slug.value])
+const lastSaved = ref('')
+const pending = computed(() => !!entry.value && snapshot() !== lastSaved.value)
 let timer: ReturnType<typeof setTimeout> | undefined
 let loading = false
 
@@ -48,10 +51,10 @@ async function load() {
     entry.value = loaded
     version = loaded.version
     // On reprend là où on s'était arrêté : les modifications en attente, sinon la version publiée.
-    data.value = JSON.parse(JSON.stringify(loaded.draft ?? loaded.published ?? {}))
+    data.value = structuredClone(loaded.draft ?? loaded.published ?? {})
     slug.value = loaded.slug ?? ''
+    lastSaved.value = snapshot()
     state.value = 'saved'
-    pending.value = false
   } catch (err) {
     loadError.value = errorMessage(err)
   }
@@ -70,22 +73,15 @@ watch(title, (next, previous) => {
 })
 
 // Sauvegarde automatique, une seconde après la dernière modification.
-watch(
-  [data, slug],
-  () => {
-    if (loading) return
-    pending.value = true
-    if (state.value === 'conflict') return
-    clearTimeout(timer)
-    timer = setTimeout(save, 1000)
-  },
-  { deep: true },
-)
+watch(snapshot, () => {
+  clearTimeout(timer)
+  if (pending.value) timer = setTimeout(save, 1000)
+})
 
 async function save() {
   clearTimeout(timer)
   if (!pending.value || state.value === 'saving' || state.value === 'conflict') return
-  pending.value = false
+  const sent = snapshot()
   state.value = 'saving'
   try {
     const saved = await api<Entry>(base.value, {
@@ -98,37 +94,37 @@ async function save() {
     })
     version = saved.version
     entry.value = saved
+    lastSaved.value = sent
     state.value = 'saved'
     saveError.value = ''
   } catch (err) {
-    pending.value = true
-    if (err instanceof ApiError && err.status === 409) {
-      state.value = 'conflict'
-      return
-    }
-    state.value = 'error'
-    saveError.value = errorMessage(err)
+    const conflict = err instanceof ApiError && err.status === 409
+    state.value = conflict ? 'conflict' : 'error'
+    saveError.value = conflict ? '' : errorMessage(err)
     return
   }
   // Des modifications sont arrivées pendant l'envoi.
   if (pending.value) timer = setTimeout(save, 1000)
 }
 
-const status = computed(() => (entry.value ? statusOf(entry.value) : 'draft'))
+const status = computed(() => (entry.value ? entryStatus(entry.value) : 'draft'))
 const enComplete = computed(() => isEnComplete(props.type.fields, data.value))
 const savedAt = computed(() => (entry.value ? formatTime(entry.value.updatedAt) : ''))
 
 /** Langue affichée sous 768 px, où les deux colonnes ne tiennent pas. */
 const lang = ref<'fr' | 'en'>('fr')
 
-// On ne quitte pas l'éditeur avec une saisie non enregistrée.
-onBeforeRouteLeave(async () => {
-  if (pending.value && state.value !== 'conflict') await save()
+// On ne quitte pas l'éditeur avec une saisie non enregistrée : retour à la liste (même route,
+// autre paramètre) comme départ vers un autre écran.
+async function confirmLeave() {
+  await save()
   return (
     !pending.value ||
     window.confirm('Vos dernières modifications ne sont pas enregistrées. Quitter quand même ?')
   )
-})
+}
+onBeforeRouteLeave(confirmLeave)
+onBeforeRouteUpdate(confirmLeave)
 const onUnload = (event: BeforeUnloadEvent) => {
   if (pending.value || state.value === 'saving') event.preventDefault()
 }

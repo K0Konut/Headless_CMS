@@ -66,7 +66,7 @@ const space = computed(() =>
               <SidebarMenuItem>
                 <SidebarMenuButton
                   as-child
-                  :is-active="['content', 'entries', 'entry'].includes(String(route.name))"
+                  :is-active="route.name === 'content' || route.name === 'entries'"
                   class="data-[active=true]:text-sidebar-primary"
                 >
                   <RouterLink :to="`/espaces/${space.slug}/contenu`">

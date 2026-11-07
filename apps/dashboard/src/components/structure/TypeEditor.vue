@@ -9,14 +9,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { api, errorMessage } from '@/lib/api'
-import { type ContentType, type ContentTypeSummary, removedFields } from '@/lib/content'
+import { type ContentType, removedFields } from '@/lib/content'
+import { plural } from '@/lib/format'
 import { slugify } from '@/lib/slug'
 import FieldList from './FieldList.vue'
 
 const props = defineProps<{
   space: string
   /** null : création d'un type. */
-  type: ContentTypeSummary | null
+  type: ContentType | null
 }>()
 const emit = defineEmits<{ saved: [ContentType]; deleted: [string] }>()
 
@@ -89,7 +90,7 @@ async function save() {
     removed.length &&
     total &&
     !window.confirm(
-      `Les valeurs de ${removed.map((r) => `« ${r} »`).join(', ')} seront supprimées dans ${total} entrée${total > 1 ? 's' : ''}. Enregistrer quand même ?`,
+      `Les valeurs de ${removed.map((r) => `« ${r} »`).join(', ')} seront supprimées des entrées qui en ont (le type en compte ${plural(total, 'entrée')}). Enregistrer quand même ?`,
     )
   ) {
     return

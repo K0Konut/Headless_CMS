@@ -27,11 +27,15 @@ import { api, errorMessage } from '@/lib/api'
 import type { ContentType, Entry, EntrySummary } from '@/lib/content'
 import { formatDay } from '@/lib/format'
 
-/** Un type : la liste de ses entrées pour une collection, l'éditeur pour une page unique. */
+/** Un type : la liste de ses entrées pour une collection, l'éditeur pour une page unique ou
+ *  pour l'entrée de l'URL (`/contenu/:type/:entree`). */
 const route = useRoute()
 const router = useRouter()
 const space = computed(() => String(route.params.espace))
 const typeSlug = computed(() => String(route.params.type))
+const entryParam = computed(() =>
+  typeof route.params.entree === 'string' ? route.params.entree : undefined,
+)
 const base = computed(
   () => `/spaces/${encodeURIComponent(space.value)}/types/${encodeURIComponent(typeSlug.value)}`,
 )
@@ -40,42 +44,40 @@ const type = ref<ContentType | null>(null)
 const entries = ref<EntrySummary[] | null>(null)
 const error = ref('')
 
+// Le type, et en parallèle la liste quand l'URL ne désigne pas une entrée (une page unique
+// renvoie une liste d'une entrée, ignorée).
 watch(
-  base,
-  async () => {
-    type.value = null
+  [base, entryParam],
+  async ([url, entry], previous) => {
+    const sameType = previous?.[0] === url && type.value
+    if (!sameType) type.value = null
     entries.value = null
     error.value = ''
     try {
-      type.value = await api<ContentType>(base.value)
-      if (type.value.kind === 'collection') {
-        entries.value = await api<EntrySummary[]>(`${base.value}/entries`)
-      }
+      const [loaded, list] = await Promise.all([
+        sameType ? type.value! : api<ContentType>(url),
+        entry ? null : api<EntrySummary[]>(`${url}/entries`),
+      ])
+      type.value = loaded
+      entries.value = list
     } catch (err) {
       error.value = errorMessage(err)
     }
   },
   { immediate: true },
 )
-
-const FILTERS = {
-  all: 'Toutes',
-  draft: 'Brouillons',
-  published: 'Publiées',
-  incomplete: 'EN incomplet',
-}
-const filter = ref<keyof typeof FILTERS>('all')
-const shown = computed(() =>
-  (entries.value ?? []).filter((e) =>
-    filter.value === 'all'
-      ? true
-      : filter.value === 'draft'
-        ? e.status === 'draft'
-        : filter.value === 'published'
-          ? e.status !== 'draft'
-          : !e.enComplete,
-  ),
+const editing = computed(
+  () => entryParam.value ?? (type.value?.kind === 'single' ? 'single' : undefined),
 )
+
+const FILTERS: Record<string, { label: string; keep: (e: EntrySummary) => boolean }> = {
+  all: { label: 'Toutes', keep: () => true },
+  draft: { label: 'Brouillons', keep: (e) => e.status === 'draft' },
+  published: { label: 'Publiées', keep: (e) => e.status !== 'draft' },
+  incomplete: { label: 'EN incomplet', keep: (e) => !e.enComplete },
+}
+const filter = ref('all')
+const shown = computed(() => (entries.value ?? []).filter(FILTERS[filter.value]!.keep))
 
 const adding = ref(false)
 async function add() {
@@ -94,7 +96,7 @@ async function add() {
   <FormError v-if="error" :message="error" class="max-w-md" />
   <Skeleton v-else-if="!type" class="h-64" />
 
-  <EntryEditor v-else-if="type.kind === 'single'" :space="space" :type="type" entry-id="single" />
+  <EntryEditor v-else-if="editing" :key="editing" :space="space" :type="type" :entry-id="editing" />
 
   <template v-else>
     <div class="flex flex-wrap items-center justify-between gap-4">
@@ -114,8 +116,8 @@ async function add() {
         <Select v-model="filter">
           <SelectTrigger id="filtre"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem v-for="(label, key) in FILTERS" :key="key" :value="key">
-              {{ label }}
+            <SelectItem v-for="(f, key) in FILTERS" :key="key" :value="key">
+              {{ f.label }}
             </SelectItem>
           </SelectContent>
         </Select>

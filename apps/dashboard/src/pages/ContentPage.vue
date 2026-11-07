@@ -5,14 +5,15 @@ import FormError from '@/components/FormError.vue'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api, errorMessage } from '@/lib/api'
-import type { ContentTypeSummary } from '@/lib/content'
+import type { ContentType } from '@/lib/content'
+import { plural } from '@/lib/format'
 import { useSessionStore } from '@/stores/session'
 
 const route = useRoute()
 const session = useSessionStore()
 const space = computed(() => String(route.params.espace))
 
-const types = ref<ContentTypeSummary[] | null>(null)
+const types = ref<ContentType[] | null>(null)
 const error = ref('')
 watch(
   space,
@@ -20,9 +21,7 @@ watch(
     types.value = null
     error.value = ''
     try {
-      types.value = await api<ContentTypeSummary[]>(
-        `/spaces/${encodeURIComponent(space.value)}/types`,
-      )
+      types.value = await api<ContentType[]>(`/spaces/${encodeURIComponent(space.value)}/types`)
     } catch (err) {
       error.value = errorMessage(err)
     }
@@ -32,7 +31,6 @@ watch(
 
 // Un type sans champ n'apparaît pas tant qu'il n'a aucun champ (document UX, « Structure »).
 const ready = computed(() => types.value?.filter((t) => t.fields.length) ?? [])
-const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? 's' : ''}`
 </script>
 
 <template>
@@ -74,7 +72,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? 's' : ''}`
         <span v-if="type.kind === 'collection'" class="text-sm text-muted-foreground">
           <template v-if="type.counts.total">
             {{ plural(type.counts.published, 'publié') }},
-            {{ plural(type.counts.drafts, 'brouillon') }}
+            {{ plural(type.counts.total - type.counts.published, 'brouillon') }}
           </template>
           <template v-else>Aucune entrée</template>
         </span>
@@ -82,7 +80,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? 's' : ''}`
           {{ type.counts.published ? 'Publiée' : 'Brouillon' }}
         </span>
         <span v-if="type.counts.enIncomplete" class="text-sm">
-          {{ type.counts.enIncomplete }} EN incomplet{{ type.counts.enIncomplete > 1 ? 's' : '' }}
+          {{ plural(type.counts.enIncomplete, 'EN incomplet') }}
         </span>
       </RouterLink>
     </li>

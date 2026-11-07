@@ -123,6 +123,8 @@ test('supprimer un champ utilisé demande une confirmation', async ({ browser, p
     void dialog.dismiss()
   })
   await page.getByRole('button', { name: 'Enregistrer le type' }).click()
-  await expect.poll(() => message).toContain('« Stack » seront supprimées dans 1 entrée')
+  await expect
+    .poll(() => message)
+    .toContain('« Stack » seront supprimées des entrées qui en ont (le type en compte 1 entrée)')
   await expect(page.getByRole('status')).toHaveCount(0)
 })

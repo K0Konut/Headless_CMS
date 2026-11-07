@@ -1,11 +1,12 @@
-import type { ContentTypeInput, Field, FieldType } from '@dashility/shared'
+import type { ContentTypeInput, EntryData, EntryStatus, Field, FieldType } from '@dashility/shared'
 import { slugify } from './slug'
 
-/** Réponse de `GET /spaces/:slug/types`. */
-export type ContentType = ContentTypeInput & { position: number; updatedAt: string }
-
-/** Ligne de `GET /spaces/:slug/types` : le type et ses compteurs. */
-export type ContentTypeSummary = ContentType & { counts: TypeCounts }
+/** Un type tel que l'API le renvoie (liste, lecture, création, modification), avec ses compteurs. */
+export type ContentType = ContentTypeInput & {
+  position: number
+  updatedAt: string
+  counts: TypeCounts
+}
 
 /** Libellés des champs et des choix enregistrés absents de la nouvelle définition : leurs
  *  valeurs seront effacées des entrées à l'enregistrement. */
@@ -23,6 +24,14 @@ export function removedFields(before: Field[], after: Field[]): string[] {
     }
     return []
   })
+}
+
+/** Identifiants stables pour les éléments d'une liste réordonnable (clés de rendu) : à appeler
+ *  avec l'élément lu dans la liste réactive, c'est-à-dire son proxy. */
+export function stableIds() {
+  const ids = new WeakMap<object, number>()
+  let last = 0
+  return (item: object) => ids.get(item) ?? (ids.set(item, ++last), last)
 }
 
 /** Déplace un élément d'une liste d'un rang vers le haut (-1) ou vers le bas (1). */
@@ -73,16 +82,12 @@ export function newField(type: FieldType): Field {
   }
 }
 
-/** Compteurs d'un type, renvoyés avec la liste des types (écran Contenu). */
+/** Compteurs d'un type (écran Contenu, confirmation dans Structure). */
 export interface TypeCounts {
   total: number
   published: number
-  drafts: number
-  modified: number
   enIncomplete: number
 }
-
-export type EntryStatus = 'draft' | 'published' | 'modified'
 
 /** Ligne de `GET …/entries`. */
 export interface EntrySummary {
@@ -98,23 +103,9 @@ export interface EntrySummary {
 export interface Entry {
   id: string
   slug: string | null
-  published: Record<string, unknown> | null
-  draft: Record<string, unknown> | null
-  enComplete: boolean
+  published: EntryData | null
+  draft: EntryData | null
   version: number
   publishedAt: string | null
   updatedAt: string
-}
-
-/** Statut affiché (document UX, « Statuts d'une entrée »). */
-export const statusOf = (entry: Pick<Entry, 'published' | 'draft'>): EntryStatus =>
-  !entry.published ? 'draft' : entry.draft ? 'modified' : 'published'
-
-/** Adresse d'un lien acceptée à la publication. */
-export function isValidLink(value: string) {
-  try {
-    return ['http:', 'https:', 'mailto:'].includes(new URL(value).protocol)
-  } catch {
-    return false
-  }
 }

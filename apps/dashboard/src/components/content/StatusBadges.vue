@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Badge } from '@/components/ui/badge'
-import type { EntryStatus } from '@/lib/content'
+import type { EntryStatus } from '@dashility/shared'
 
 /** Badges d'une entrée (document UX, « Statuts d'une entrée »). */
 defineProps<{ status: EntryStatus; enComplete: boolean }>()

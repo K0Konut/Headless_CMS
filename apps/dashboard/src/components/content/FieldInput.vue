@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Field } from '@dashility/shared'
+import { type Field, isValidLink } from '@dashility/shared'
 import { X } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { isValidLink } from '@/lib/content'
 
 /** Saisie d'une valeur d'un champ simple, dans une langue. Le libellé est porté par `label`
  *  (« Titre (français) ») : la ligne du champ l'affiche une seule fois pour les deux langues. */
@@ -43,7 +42,7 @@ function setDate(change: Partial<DateValue>) {
   value.value = next
 }
 
-const list = computed(() => (Array.isArray(value.value) ? (value.value as string[]) : []))
+const list = computed<string[]>(() => (Array.isArray(value.value) ? value.value : []))
 const draftItem = ref('')
 function addItem() {
   const item = draftItem.value.trim()

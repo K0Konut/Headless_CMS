@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fieldKey, isValidLink, removedFields } from './content'
+import { fieldKey, removedFields } from './content'
 
 describe('fieldKey', () => {
   it.each([
@@ -10,17 +10,6 @@ describe('fieldKey', () => {
     [`2 ${'a'.repeat(60)}`, `champ_2_${'a'.repeat(42)}`],
   ])('« %s » → « %s »', (label, key) => {
     expect(fieldKey(label)).toBe(key)
-  })
-})
-
-describe('isValidLink', () => {
-  it.each([
-    ['https://github.com/K0Konut', true],
-    ['mailto:moi@exemple.fr', true],
-    ['github.com/K0Konut', false],
-    ['javascript:alert(1)', false],
-  ])('%s → %s', (value, valid) => {
-    expect(isValidLink(value)).toBe(valid)
   })
 })
 

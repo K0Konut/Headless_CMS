@@ -18,3 +18,6 @@ export const formatDay = (date: string) => day.format(new Date(`${date}T00:00:00
 
 /** Instant ISO → « 14:02 », heure de Paris. */
 export const formatTime = (iso: string) => time.format(new Date(iso))
+
+/** « 1 brouillon », « 2 brouillons » : le nom prend un s au-delà de un. */
+export const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? 's' : ''}`
