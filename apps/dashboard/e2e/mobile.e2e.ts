@@ -6,6 +6,7 @@ for (const path of [
   '/espaces/portfolio/analytics',
   '/espaces/portfolio/reglages',
   '/espaces/portfolio/structure/nouveau',
+  '/espaces/portfolio/contenu',
   '/compte',
 ]) {
   test(`aucun défilement horizontal sur téléphone : ${path}`, async ({ page }) => {
