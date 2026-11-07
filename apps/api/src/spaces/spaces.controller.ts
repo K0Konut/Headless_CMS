@@ -16,7 +16,7 @@ import { CurrentUser, SuperAdminGuard } from '../auth/session.guard.js'
 import type { User } from '../db/index.js'
 import { type SpaceRequest, SpaceAccessGuard } from './guards.js'
 import { uuidOr404 } from '../uuid-or-404.pipe.js'
-import { SpacesService } from './spaces.service.js'
+import { SpacesService, withoutSecrets } from './spaces.service.js'
 
 @Controller('spaces')
 export class SpacesController {
@@ -42,11 +42,19 @@ export class SpacesController {
 export class SpaceController {
   constructor(private readonly spaces: SpacesService) {}
 
-  /** La clé publique n'est renvoyée qu'au super-admin (Réglages › Intégration). */
+  /** La clé publique et la date de la clé API ne sont renvoyées qu'au super-admin (Réglages ›
+   *  Intégration) ; l'empreinte de la clé API, jamais. */
   @Get()
   get(@Req() { space, user }: SpaceRequest) {
-    const { id, publicKey, ...rest } = space
-    return user.isSuperAdmin ? { ...rest, publicKey } : rest
+    const { id, publicKey, apiKeyCreatedAt, ...rest } = withoutSecrets(space)
+    void id
+    return user.isSuperAdmin ? { ...rest, publicKey, apiKeyCreatedAt } : rest
+  }
+
+  @Post('api-key')
+  @UseGuards(SuperAdminGuard)
+  regenerateApiKey(@Req() { space }: SpaceRequest) {
+    return this.spaces.regenerateApiKey(space)
   }
 
   @Patch()

@@ -46,6 +46,16 @@ export const spaces = pgTable('spaces', {
   siteUrl: text('site_url').notNull(),
   /** Identifiant public envoyé par le script de collecte. */
   publicKey: text('public_key').notNull().unique(),
+  /** Clé de l'API de lecture (V2) : seulement son empreinte SHA-256, comme les sessions. */
+  apiKeyHash: text('api_key_hash').unique(),
+  apiKeyCreatedAt: timestamp('api_key_created_at', { withTimezone: true }),
+  /** URL appelée après une publication (hook de build), et son jeton facultatif, gardé en clair
+   *  puisqu'il faut l'envoyer ; jamais renvoyé par l'API. */
+  deployUrl: text('deploy_url'),
+  deployToken: text('deploy_token'),
+  /** Dernier appel : heure et statut HTTP (null : site injoignable). */
+  deployCalledAt: timestamp('deploy_called_at', { withTimezone: true }),
+  deployStatus: integer('deploy_status'),
   createdAt: createdAt(),
 })
 

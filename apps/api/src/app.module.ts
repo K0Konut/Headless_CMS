@@ -19,6 +19,11 @@ import { TypesService } from './content/types.service.js'
 import { RetentionService } from './collect/retention.service.js'
 import { PublicMediaController, SpaceMediaController } from './media/media.controller.js'
 import { MediaService } from './media/media.service.js'
+import { ApiKeyGuard } from './public-api/public-api.guard.js'
+import { PublicApiController } from './public-api/public-api.controller.js'
+import { PublicApiService } from './public-api/public-api.service.js'
+import { DeployController } from './deploy/deploy.controller.js'
+import { DeployService } from './deploy/deploy.service.js'
 import { DbModule } from './db/db.module.js'
 import { ErrorFilter } from './error.filter.js'
 import { requireJson } from './require-json.middleware.js'
@@ -45,7 +50,9 @@ import { SpacesService } from './spaces/spaces.service.js'
     AnalyticsController,
     AuthController,
     CollectController,
+    DeployController,
     LinksController,
+    PublicApiController,
     PublicMediaController,
     SpaceMediaController,
     SpacesController,
@@ -56,9 +63,12 @@ import { SpacesService } from './spaces/spaces.service.js'
   providers: [
     AnalyticsService,
     AuthService,
+    DeployService,
     LiveService,
     LinksService,
     MediaService,
+    ApiKeyGuard,
+    PublicApiService,
     RetentionService,
     SpacesService,
     TypesService,

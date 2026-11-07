@@ -344,7 +344,8 @@ Mêmes règles que la V1 : session, `SpaceAccessGuard`, 404 pour un espace inacc
 | `POST /spaces/:slug/media` | Membre | Envoie une image ou un PDF |
 | `POST /spaces/:slug/api-key` | Super-admin | Génère ou régénère la clé ; la renvoie une seule fois |
 | `PUT /spaces/:slug/deploy` | Super-admin | `{ url, token? }` |
-| `POST /spaces/:slug/deploy` | Super-admin | Lance un déploiement tout de suite |
+| `GET /spaces/:slug/deploy` | Membre | État du déploiement : configuré, appel en attente, dernier appel ; l'URL et la présence d'un jeton pour le super-admin |
+| `POST /spaces/:slug/deploy` | Membre | Lance un déploiement tout de suite (« Lancer un déploiement », « Relancer ») |
 
 - **Ce qui est réservé au super-admin est vérifié par l'API**, pas seulement caché dans le dashboard.
 - **Publier, dépublier ou supprimer une entrée publiée** demande un déploiement (voir plus bas).
@@ -362,8 +363,9 @@ Authorization: Bearer <clé API de l'espace>
 - **Réponse résolue pour la langue** : un champ traduisible renvoie la valeur de `locale` ; un choix renvoie `{ key, label }` ; le texte riche renvoie `{ html }` ; une image renvoie `{ alt, width, height, src, srcset: { webp, avif } }` avec des URL absolues ; un PDF renvoie `{ url, bytes }`.
 - **`locale=en`** n'inclut que les entrées dont la version anglaise est complète (PRD, « Langues »).
 - **Valeur par défaut** : un champ « oui / non » jamais touché n'a pas de valeur enregistrée ; l'API renvoie sa valeur par défaut, celle que l'éditeur affiche.
-- **Chaque entrée** porte aussi `slug` (collections), `publishedAt` et `updatedAt`.
-- Limitée à 120 requêtes par minute par clé. Documentée en OpenAPI sur `/api/docs` (`@nestjs/swagger`, prévu dans la stack depuis la V1 et pas encore en place, arrive avec cette API).
+- **Chaque entrée** vaut `{ slug, publishedAt, fields }` : `slug` pour une collection, `publishedAt` la date de la dernière publication, et les valeurs dans `fields` (un champ peut s'appeler `slug`). Pas d'`updatedAt` : il changerait à chaque sauvegarde d'un brouillon, que le site ne voit pas.
+- **Adresses absolues** des médias construites à partir de la requête (`X-Forwarded-Proto` et `Host`, derrière Nginx Proxy Manager).
+- Limitée à 120 requêtes par minute par clé. Documentée en OpenAPI sur `/api/docs` (document écrit à la main, servi par `@nestjs/swagger` ; JSON sur `/api/docs-json`).
 
 ### Déploiement à la publication
 
