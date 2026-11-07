@@ -9,14 +9,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { api, errorMessage } from '@/lib/api'
-import type { ContentType } from '@/lib/content'
+import { type ContentType, type ContentTypeSummary, removedFields } from '@/lib/content'
 import { slugify } from '@/lib/slug'
 import FieldList from './FieldList.vue'
 
 const props = defineProps<{
   space: string
   /** null : création d'un type. */
-  type: ContentType | null
+  type: ContentTypeSummary | null
 }>()
 const emit = defineEmits<{ saved: [ContentType]; deleted: [string] }>()
 
@@ -82,6 +82,18 @@ async function save() {
     : updateContentTypeSchema.safeParse(body)
   error.value = parsed.success ? '' : (parsed.error.issues[0]?.message ?? 'Champs invalides')
   if (!parsed.success) return
+  // Les valeurs des champs et choix supprimés sont effacées des entrées (document UX).
+  const removed = props.type ? removedFields(props.type.fields, form.fields) : []
+  const total = props.type?.counts.total ?? 0
+  if (
+    removed.length &&
+    total &&
+    !window.confirm(
+      `Les valeurs de ${removed.map((r) => `« ${r} »`).join(', ')} seront supprimées dans ${total} entrée${total > 1 ? 's' : ''}. Enregistrer quand même ?`,
+    )
+  ) {
+    return
+  }
   pending.value = true
   try {
     const saved = await api<ContentType>(

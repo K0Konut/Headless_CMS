@@ -8,7 +8,7 @@ import TypeEditor from '@/components/structure/TypeEditor.vue'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api, errorMessage } from '@/lib/api'
-import { type ContentType, moveItem } from '@/lib/content'
+import { type ContentType, type ContentTypeSummary, moveItem } from '@/lib/content'
 
 const route = useRoute()
 const router = useRouter()
@@ -19,7 +19,7 @@ const selected = computed(() =>
 )
 const base = computed(() => `/espaces/${space.value}/structure`)
 
-const types = ref<ContentType[] | null>(null)
+const types = ref<ContentTypeSummary[] | null>(null)
 const error = ref('')
 const orderError = ref('')
 
@@ -27,7 +27,9 @@ async function load() {
   error.value = ''
   types.value = null
   try {
-    types.value = await api<ContentType[]>(`/spaces/${encodeURIComponent(space.value)}/types`)
+    types.value = await api<ContentTypeSummary[]>(
+      `/spaces/${encodeURIComponent(space.value)}/types`,
+    )
   } catch (err) {
     error.value = errorMessage(err)
   }
@@ -47,10 +49,14 @@ function onSaved(saved: ContentType) {
   const list = types.value!
   const index = list.findIndex((t) => t.slug === saved.slug)
   if (index === -1) {
-    list.push(saved)
+    // Un type neuf n'a pas d'entrée à perdre : ses compteurs ne servent pas avant rechargement.
+    list.push({
+      ...saved,
+      counts: { total: 0, published: 0, drafts: 0, modified: 0, enIncomplete: 0 },
+    })
     void router.replace(`${base.value}/${saved.slug}`)
   } else {
-    list[index] = saved
+    list[index] = { ...list[index]!, ...saved }
   }
 }
 
