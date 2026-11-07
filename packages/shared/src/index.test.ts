@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  richtextSchema,
   type Field,
   publicationIssues,
   analyticsQuerySchema,
@@ -360,5 +361,78 @@ describe('publicationIssues', () => {
 
   it('ne demande pas d’identifiant d’URL à une page unique', () => {
     expect(publicationIssues({ ...PROJECT, kind: 'single' }, VALID, null)).toEqual([])
+  })
+})
+
+describe('richtextSchema', () => {
+  const text = (t: string, marks?: object[]) => ({ type: 'text', text: t, ...(marks && { marks }) })
+  const DOC = {
+    type: 'doc',
+    content: [
+      { type: 'heading', attrs: { level: 2 }, content: [text('Contexte')] },
+      {
+        type: 'paragraph',
+        content: [
+          text('Étudiant, '),
+          text('important', [{ type: 'bold' }, { type: 'highlight' }]),
+          text('lien', [
+            {
+              type: 'link',
+              attrs: { href: 'https://exemple.fr', target: '_blank', rel: 'noopener' },
+            },
+          ]),
+        ],
+      },
+      {
+        type: 'orderedList',
+        attrs: { start: 1, type: null },
+        content: [
+          {
+            type: 'listItem',
+            content: [
+              { type: 'paragraph', content: [text('Un')] },
+              {
+                type: 'bulletList',
+                content: [{ type: 'listItem', content: [{ type: 'paragraph' }] }],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  }
+
+  it('accepte les nœuds et marques de l’éditeur, en retirant les attributs inconnus', () => {
+    const parsed = richtextSchema.parse(DOC)
+    expect(JSON.stringify(parsed)).not.toContain('noopener')
+    expect(JSON.stringify(parsed)).toContain('https://exemple.fr')
+  })
+
+  it.each([
+    ['un intertitre h1', { type: 'heading', attrs: { level: 1 }, content: [text('Titre')] }],
+    ['un bloc de code', { type: 'codeBlock', content: [text('x')] }],
+    ['une marque inconnue', { type: 'paragraph', content: [text('x', [{ type: 'strike' }])] }],
+    [
+      'un lien javascript:',
+      {
+        type: 'paragraph',
+        content: [text('x', [{ type: 'link', attrs: { href: 'javascript:alert(1)' } }])],
+      },
+    ],
+    ['du HTML brut', { type: 'paragraph', content: [{ type: 'html', html: '<script>' }] }],
+  ])('refuse %s', (_, node) => {
+    expect(richtextSchema.safeParse({ type: 'doc', content: [node] }).success).toBe(false)
+  })
+
+  it('compte un document sans texte comme vide pour la publication', () => {
+    const fields = [
+      { key: 'body', label: 'Texte', type: 'richtext', required: true, translatable: true },
+    ] as Field[]
+    const empty = { type: 'doc', content: [{ type: 'paragraph' }] }
+    const issues = (data: Record<string, unknown>) =>
+      publicationIssues({ kind: 'single', fields }, data, null).map((i) => i.path)
+    expect(issues({ body: { fr: empty } })).toEqual(['body.fr'])
+    expect(issues({ body: { fr: DOC } })).toEqual([])
+    expect(isEnComplete(fields, { body: { fr: DOC, en: empty } })).toBe(false)
   })
 })

@@ -307,7 +307,8 @@ type Field = {
 ### Texte riche
 
 - **Saisie** : Tiptap, limité aux extensions du document UX (paragraphe, gras, italique, lien, listes, intertitre `h2` et `h3`, mise en avant). Le collage ne garde que ces éléments, puisque Tiptap retire ce que son schéma ne connaît pas.
-- **Stockage** : le document JSON de Tiptap. L'API le valide contre la même liste de nœuds et de marques ; un lien doit être en `http(s)` ou `mailto`.
+- **Stockage** : le document JSON de Tiptap. L'API le valide contre la même liste de nœuds et de marques (`richtextSchema` de `packages/shared`, sans dépendance à Tiptap) ; un lien doit être en `http(s)` ou `mailto`, les listes s'imbriquent sur 4 niveaux au plus, et les attributs inconnus sont retirés. Un document sans texte compte comme vide pour la règle « obligatoire » et pour la version anglaise.
+- **Chargement** : l'éditeur (environ 120 Ko compressés) est chargé à la demande, seulement quand une entrée a un champ de texte riche.
 - **Lecture par les sites** : l'API publique renvoie du HTML généré à partir du JSON par `@tiptap/html`, avec les mêmes extensions. Le HTML ne contient donc que ces balises, et le texte est échappé. La mise en avant devient `<mark>` ; le site lui donne son style.
 
 ### Médias

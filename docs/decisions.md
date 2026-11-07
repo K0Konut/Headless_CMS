@@ -89,3 +89,8 @@
 | 2026-11-07 | Dépublier garde la date de publication (`published_at`) | L'identifiant d'URL a déjà circulé : il n'est plus proposé à partir du titre |
 | 2026-11-07 | Dépublier et supprimer demandent une confirmation (boîte native), comme annuler les modifications | Actions qui retirent du contenu du site ; la suppression est définitive |
 | 2026-11-07 | Appel de l'URL de déploiement après une publication reporté à l'étape « déploiement à la publication » | Ordre de construction de la V2 |
+| 2026-11-07 | Tiptap 3.32.0, versions fixées, configuré à partir de StarterKit (extensions hors document UX désactivées : citation, code, barré, souligné, saut de ligne, ligne horizontale) + Highlight | Une seule liste d'extensions dans `lib/richtext.ts` ; un test vérifie qu'un collage riche (Word, page web) produit toujours un document accepté par l'API |
+| 2026-11-07 | Validation du texte riche par un schéma Zod écrit à la main dans `packages/shared`, sans Tiptap côté API à cette étape | Le schéma liste exactement ce que l'éditeur produit ; `@tiptap/html` n'arrive qu'avec l'API publique (étape 6) |
+| 2026-11-07 | Barre d'outils : gras, italique, lien, liste à puces, liste numérotée, intertitre (h2), sous-intertitre (h3), mise en avant ; le lien se saisit dans une boîte native | Le document UX prévoit `h2` et `h3` ; une boîte de dialogue maison n'apporte rien à ce stade |
+| 2026-11-07 | Éditeur de texte riche chargé à la demande (`defineAsyncComponent`) | La liste des entrées passe de 415 Ko à 24 Ko ; seul un éditeur avec un champ de texte riche charge Tiptap |
+| 2026-11-07 | Le caractère obligatoire du texte riche est vérifié à la publication ; restent exemptés l'image et le PDF jusqu'à l'étape « médias » | Le texte riche se remplit désormais |

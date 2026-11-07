@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { type Field, isValidLink } from '@dashility/shared'
 import { X } from '@lucide/vue'
-import { computed, ref } from 'vue'
+import { computed, defineAsyncComponent, ref } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -11,6 +11,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+
+/** L'éditeur de texte riche (Tiptap, environ 300 Ko) n'est chargé qu'avec un champ qui l'utilise. */
+const RichTextInput = defineAsyncComponent(() => import('./RichTextInput.vue'))
 
 /** Saisie d'une valeur d'un champ simple, dans une langue. Le libellé est porté par `label`
  *  (« Titre (français) ») : la ligne du champ l'affiche une seule fois pour les deux langues. */
@@ -190,6 +193,16 @@ function addItem() {
       />
       <p :id="`${id}-hint`" class="text-sm text-muted-foreground">Entrée pour ajouter.</p>
     </div>
+
+    <RichTextInput
+      v-else-if="field.type === 'richtext'"
+      :id="id"
+      v-model="value"
+      :label="label"
+      :lang="lang"
+      :invalid="invalid"
+      :describedby="describedby"
+    />
 
     <p v-else class="text-sm text-muted-foreground">
       La saisie de ce champ arrive dans une prochaine version du dashboard.

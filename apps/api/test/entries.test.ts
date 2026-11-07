@@ -266,3 +266,40 @@ describe('publication', () => {
     await api('post', `${single}/publish`, member).send({ version: saved.body.version }).expect(200)
   })
 })
+
+describe('texte riche', () => {
+  const body = { key: 'body', label: 'Texte', type: 'richtext', required: true, translatable: true }
+  const doc = (text: string, marks?: object[]) => ({
+    type: 'doc',
+    content: [{ type: 'paragraph', content: [{ type: 'text', text, ...(marks && { marks }) }] }],
+  })
+
+  it('enregistre un document de l’éditeur et refuse ce qu’il ne produit pas', async () => {
+    await api('post', '/spaces/portfolio/types', admin)
+      .send({ slug: 'bio', kind: 'single', name: 'Bio', entryLabel: null, fields: [body] })
+      .expect(201)
+    const url = '/spaces/portfolio/types/bio/entries/single'
+    const { body: entry } = await api('get', url, member).expect(200)
+    const saved = await api('patch', url, member)
+      .send({ version: entry.version, data: { body: { fr: doc('Bonjour', [{ type: 'bold' }]) } } })
+      .expect(200)
+    expect(saved.body.draft.body.fr.content[0].content[0].text).toBe('Bonjour')
+
+    const evil = doc('clic', [{ type: 'link', attrs: { href: 'javascript:alert(1)' } }])
+    await api('patch', url, member)
+      .send({ version: saved.body.version, data: { body: { fr: evil } } })
+      .expect(400)
+
+    // Un document sans texte est vide : la publication le refuse.
+    const empty = await api('patch', url, member)
+      .send({
+        version: saved.body.version,
+        data: { body: { fr: { type: 'doc', content: [{ type: 'paragraph' }] } } },
+      })
+      .expect(200)
+    const refused = await api('post', `${url}/publish`, member)
+      .send({ version: empty.body.version })
+      .expect(400)
+    expect(refused.body.error.issues).toEqual([{ path: 'body.fr', message: 'Champ obligatoire' }])
+  })
+})
