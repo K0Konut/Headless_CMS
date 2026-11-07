@@ -360,6 +360,7 @@ Authorization: Bearer <clé API de l'espace>
 - **Lecture côté serveur uniquement** : elle sert au build des sites (GitHub Actions) ou à leur serveur. Pas de CORS, puisque la clé ne doit jamais être dans un navigateur.
 - **Réponse résolue pour la langue** : un champ traduisible renvoie la valeur de `locale` ; un choix renvoie `{ key, label }` ; le texte riche renvoie `{ html }` ; une image renvoie `{ alt, width, height, src, srcset: { webp, avif } }` avec des URL absolues ; un PDF renvoie `{ url, bytes }`.
 - **`locale=en`** n'inclut que les entrées dont la version anglaise est complète (PRD, « Langues »).
+- **Valeur par défaut** : un champ « oui / non » jamais touché n'a pas de valeur enregistrée ; l'API renvoie sa valeur par défaut, celle que l'éditeur affiche.
 - **Chaque entrée** porte aussi `slug` (collections), `publishedAt` et `updatedAt`.
 - Limitée à 120 requêtes par minute par clé. Documentée en OpenAPI sur `/api/docs` (`@nestjs/swagger`, prévu dans la stack depuis la V1 et pas encore en place, arrive avec cette API).
 
