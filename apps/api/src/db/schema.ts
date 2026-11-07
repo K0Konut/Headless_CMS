@@ -1,4 +1,4 @@
-import type { Field } from '@dashility/shared'
+import type { EntryData, Field } from '@dashility/shared'
 import { sql } from 'drizzle-orm'
 import {
   bigint,
@@ -119,4 +119,32 @@ export const contentTypes = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [unique('content_types_space_slug').on(t.spaceId, t.slug)],
+)
+
+/** Entrées d'un type (V2). Le statut se déduit de `published` et `draft` (architecture technique,
+ *  « Modèle de données ») : le site ne lit que `published`. Une page unique a une seule entrée,
+ *  créée avec son type ; `slug` ne sert qu'aux collections (null tant qu'il n'est pas choisi). */
+export const entries = pgTable(
+  'entries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    typeId: uuid('type_id')
+      .notNull()
+      .references(() => contentTypes.id, { onDelete: 'cascade' }),
+    slug: text('slug'),
+    published: jsonb('published').$type<EntryData>(),
+    draft: jsonb('draft').$type<EntryData>(),
+    /** Calculé à chaque écriture, sur la version la plus récente (brouillon, sinon publiée). */
+    enComplete: boolean('en_complete').notNull(),
+    /** Contrôle des écritures concurrentes : chaque sauvegarde envoie la version lue. */
+    version: integer('version').notNull().default(1),
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  },
+  (t) => [
+    unique('entries_type_slug').on(t.typeId, t.slug),
+    check('entries_has_data', sql`${t.published} is not null or ${t.draft} is not null`),
+  ],
 )

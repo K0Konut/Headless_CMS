@@ -327,12 +327,12 @@ Mêmes règles que la V1 : session, `SpaceAccessGuard`, 404 pour un espace inacc
 
 | Méthode et route | Accès | Rôle |
 | --- | --- | --- |
-| `GET /spaces/:slug/types` | Membre | Types de l'espace, avec leurs compteurs (publiés, brouillons, EN incomplet) |
+| `GET /spaces/:slug/types` | Membre | Types de l'espace, avec leurs compteurs (entrées, publiées, EN incomplet) ; chaque route qui renvoie un type renvoie aussi ses compteurs |
 | `POST /spaces/:slug/types` | Super-admin | Crée un type |
 | `PUT /spaces/:slug/types/:type` | Super-admin | Enregistre le type (noms, champs, ordre) ; refuse ce qui est figé |
 | `DELETE /spaces/:slug/types/:type` | Super-admin | Supprime le type et ses entrées |
 | `PUT /spaces/:slug/type-order` | Super-admin | Ordre des types (hors de `/types/`, où `order` pourrait être un type) |
-| `GET /spaces/:slug/types/:type/entries?status` | Membre | Liste : id, titre, slug, statut, EN complet, date de modification |
+| `GET /spaces/:slug/types/:type/entries` | Membre | Liste : id, titre, slug, statut, EN complet, date de modification (le filtre par statut se fait dans le dashboard) |
 | `POST /spaces/:slug/types/:type/entries` | Membre | Crée une entrée (brouillon) |
 | `GET /spaces/:slug/types/:type/entries/:id` | Membre | Entrée complète (`published`, `draft`, `version`) ; pour une page unique, `:id` vaut `single` |
 | `PATCH /spaces/:slug/types/:type/entries/:id` | Membre | Sauvegarde automatique : `{ version, data, slug? }` dans `draft` |
@@ -360,6 +360,7 @@ Authorization: Bearer <clé API de l'espace>
 - **Lecture côté serveur uniquement** : elle sert au build des sites (GitHub Actions) ou à leur serveur. Pas de CORS, puisque la clé ne doit jamais être dans un navigateur.
 - **Réponse résolue pour la langue** : un champ traduisible renvoie la valeur de `locale` ; un choix renvoie `{ key, label }` ; le texte riche renvoie `{ html }` ; une image renvoie `{ alt, width, height, src, srcset: { webp, avif } }` avec des URL absolues ; un PDF renvoie `{ url, bytes }`.
 - **`locale=en`** n'inclut que les entrées dont la version anglaise est complète (PRD, « Langues »).
+- **Valeur par défaut** : un champ « oui / non » jamais touché n'a pas de valeur enregistrée ; l'API renvoie sa valeur par défaut, celle que l'éditeur affiche.
 - **Chaque entrée** porte aussi `slug` (collections), `publishedAt` et `updatedAt`.
 - Limitée à 120 requêtes par minute par clé. Documentée en OpenAPI sur `/api/docs` (`@nestjs/swagger`, prévu dans la stack depuis la V1 et pas encore en place, arrive avec cette API).
 

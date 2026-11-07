@@ -13,7 +13,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import MoveButtons from '@/components/MoveButtons.vue'
-import { FIELD_TYPE_LABELS, moveItem, newField } from '@/lib/content'
+import { FIELD_TYPE_LABELS, moveItem, newField, stableIds } from '@/lib/content'
+import { plural } from '@/lib/format'
 import FieldForm from './FieldForm.vue'
 
 const props = defineProps<{
@@ -29,9 +30,7 @@ const fields = defineModel<Field[]>({ required: true })
 const types = FIELD_TYPES.filter((t) => props.allowGroup || t !== 'group')
 const newType = ref<FieldType>('text')
 // Identifiant stable par champ (clé de rendu, champs ouverts) : l'ordre peut changer.
-const ids = new WeakMap<Field, number>()
-let lastId = 0
-const idOf = (field: Field) => ids.get(field) ?? (ids.set(field, ++lastId), lastId)
+const idOf = stableIds()
 const open = ref(new Set<number>())
 const isOpen = (field: Field) => open.value.has(idOf(field))
 
@@ -95,7 +94,7 @@ const savedField = (field: Field) =>
             <Badge v-if="field.required" variant="outline">Obligatoire</Badge>
             <Badge v-if="field.translatable" variant="outline">FR et EN</Badge>
             <Badge v-if="field.type === 'group'" variant="outline">
-              {{ field.fields.length }} sous-champ{{ field.fields.length > 1 ? 's' : '' }}
+              {{ plural(field.fields.length, 'sous-champ') }}
             </Badge>
           </div>
           <div class="flex">

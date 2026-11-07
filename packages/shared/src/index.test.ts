@@ -4,8 +4,14 @@ import {
   collectEventSchema,
   createContentTypeSchema,
   emailSchema,
+  entryDataSchema,
+  entryTitle,
   fieldSchema,
+  entryPruner,
+  entryStatus,
   frozenFieldChange,
+  isEnComplete,
+  isValidLink,
   passwordSchema,
   siteUrlSchema,
   slugSchema,
@@ -164,5 +170,100 @@ describe('types de contenu', () => {
     expect(after([{ ...title, type: 'richtext' }])).toMatch(/type du champ « title »/)
     expect(after([{ ...title, translatable: false }])).toMatch(/non traduisible/)
     expect(after([{ ...group, fields: [{ ...title, translatable: false }] }])).toMatch(/« title »/)
+  })
+})
+
+describe('valeurs des entrées', () => {
+  const fields = fieldSchema.array().parse([
+    { key: 'title', label: 'Titre', type: 'text', required: true, translatable: true },
+    {
+      key: 'kind',
+      label: 'Type',
+      type: 'choice',
+      required: true,
+      translatable: false,
+      choices: [{ key: 'perso', fr: 'Perso', en: 'Personal' }],
+    },
+    {
+      key: 'period',
+      label: 'Durée',
+      type: 'date',
+      required: false,
+      translatable: false,
+      period: true,
+      precision: 'month',
+    },
+    { key: 'stack', label: 'Stack', type: 'list', required: false, translatable: false },
+    {
+      key: 'steps',
+      label: 'Étapes',
+      type: 'group',
+      required: false,
+      translatable: false,
+      fields: [{ key: 'name', label: 'Nom', type: 'text', required: true, translatable: true }],
+    },
+    { key: 'body', label: 'Corps', type: 'richtext', required: false, translatable: true },
+  ])
+  const data = {
+    title: { fr: 'Ce portfolio', en: 'This portfolio' },
+    kind: 'perso',
+    period: { start: '2026-10', ongoing: true },
+    stack: ['Vue', 'Vite'],
+    steps: [{ name: { fr: 'PRD', en: 'PRD' } }],
+  }
+
+  it('accepte un brouillon complet ou vide', () => {
+    expect(entryDataSchema(fields).safeParse(data).success).toBe(true)
+    expect(entryDataSchema(fields).safeParse({}).success).toBe(true)
+  })
+
+  it.each([
+    ['une clé inconnue', { other: 'x' }],
+    ['un choix inconnu', { kind: 'client' }],
+    ['une date mal formée', { period: { start: 'octobre' } }],
+    ['une valeur traduite pour un champ non traduisible', { kind: { fr: 'perso' } }],
+    ['un champ de l’étape suivante rempli', { body: { fr: 'texte' } }],
+    ['un sous-champ inconnu', { steps: [{ other: 'x' }] }],
+  ])('refuse %s', (_, value) => {
+    expect(entryDataSchema(fields).safeParse(value).success).toBe(false)
+  })
+
+  it('repère une version anglaise incomplète, y compris dans un groupe', () => {
+    expect(isEnComplete(fields, data)).toBe(true)
+    expect(isEnComplete(fields, { ...data, title: { fr: 'Titre', en: '  ' } })).toBe(false)
+    expect(isEnComplete(fields, { ...data, steps: [{ name: { fr: 'PRD' } }] })).toBe(false)
+  })
+
+  it('retire les valeurs devenues invalides après un changement de structure', () => {
+    const kept = fields.filter((f) => f.key !== 'stack')
+    const choice = kept[1]!
+    if (choice.type === 'choice') choice.choices = [{ key: 'ecole', fr: 'École', en: 'School' }]
+    expect(entryPruner(kept)(data)).toEqual({
+      title: data.title,
+      period: data.period,
+      steps: data.steps,
+    })
+  })
+
+  it('prend le titre français du premier texte court', () => {
+    expect(entryTitle(fields, data)).toBe('Ce portfolio')
+    expect(entryTitle(fields, {})).toBe('')
+  })
+})
+
+it('déduit le statut des deux versions', () => {
+  expect(entryStatus({ published: null, draft: {} })).toBe('draft')
+  expect(entryStatus({ published: {}, draft: null })).toBe('published')
+  expect(entryStatus({ published: {}, draft: {} })).toBe('modified')
+})
+
+describe('isValidLink', () => {
+  it.each([
+    ['https://github.com/K0Konut', true],
+    ['mailto:moi@exemple.fr', true],
+    ['github.com/K0Konut', false],
+    ['javascript:alert(1)', false],
+  ])('%s → %s', (value, valid) => {
+    expect(isValidLink(value)).toBe(valid)
   })
 })

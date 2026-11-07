@@ -49,7 +49,8 @@ beforeEach(async () => {
 
 describe('types de contenu', () => {
   it('crée des types, rangés dans l’ordre de création, lisibles par un membre', async () => {
-    await api('post', '/spaces/portfolio/types', admin).send(PROJECTS).expect(201)
+    const created = await api('post', '/spaces/portfolio/types', admin).send(PROJECTS).expect(201)
+    expect(created.body).toMatchObject({ ...PROJECTS, counts: { total: 0 } })
     await api('post', '/spaces/portfolio/types', admin).send(CV).expect(201)
     const res = await api('get', '/spaces/portfolio/types', member).expect(200)
     expect(res.body.map((t: { slug: string }) => t.slug)).toEqual(['projets', 'cv'])

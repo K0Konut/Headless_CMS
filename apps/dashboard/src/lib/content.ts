@@ -1,8 +1,38 @@
-import type { ContentTypeInput, Field, FieldType } from '@dashility/shared'
+import type { ContentTypeInput, EntryData, EntryStatus, Field, FieldType } from '@dashility/shared'
 import { slugify } from './slug'
 
-/** Réponse de `GET /spaces/:slug/types`. */
-export type ContentType = ContentTypeInput & { position: number; updatedAt: string }
+/** Un type tel que l'API le renvoie (liste, lecture, création, modification), avec ses compteurs. */
+export type ContentType = ContentTypeInput & {
+  position: number
+  updatedAt: string
+  counts: TypeCounts
+}
+
+/** Libellés des champs et des choix enregistrés absents de la nouvelle définition : leurs
+ *  valeurs seront effacées des entrées à l'enregistrement. */
+export function removedFields(before: Field[], after: Field[]): string[] {
+  return before.flatMap((old) => {
+    const next = after.find((f) => f.key === old.key)
+    if (!next) return [old.label]
+    if (old.type === 'choice' && next.type === 'choice') {
+      return old.choices
+        .filter((c) => !next.choices.some((n) => n.key === c.key))
+        .map((c) => `${old.label} : ${c.fr}`)
+    }
+    if (old.type === 'group' && next.type === 'group') {
+      return removedFields(old.fields, next.fields).map((label) => `${old.label} : ${label}`)
+    }
+    return []
+  })
+}
+
+/** Identifiants stables pour les éléments d'une liste réordonnable (clés de rendu) : à appeler
+ *  avec l'élément lu dans la liste réactive, c'est-à-dire son proxy. */
+export function stableIds() {
+  const ids = new WeakMap<object, number>()
+  let last = 0
+  return (item: object) => ids.get(item) ?? (ids.set(item, ++last), last)
+}
 
 /** Déplace un élément d'une liste d'un rang vers le haut (-1) ou vers le bas (1). */
 export function moveItem<T>(list: T[], index: number, delta: -1 | 1) {
@@ -50,4 +80,32 @@ export function newField(type: FieldType): Field {
     default:
       return { ...base, type }
   }
+}
+
+/** Compteurs d'un type (écran Contenu, confirmation dans Structure). */
+export interface TypeCounts {
+  total: number
+  published: number
+  enIncomplete: number
+}
+
+/** Ligne de `GET …/entries`. */
+export interface EntrySummary {
+  id: string
+  slug: string | null
+  title: string
+  status: EntryStatus
+  enComplete: boolean
+  updatedAt: string
+}
+
+/** Réponse de `GET …/entries/:id`. */
+export interface Entry {
+  id: string
+  slug: string | null
+  published: EntryData | null
+  draft: EntryData | null
+  version: number
+  publishedAt: string | null
+  updatedAt: string
 }
