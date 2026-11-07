@@ -327,12 +327,12 @@ Mêmes règles que la V1 : session, `SpaceAccessGuard`, 404 pour un espace inacc
 
 | Méthode et route | Accès | Rôle |
 | --- | --- | --- |
-| `GET /spaces/:slug/types` | Membre | Types de l'espace, avec leurs compteurs (publiés, brouillons, EN incomplet) |
+| `GET /spaces/:slug/types` | Membre | Types de l'espace, avec leurs compteurs (entrées, publiées, EN incomplet) ; chaque route qui renvoie un type renvoie aussi ses compteurs |
 | `POST /spaces/:slug/types` | Super-admin | Crée un type |
 | `PUT /spaces/:slug/types/:type` | Super-admin | Enregistre le type (noms, champs, ordre) ; refuse ce qui est figé |
 | `DELETE /spaces/:slug/types/:type` | Super-admin | Supprime le type et ses entrées |
 | `PUT /spaces/:slug/type-order` | Super-admin | Ordre des types (hors de `/types/`, où `order` pourrait être un type) |
-| `GET /spaces/:slug/types/:type/entries?status` | Membre | Liste : id, titre, slug, statut, EN complet, date de modification |
+| `GET /spaces/:slug/types/:type/entries` | Membre | Liste : id, titre, slug, statut, EN complet, date de modification (le filtre par statut se fait dans le dashboard) |
 | `POST /spaces/:slug/types/:type/entries` | Membre | Crée une entrée (brouillon) |
 | `GET /spaces/:slug/types/:type/entries/:id` | Membre | Entrée complète (`published`, `draft`, `version`) ; pour une page unique, `:id` vaut `single` |
 | `PATCH /spaces/:slug/types/:type/entries/:id` | Membre | Sauvegarde automatique : `{ version, data, slug? }` dans `draft` |
