@@ -22,6 +22,7 @@ import { isUniqueViolation } from '../db/errors.js'
 import type { Db, User } from '../db/index.js'
 import { contentTypes, entries } from '../db/schema.js'
 import type { Space } from '../spaces/guards.js'
+import { DeployService } from '../deploy/deploy.service.js'
 import { MediaService } from '../media/media.service.js'
 import { TypesService } from './types.service.js'
 
@@ -48,6 +49,7 @@ export class EntriesService {
     @Inject(DB) private readonly db: Db,
     private readonly types: TypesService,
     private readonly media: MediaService,
+    private readonly deploy: DeployService,
   ) {}
 
   /** Entrées d'une collection, la dernière modifiée d'abord. */
@@ -171,12 +173,15 @@ export class EntriesService {
         issues,
       })
     }
-    return this.write(current.id, version, user, {
+    const entry = await this.write(current.id, version, user, {
       published: current.draft,
       draft: null,
       enComplete: isEnComplete(type.fields, current.draft),
       publishedAt: new Date(),
     })
+    // Ce que le site affiche a changé : un déploiement est demandé (regroupé sur 10 s).
+    this.deploy.schedule(space.id)
+    return entry
   }
 
   /** « Annuler les modifications » : on revient à la version en ligne. */
@@ -198,10 +203,12 @@ export class EntriesService {
     const type = await this.types.row(space, typeSlug)
     const current = await this.current(type, id, version)
     if (!current.published) throw new BadRequestException('Cette entrée n’est pas publiée')
-    return this.write(current.id, version, user, {
+    const entry = await this.write(current.id, version, user, {
       published: null,
       draft: current.draft ?? current.published,
     })
+    this.deploy.schedule(space.id)
+    return entry
   }
 
   /** Suppression définitive (pas d'historique, PRD). Une page unique ne se supprime pas : elle
@@ -212,8 +219,10 @@ export class EntriesService {
     const deleted = await this.db
       .delete(entries)
       .where(this.byId(type, id))
-      .returning({ id: entries.id })
+      .returning({ id: entries.id, published: entries.published })
     if (!deleted.length) throw new NotFoundException('Entrée introuvable')
+    // Un brouillon n'était pas sur le site : rien à redéployer.
+    if (deleted[0]!.published) this.deploy.schedule(space.id)
   }
 
   /** L'entrée, à condition que la version lue soit toujours la sienne. */

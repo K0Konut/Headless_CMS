@@ -27,6 +27,7 @@ import type { ContentType, Entry } from '@/lib/content'
 import { formatTime } from '@/lib/format'
 import { slugify } from '@/lib/slug'
 import FieldRows from './FieldRows.vue'
+import DeployStatus from './DeployStatus.vue'
 import StatusBadges from './StatusBadges.vue'
 
 const props = defineProps<{ space: string; type: ContentType; entryId: string }>()
@@ -156,6 +157,7 @@ const slugIssue = computed(() => errors.value.slug)
 
 const busy = ref(false)
 const actionError = ref('')
+const deployRefresh = ref(0)
 /** Annonce des actions réussies aux lecteurs d'écran (document UX : « Publié » est annoncé). */
 const announcement = ref('')
 let deleted = false
@@ -193,6 +195,8 @@ async function act(action: 'publish' | 'discard' | 'unpublish', done: string) {
     apply(result)
     checking.value = false
     announcement.value = done
+    // Publier ou dépublier demande un déploiement : son état est relu.
+    deployRefresh.value++
   } catch (err) {
     if (err instanceof ApiError && err.status === 409) state.value = 'conflict'
     else actionError.value = errorMessage(err)
@@ -303,6 +307,7 @@ onBeforeUnmount(() => {
         <template v-else-if="state === 'saved' && !pending">Enregistré à {{ savedAt }}</template>
         <template v-else-if="state === 'saved'">Modifications en cours…</template>
       </p>
+      <DeployStatus :space="space" :refresh-key="deployRefresh" />
       <div class="flex flex-wrap items-center gap-2">
         <template v-if="status === 'modified'">
           <Button variant="outline" :disabled="busy" @click="discard">

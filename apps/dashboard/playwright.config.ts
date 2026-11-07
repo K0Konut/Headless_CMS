@@ -29,7 +29,8 @@ export default defineConfig({
       // L'API doit avoir été compilée (npm run build -w @dashility/api).
       command: 'node ../api/dist/main.js',
       port: API_PORT,
-      env: { PORT: String(API_PORT), DATABASE_URL: E2E_DATABASE_URL },
+      // Regroupement des déploiements raccourci (10 s en vrai).
+      env: { PORT: String(API_PORT), DATABASE_URL: E2E_DATABASE_URL, DEPLOY_DELAY_MS: '500' },
     },
     {
       command: `npx vite --port ${WEB_PORT} --strictPort`,

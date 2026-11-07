@@ -344,7 +344,8 @@ Mêmes règles que la V1 : session, `SpaceAccessGuard`, 404 pour un espace inacc
 | `POST /spaces/:slug/media` | Membre | Envoie une image ou un PDF |
 | `POST /spaces/:slug/api-key` | Super-admin | Génère ou régénère la clé ; la renvoie une seule fois |
 | `PUT /spaces/:slug/deploy` | Super-admin | `{ url, token? }` |
-| `POST /spaces/:slug/deploy` | Super-admin | Lance un déploiement tout de suite |
+| `GET /spaces/:slug/deploy` | Membre | État du déploiement : configuré, appel en attente, dernier appel ; l'URL et la présence d'un jeton pour le super-admin |
+| `POST /spaces/:slug/deploy` | Membre | Lance un déploiement tout de suite (« Lancer un déploiement », « Relancer ») |
 
 - **Ce qui est réservé au super-admin est vérifié par l'API**, pas seulement caché dans le dashboard.
 - **Publier, dépublier ou supprimer une entrée publiée** demande un déploiement (voir plus bas).

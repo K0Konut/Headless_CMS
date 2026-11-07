@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import CopyField from '@/components/CopyField.vue'
 import type { SpaceDetail } from '@/lib/spaces'
 import ApiKeyField from './ApiKeyField.vue'
+import DeploySettings from './DeploySettings.vue'
 import SettingsSection from './SettingsSection.vue'
 
 const props = defineProps<{ space: SpaceDetail }>()
@@ -39,6 +40,7 @@ const projets = await res.json()`
         <CopyField :value="snippet" label="Extrait d’installation" multiline />
       </div>
       <ApiKeyField :slug="space.slug" :created-at="space.apiKeyCreatedAt ?? null" />
+      <DeploySettings :slug="space.slug" />
       <div class="grid grid-cols-1 gap-2">
         <p class="text-sm font-medium">Lire le contenu publié</p>
         <CopyField :value="readSnippet" label="Exemple de lecture du contenu" multiline />

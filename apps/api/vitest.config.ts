@@ -11,6 +11,9 @@ process.env.DATABASE_URL =
 // Médias écrits dans un dossier temporaire, propre à chaque lancement.
 process.env.MEDIA_DIR = mkdtempSync(join(tmpdir(), 'dashility-medias-'))
 
+// Regroupement des déploiements raccourci : 10 s en vrai.
+process.env.DEPLOY_DELAY_MS = '150'
+
 export default defineConfig({
   test: {
     globalSetup: './test/global-setup.ts',
