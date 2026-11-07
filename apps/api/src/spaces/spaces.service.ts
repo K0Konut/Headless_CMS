@@ -16,8 +16,9 @@ type SpaceFields = { name: string; slug: string; siteUrl: string }
 
 /** Un espace tel que l'API le renvoie : jamais l'empreinte de sa clé API. */
 export function withoutSecrets(space: Space) {
-  const { apiKeyHash, ...rest } = space
-  void apiKeyHash
+  // Le déploiement a sa propre route, qui ne renvoie jamais le jeton.
+  const { apiKeyHash, deployUrl, deployToken, deployCalledAt, deployStatus, ...rest } = space
+  void [apiKeyHash, deployUrl, deployToken, deployCalledAt, deployStatus]
   return rest
 }
 

@@ -687,3 +687,29 @@ export function publicationIssues(
 /** Corps des actions de publication (`publish`, `discard`, `unpublish`) : la version lue, pour
  *  ne pas publier ou annuler autre chose que ce que le membre a sous les yeux. */
 export const entryActionSchema = z.object({ version: z.int().min(1) })
+
+// ── Contenu (V2) : déploiement à la publication ───────────────────────────────────────
+
+/** Corps de `PUT /spaces/:slug/deploy` (super-admin). L'URL doit être en https ; `null` retire le
+ *  déploiement. Le jeton : absent, il reste tel quel ; `null` le retire ; une chaîne le remplace.
+ *  Il n'est jamais renvoyé. */
+export const deploySettingsSchema = z.object({
+  url: z
+    .url({ protocol: /^https$/, error: 'Adresse invalide : elle doit commencer par https://' })
+    .max(2048)
+    .nullable(),
+  token: z.string().trim().min(1, 'Jeton vide').max(1000).nullable().optional(),
+})
+
+/** État du déploiement d'un espace (`GET /spaces/:slug/deploy`). */
+export interface DeployState {
+  /** Une URL de déploiement est enregistrée. */
+  configured: boolean
+  /** Un appel est attendu (regroupement de 10 s) ou en cours. */
+  pending: boolean
+  /** Dernier appel : heure, statut HTTP (null si le site était injoignable), réussite. */
+  last: { at: string; status: number | null; ok: boolean } | null
+  /** Super-admin seulement : l'URL et la présence d'un jeton (jamais sa valeur). */
+  url?: string | null
+  hasToken?: boolean
+}

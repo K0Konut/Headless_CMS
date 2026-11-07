@@ -43,6 +43,13 @@
       "when": 1794075178731,
       "tag": "0005_api_key",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794076371022,
+      "tag": "0006_deploy",
+      "breakpoints": true
     }
   ]
 }
