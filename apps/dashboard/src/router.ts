@@ -79,6 +79,24 @@ export const router = createRouter({
           meta: { title: 'Analytics' },
         },
         {
+          path: 'espaces/:espace/contenu',
+          name: 'content',
+          component: () => import('@/pages/ContentPage.vue'),
+          meta: { title: 'Contenu' },
+        },
+        {
+          path: 'espaces/:espace/contenu/:type',
+          name: 'entries',
+          component: () => import('@/pages/EntriesPage.vue'),
+          meta: { title: 'Contenu' },
+        },
+        {
+          path: 'espaces/:espace/contenu/:type/:entree',
+          name: 'entry',
+          component: () => import('@/pages/EntryPage.vue'),
+          meta: { title: 'Contenu' },
+        },
+        {
           path: 'espaces/:espace/structure/:type?',
           name: 'structure',
           component: () => import('@/pages/StructurePage.vue'),

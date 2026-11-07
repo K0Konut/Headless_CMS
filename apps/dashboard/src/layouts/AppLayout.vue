@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Blocks, ChartColumn, Settings } from '@lucide/vue'
+import { Blocks, ChartColumn, FileText, Settings } from '@lucide/vue'
 import { computed } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import SpaceSwitcher from '@/components/SpaceSwitcher.vue'
@@ -60,6 +60,17 @@ const space = computed(() =>
                 >
                   <RouterLink :to="`/espaces/${space.slug}/analytics`">
                     <ChartColumn aria-hidden="true" />Analytics
+                  </RouterLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  as-child
+                  :is-active="['content', 'entries', 'entry'].includes(String(route.name))"
+                  class="data-[active=true]:text-sidebar-primary"
+                >
+                  <RouterLink :to="`/espaces/${space.slug}/contenu`">
+                    <FileText aria-hidden="true" />Contenu
                   </RouterLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
