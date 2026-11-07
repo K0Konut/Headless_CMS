@@ -254,6 +254,10 @@ export function frozenFieldChange(before: Field[], after: Field[]): string | nul
   return null
 }
 
+/** Langues du contenu ; le français est la langue de référence (document UX). */
+export const LOCALES = ['fr', 'en'] as const
+export type Locale = (typeof LOCALES)[number]
+
 // ── Contenu (V2) : valeurs des entrées ─────────────────────────────────────────────────
 
 /** Date au mois (`2026-10`) ou au jour (`2026-10-14`). */

@@ -1,10 +1,13 @@
-/** Réponse de `GET /spaces/:slug` ; la clé publique n'est renvoyée qu'au super-admin. */
+/** Réponse de `GET /spaces/:slug` ; la clé publique et la date de la clé API ne sont renvoyées
+ *  qu'au super-admin. */
 export interface SpaceDetail {
   slug: string
   name: string
   siteUrl: string
   createdAt: string
   publicKey?: string
+  /** null : aucune clé API générée. */
+  apiKeyCreatedAt?: string | null
 }
 
 export interface Members {
