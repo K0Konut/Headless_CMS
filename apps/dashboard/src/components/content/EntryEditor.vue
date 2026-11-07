@@ -5,13 +5,20 @@ import {
   entryStatus,
   entryTitle,
   isEnComplete,
+  publicationIssues,
 } from '@dashility/shared'
-import { ArrowLeft } from '@lucide/vue'
+import { ArrowLeft, Ellipsis, Trash2, Undo2 } from '@lucide/vue'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
+import { RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate, useRouter } from 'vue-router'
 import FormError from '@/components/FormError.vue'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -23,6 +30,7 @@ import FieldRows from './FieldRows.vue'
 import StatusBadges from './StatusBadges.vue'
 
 const props = defineProps<{ space: string; type: ContentType; entryId: string }>()
+const router = useRouter()
 
 const base = computed(
   () =>
@@ -61,13 +69,7 @@ async function load() {
   loadError.value = ''
   clearTimeout(timer)
   try {
-    const loaded = await api<Entry>(base.value)
-    entry.value = loaded
-    version = loaded.version
-    // On reprend là où on s'était arrêté : les modifications en attente, sinon la version publiée.
-    data.value = structuredClone(loaded.draft ?? loaded.published ?? {})
-    slug.value = loaded.slug ?? ''
-    lastSaved.value = snapshot()
+    apply(await api<Entry>(base.value))
     state.value = 'saved'
     slugError.value = ''
   } catch (err) {
@@ -77,6 +79,16 @@ async function load() {
   loading = false
 }
 watch(base, load, { immediate: true })
+
+/** Affiche une entrée lue ou renvoyée par une action : on reprend là où on s'était arrêté, les
+ *  modifications en attente, sinon la version publiée. */
+function apply(loaded: Entry) {
+  entry.value = loaded
+  version = loaded.version
+  data.value = structuredClone(loaded.draft ?? loaded.published ?? {})
+  slug.value = loaded.slug ?? ''
+  lastSaved.value = snapshot()
+}
 
 const title = computed(() => entryTitle(props.type.fields, data.value))
 
@@ -131,12 +143,125 @@ const status = computed(() => (entry.value ? entryStatus(entry.value) : 'draft')
 const enComplete = computed(() => isEnComplete(props.type.fields, data.value))
 const savedAt = computed(() => (entry.value ? formatTime(entry.value.updatedAt) : ''))
 
+// ── Publication (document UX, « Éditeur d'entrée ») ──────────────────────────────────────
+
+/** Les contrôles de publication s'affichent après une première tentative, puis suivent la
+ *  saisie : un champ corrigé perd son erreur. */
+const checking = ref(false)
+const issues = computed(() =>
+  checking.value ? publicationIssues(props.type, data.value, slug.value || null) : [],
+)
+const errors = computed(() => Object.fromEntries(issues.value.map((i) => [i.path, i.message])))
+const slugIssue = computed(() => errors.value.slug)
+
+const busy = ref(false)
+const actionError = ref('')
+/** Annonce des actions réussies aux lecteurs d'écran (document UX : « Publié » est annoncé). */
+const announcement = ref('')
+let deleted = false
+
+/** Focus sur la saisie d'un chemin, sinon sur son parent (`duration.start` → `duration`,
+ *  un groupe → son conteneur). */
+async function focusPath(path: string) {
+  await nextTick()
+  const parts = path.split('.')
+  while (parts.length) {
+    const el = document.getElementById(['entry', ...parts].join('-'))
+    if (el) return el.focus()
+    parts.pop()
+  }
+}
+
+/** Avant une action, la saisie doit être enregistrée : l'API agit sur la version qu'elle a. */
+async function saveFirst() {
+  actionError.value = ''
+  await save()
+  if (state.value === 'saved' && !pending.value) return true
+  if (state.value !== 'conflict') {
+    actionError.value = 'La saisie n’est pas enregistrée : réessayez avant de continuer.'
+  }
+  return false
+}
+
+async function act(action: 'publish' | 'discard' | 'unpublish', done: string) {
+  busy.value = true
+  try {
+    const result = await api<Entry>(`${base.value}/${action}`, {
+      method: 'POST',
+      body: { version },
+    })
+    apply(result)
+    checking.value = false
+    announcement.value = done
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 409) state.value = 'conflict'
+    else actionError.value = errorMessage(err)
+  } finally {
+    busy.value = false
+  }
+}
+
+async function publish() {
+  if (!(await saveFirst())) return
+  checking.value = true
+  if (issues.value.length) {
+    const n = issues.value.length
+    actionError.value = `Publication impossible : ${n === 1 ? 'un champ' : `${n} champs`} à corriger.`
+    return focusPath(issues.value[0]!.path)
+  }
+  if (
+    !enComplete.value &&
+    !window.confirm(
+      'La version anglaise est incomplète : cette entrée sera masquée sur le site en anglais. Publier quand même ?',
+    )
+  ) {
+    return
+  }
+  await act('publish', status.value === 'draft' ? 'Entrée publiée.' : 'Modifications publiées.')
+}
+
+async function discard() {
+  if (!(await saveFirst())) return
+  if (!window.confirm('Annuler les modifications et revenir à la version en ligne ?')) return
+  await act('discard', 'Modifications annulées : la version en ligne est rétablie.')
+}
+
+async function unpublish() {
+  if (!(await saveFirst())) return
+  if (
+    !window.confirm(
+      'Dépublier cette entrée ? Elle repasse en brouillon et sera retirée du site au prochain déploiement.',
+    )
+  ) {
+    return
+  }
+  await act('unpublish', 'Entrée dépubliée : elle est de nouveau en brouillon.')
+}
+
+async function remove() {
+  const name = title.value || 'Sans titre'
+  if (!window.confirm(`Supprimer « ${name} » ? C’est définitif.`)) return
+  busy.value = true
+  actionError.value = ''
+  try {
+    clearTimeout(timer)
+    await api(base.value, { method: 'DELETE' })
+    deleted = true
+    await router.push(`/espaces/${props.space}/contenu/${props.type.slug}`)
+  } catch (err) {
+    actionError.value = errorMessage(err)
+  } finally {
+    busy.value = false
+  }
+}
+
 /** Langue affichée sous 768 px, où les deux colonnes ne tiennent pas. */
 const lang = ref<'fr' | 'en'>('fr')
 
 // On ne quitte pas l'éditeur avec une saisie non enregistrée : retour à la liste (même route,
 // autre paramètre) comme départ vers un autre écran.
 async function confirmLeave() {
+  if (deleted) return true
   await save()
   return (
     !pending.value ||
@@ -178,6 +303,32 @@ onBeforeUnmount(() => {
         <template v-else-if="state === 'saved' && !pending">Enregistré à {{ savedAt }}</template>
         <template v-else-if="state === 'saved'">Modifications en cours…</template>
       </p>
+      <div class="flex flex-wrap items-center gap-2">
+        <template v-if="status === 'modified'">
+          <Button variant="outline" :disabled="busy" @click="discard">
+            <Undo2 aria-hidden="true" />Annuler les modifications
+          </Button>
+          <Button :disabled="busy" @click="publish">Publier les modifications</Button>
+        </template>
+        <Button v-else-if="status === 'draft'" :disabled="busy" @click="publish">Publier</Button>
+        <DropdownMenu v-if="status !== 'draft' || isCollection">
+          <DropdownMenuTrigger as-child>
+            <Button variant="outline" size="icon" :disabled="busy" aria-label="Autres actions">
+              <Ellipsis aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem v-if="status !== 'draft'" @select="unpublish">
+              <Undo2 aria-hidden="true" />Dépublier
+            </DropdownMenuItem>
+            <DropdownMenuItem v-if="isCollection" variant="destructive" @select="remove">
+              <Trash2 aria-hidden="true" />Supprimer
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      <p role="status" class="sr-only">{{ announcement }}</p>
+      <FormError :message="actionError" />
       <!-- Seuls les échecs sont annoncés (Alert porte role="alert") : une annonce à chaque frappe
          saturerait les lecteurs d'écran. -->
       <Alert v-if="state === 'error'" variant="destructive">
@@ -201,11 +352,15 @@ onBeforeUnmount(() => {
         id="entry-slug"
         v-model="slug"
         class="font-mono"
-        :aria-invalid="slugInvalid || !!slugError || undefined"
+        :aria-invalid="slugInvalid || !!slugError || !!slugIssue || undefined"
         aria-describedby="entry-slug-hint entry-slug-error"
       />
-      <p v-if="slugInvalid || slugError" id="entry-slug-error" class="text-sm text-destructive">
-        {{ slugInvalid ? 'Minuscules, chiffres et tirets uniquement.' : slugError }}
+      <p
+        v-if="slugInvalid || slugError || slugIssue"
+        id="entry-slug-error"
+        class="text-sm text-destructive"
+      >
+        {{ slugInvalid ? 'Minuscules, chiffres et tirets uniquement.' : slugError || slugIssue }}
       </p>
       <p id="entry-slug-hint" class="text-sm text-muted-foreground">
         {{
@@ -240,7 +395,13 @@ onBeforeUnmount(() => {
       <p v-if="!type.fields.length" class="text-sm text-muted-foreground">
         Ce type n’a encore aucun champ.
       </p>
-      <FieldRows v-model="data" :fields="type.fields" id-prefix="entry" :lang="lang" />
+      <FieldRows
+        v-model="data"
+        :fields="type.fields"
+        id-prefix="entry"
+        :lang="lang"
+        :errors="errors"
+      />
     </section>
   </div>
 </template>

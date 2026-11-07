@@ -5,7 +5,15 @@ import GroupInput from './GroupInput.vue'
 
 /** Les champs d'une entrée, une ligne par champ : français et anglais côte à côte pour un champ
  *  traduisible (document UX). Sous 768 px, seule la langue choisie (`lang`) est affichée. */
-const props = defineProps<{ fields: Field[]; idPrefix: string; lang: 'fr' | 'en' }>()
+const props = defineProps<{
+  fields: Field[]
+  idPrefix: string
+  lang: 'fr' | 'en'
+  /** Erreurs de publication, par chemin (`title.fr`, `steps.0.name.fr`). */
+  errors?: Record<string, string>
+  /** Préfixe des chemins de ces champs (`steps.0.` dans un groupe). */
+  path?: string
+}>()
 const data = defineModel<EntryData>({ required: true })
 
 const LANGS = ['fr', 'en'] as const
@@ -16,6 +24,13 @@ const translated = (field: Field, lang: 'fr' | 'en') =>
 function setTranslated(field: Field, lang: 'fr' | 'en', value: unknown) {
   data.value[field.key] = { ...(data.value[field.key] as object | undefined), [lang]: value }
 }
+/** Erreur d'une valeur ; une date peut l'avoir sur son début ou sa fin. */
+function errorOf(field: Field, lang?: 'fr' | 'en') {
+  const at = `${props.path ?? ''}${field.key}${lang ? `.${lang}` : ''}`
+  const errors = props.errors ?? {}
+  return errors[at] ?? errors[`${at}.start`] ?? errors[`${at}.end`]
+}
+
 const id = (field: Field, lang?: string) =>
   [props.idPrefix, field.key, lang].filter(Boolean).join('-')
 </script>
@@ -43,6 +58,9 @@ const id = (field: Field, lang?: string) =>
         :field="field"
         :id-prefix="id(field)"
         :lang="lang"
+        :errors="errors"
+        :path="`${path ?? ''}${field.key}.`"
+        :error="errorOf(field)"
         class="md:col-span-2"
       />
       <template v-else-if="field.translatable">
@@ -53,6 +71,7 @@ const id = (field: Field, lang?: string) =>
           :field="field"
           :label="`${field.label} (${LANG_NAMES[l]})`"
           :lang="l"
+          :error="errorOf(field, l)"
           :model-value="translated(field, l)"
           :class="{ 'hidden md:grid': l !== lang }"
           @update:model-value="setTranslated(field, l, $event)"
@@ -64,6 +83,7 @@ const id = (field: Field, lang?: string) =>
         v-model="data[field.key]"
         :field="field"
         :label="field.label"
+        :error="errorOf(field)"
         class="md:col-span-2"
       />
     </div>

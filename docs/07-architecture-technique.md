@@ -336,9 +336,9 @@ Mêmes règles que la V1 : session, `SpaceAccessGuard`, 404 pour un espace inacc
 | `POST /spaces/:slug/types/:type/entries` | Membre | Crée une entrée (brouillon) |
 | `GET /spaces/:slug/types/:type/entries/:id` | Membre | Entrée complète (`published`, `draft`, `version`) ; pour une page unique, `:id` vaut `single` |
 | `PATCH /spaces/:slug/types/:type/entries/:id` | Membre | Sauvegarde automatique : `{ version, data, slug? }` dans `draft` |
-| `POST /spaces/:slug/types/:type/entries/:id/publish` | Membre | Publie le brouillon (validation complète) |
-| `POST /spaces/:slug/types/:type/entries/:id/discard` | Membre | Annule les modifications en attente |
-| `POST /spaces/:slug/types/:type/entries/:id/unpublish` | Membre | Dépublie |
+| `POST /spaces/:slug/types/:type/entries/:id/publish` | Membre | `{ version }` : publie le brouillon après les contrôles de publication ; sinon 400 `publication_invalid` avec la liste des champs fautifs (`issues`) |
+| `POST /spaces/:slug/types/:type/entries/:id/discard` | Membre | `{ version }` : annule les modifications en attente |
+| `POST /spaces/:slug/types/:type/entries/:id/unpublish` | Membre | `{ version }` : dépublie, en gardant le contenu (et les modifications en attente) en brouillon |
 | `DELETE /spaces/:slug/types/:type/entries/:id` | Membre | Supprime (sauf une page unique) |
 | `POST /spaces/:slug/media` | Membre | Envoie une image ou un PDF |
 | `POST /spaces/:slug/api-key` | Super-admin | Génère ou régénère la clé ; la renvoie une seule fois |

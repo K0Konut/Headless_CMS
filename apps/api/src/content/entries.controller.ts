@@ -1,8 +1,27 @@
-import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common'
-import { saveEntrySchema } from '@dashility/shared'
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Req,
+  NotFoundException,
+  type PipeTransform,
+  UseGuards,
+} from '@nestjs/common'
+import { entryActionSchema, saveEntrySchema } from '@dashility/shared'
 import { type SpaceRequest, SpaceAccessGuard } from '../spaces/guards.js'
 import { uuidOr404 } from '../uuid-or-404.pipe.js'
 import { EntriesService, type EntryRef } from './entries.service.js'
+
+/** `single`, ou l'identifiant d'une entrée de collection (sinon 404). */
+const singleOrUuid: PipeTransform<string, Promise<EntryRef>> = {
+  transform: async (value, meta) =>
+    value === 'single' ? value : ((await uuidOr404.transform(value, meta)) as string),
+}
 
 /** Entrées d'un type : tous les membres de l'espace les lisent et les modifient (PRD, « Rôles »).
  *  `single` désigne l'entrée d'une page unique ; sinon l'identifiant d'une entrée de collection. */
@@ -48,5 +67,38 @@ export class EntriesController {
     @Body() body: unknown,
   ) {
     return this.entries.save(space, type, id, saveEntrySchema.parse(body), user)
+  }
+
+  /** Publier, annuler les modifications, dépublier : `single` ou l'identifiant d'une entrée. */
+  @Post(':id/:action')
+  @HttpCode(200)
+  act(
+    @Req() { space, user }: SpaceRequest,
+    @Param('type') type: string,
+    @Param('id', singleOrUuid) id: EntryRef,
+    @Param('action') action: string,
+    @Body() body: unknown,
+  ) {
+    const { version } = entryActionSchema.parse(body)
+    switch (action) {
+      case 'publish':
+        return this.entries.publish(space, type, id, version, user)
+      case 'discard':
+        return this.entries.discard(space, type, id, version, user)
+      case 'unpublish':
+        return this.entries.unpublish(space, type, id, version, user)
+      default:
+        throw new NotFoundException()
+    }
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  remove(
+    @Req() { space }: SpaceRequest,
+    @Param('type') type: string,
+    @Param('id', singleOrUuid) id: EntryRef,
+  ) {
+    return this.entries.remove(space, type, id)
   }
 }

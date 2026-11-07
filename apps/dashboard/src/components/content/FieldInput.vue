@@ -14,7 +14,14 @@ import {
 
 /** Saisie d'une valeur d'un champ simple, dans une langue. Le libellé est porté par `label`
  *  (« Titre (français) ») : la ligne du champ l'affiche une seule fois pour les deux langues. */
-const props = defineProps<{ field: Field; id: string; label: string; lang?: 'fr' | 'en' }>()
+const props = defineProps<{
+  field: Field
+  id: string
+  label: string
+  lang?: 'fr' | 'en'
+  /** Erreur signalée par une tentative de publication. */
+  error?: string
+}>()
 const value = defineModel<unknown>()
 
 const text = computed({
@@ -24,6 +31,13 @@ const text = computed({
 const linkError = computed(
   () => props.field.type === 'link' && !!text.value && !isValidLink(text.value),
 )
+/** Erreur affichée : celle de la publication, sinon un lien invalide, signalé dès la saisie. */
+const shownError = computed(
+  () =>
+    props.error || (linkError.value ? 'Adresse invalide : elle doit commencer par https://' : ''),
+)
+const invalid = computed(() => !!shownError.value || undefined)
+const describedby = computed(() => (shownError.value ? `${props.id}-error` : undefined))
 
 const NONE = '__aucun'
 const choice = computed({
@@ -61,12 +75,9 @@ function addItem() {
         :type="field.type === 'link' ? 'url' : 'text'"
         :maxlength="field.type === 'text' ? field.maxLength : 2048"
         :lang="lang"
-        :aria-invalid="linkError || undefined"
-        :aria-describedby="linkError ? `${id}-error` : undefined"
+        :aria-invalid="invalid"
+        :aria-describedby="describedby"
       />
-      <p v-if="linkError" :id="`${id}-error`" class="text-sm text-destructive">
-        Adresse invalide : elle doit commencer par https://
-      </p>
     </template>
 
     <template v-else-if="field.type === 'number'">
@@ -76,6 +87,8 @@ function addItem() {
         type="number"
         :step="field.decimals ? 'any' : '1'"
         class="max-w-40"
+        :aria-invalid="invalid"
+        :aria-describedby="describedby"
         :model-value="typeof value === 'number' ? value : ''"
         @update:model-value="value = $event === '' ? null : Number($event)"
       />
@@ -95,7 +108,13 @@ function addItem() {
     <template v-else-if="field.type === 'choice'">
       <label :for="id" class="sr-only">{{ label }}</label>
       <Select v-model="choice">
-        <SelectTrigger :id="id" class="w-full max-w-64"><SelectValue /></SelectTrigger>
+        <SelectTrigger
+          :id="id"
+          class="w-full max-w-64"
+          :aria-invalid="invalid"
+          :aria-describedby="describedby"
+          ><SelectValue
+        /></SelectTrigger>
         <SelectContent>
           <SelectItem :value="NONE">Aucun</SelectItem>
           <SelectItem v-for="c in field.choices" :key="c.key" :value="c.key">{{ c.fr }}</SelectItem>
@@ -110,6 +129,8 @@ function addItem() {
         :id="id"
         :type="field.precision === 'month' ? 'month' : 'date'"
         class="w-44"
+        :aria-invalid="invalid"
+        :aria-describedby="describedby"
         :model-value="date.start ?? ''"
         @update:model-value="setDate({ start: String($event) })"
       />
@@ -162,7 +183,8 @@ function addItem() {
         :id="id"
         v-model="draftItem"
         :lang="lang"
-        :aria-describedby="`${id}-hint`"
+        :aria-invalid="invalid"
+        :aria-describedby="[`${id}-hint`, describedby].filter(Boolean).join(' ')"
         @keydown.enter.prevent="addItem"
         @blur="addItem"
       />
@@ -172,5 +194,7 @@ function addItem() {
     <p v-else class="text-sm text-muted-foreground">
       La saisie de ce champ arrive dans une prochaine version du dashboard.
     </p>
+
+    <p v-if="shownError" :id="`${id}-error`" class="text-sm text-destructive">{{ shownError }}</p>
   </div>
 </template>
