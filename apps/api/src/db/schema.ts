@@ -123,7 +123,7 @@ export const contentTypes = pgTable(
 
 /** Entrées d'un type (V2). Le statut se déduit de `published` et `draft` (architecture technique,
  *  « Modèle de données ») : le site ne lit que `published`. Une page unique a une seule entrée,
- *  de slug vide ; une entrée de collection a un slug, ou null tant qu'il n'est pas choisi. */
+ *  créée avec son type ; `slug` ne sert qu'aux collections (null tant qu'il n'est pas choisi). */
 export const entries = pgTable(
   'entries',
   {

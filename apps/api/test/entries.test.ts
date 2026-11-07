@@ -75,13 +75,7 @@ describe('entrées', () => {
       expect.objectContaining({ title: 'Ce portfolio', status: 'draft', enComplete: true }),
     ])
     const types = await api('get', '/spaces/portfolio/types', member).expect(200)
-    expect(types.body[0].counts).toEqual({
-      total: 1,
-      published: 0,
-      drafts: 1,
-      modified: 0,
-      enIncomplete: 0,
-    })
+    expect(types.body[0].counts).toEqual({ total: 1, published: 0, enIncomplete: 0 })
   })
 
   it('refuse une version périmée : rien n’est écrasé sans le savoir', async () => {
@@ -117,7 +111,7 @@ describe('entrées', () => {
       .send({ slug: 'cv', kind: 'single', name: 'CV', entryLabel: null, fields: [title] })
       .expect(201)
     const entry = await api('get', '/spaces/portfolio/types/cv/entries/single', member).expect(200)
-    expect(entry.body).toMatchObject({ slug: '', draft: {}, version: 1 })
+    expect(entry.body).toMatchObject({ slug: null, draft: {}, version: 1 })
     await api('post', '/spaces/portfolio/types/cv/entries', member).expect(400)
     await api('patch', '/spaces/portfolio/types/cv/entries/single', member)
       .send({ version: 1, data: {}, slug: 'cv' })

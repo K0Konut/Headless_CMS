@@ -6,8 +6,8 @@ import {
   NotFoundException,
 } from '@nestjs/common'
 import {
-  type EntryData,
   entryDataSchema,
+  entryStatus,
   entryTitle,
   isEnComplete,
   type saveEntrySchema,
@@ -35,11 +35,8 @@ const entryColumns = {
   updatedAt: entries.updatedAt,
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-/** Statut affiché (document UX, « Statuts d'une entrée »), déduit des deux versions. */
-const statusOf = (published: EntryData | null, draft: EntryData | null) =>
-  !published ? 'draft' : draft ? 'modified' : 'published'
+/** Une entrée d'une collection (identifiant validé par la route), ou celle d'une page unique. */
+export type EntryRef = string | 'single'
 
 @Injectable()
 export class EntriesService {
@@ -60,7 +57,7 @@ export class EntriesService {
       id,
       slug,
       title: entryTitle(type.fields, draft ?? published ?? {}),
-      status: statusOf(published, draft),
+      status: entryStatus({ published, draft }),
       enComplete,
       updatedAt,
     }))
@@ -84,7 +81,7 @@ export class EntriesService {
     return entry!
   }
 
-  async get(space: Space, typeSlug: string, id: string) {
+  async get(space: Space, typeSlug: string, id: EntryRef) {
     const type = await this.types.row(space, typeSlug)
     const [entry] = await this.db.select(entryColumns).from(entries).where(this.byId(type, id))
     if (!entry) throw new NotFoundException('Entrée introuvable')
@@ -96,7 +93,7 @@ export class EntriesService {
   async save(
     space: Space,
     typeSlug: string,
-    id: string,
+    id: EntryRef,
     body: z.infer<typeof saveEntrySchema>,
     user: User,
   ) {
@@ -125,18 +122,22 @@ export class EntriesService {
       }
       throw err
     }
-    await this.get(space, typeSlug, id)
+    // Aucune ligne modifiée : l'entrée n'existe pas (404), ou sa version a changé (409).
+    const [exists] = await this.db
+      .select({ id: entries.id })
+      .from(entries)
+      .where(this.byId(type, id))
+    if (!exists) throw new NotFoundException('Entrée introuvable')
     throw new ConflictException('Cette entrée a été modifiée ailleurs')
   }
 
-  /** `single` désigne l'entrée d'une page unique ; sinon un identifiant d'entrée du type. */
-  private byId(type: ContentType, id: string) {
-    if (id === 'single') {
-      return type.kind === 'single'
-        ? and(eq(entries.typeId, type.id), eq(entries.slug, ''))
-        : sql`false`
+  /** `single` désigne l'entrée d'une page unique, la seule de son type. */
+  private byId(type: ContentType, id: EntryRef) {
+    if ((id === 'single') !== (type.kind === 'single')) {
+      throw new NotFoundException('Entrée introuvable')
     }
-    // Un identifiant mal formé désigne une entrée qui n'existe pas.
-    return and(eq(entries.typeId, type.id), UUID.test(id) ? eq(entries.id, id) : sql`false`)
+    return id === 'single'
+      ? eq(entries.typeId, type.id)
+      : and(eq(entries.typeId, type.id), eq(entries.id, id))
   }
 }
