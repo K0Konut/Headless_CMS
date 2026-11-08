@@ -1,7 +1,10 @@
 {
-  "name": "dashility",
+  "name": "@dashility/client",
   "version": "0.1.0",
   "description": "Script analytics des sites gérés par Dashility",
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/K0Konut/Headless_CMS.git",
