@@ -18,6 +18,7 @@ import {
   isEnComplete,
   isValidLink,
   parisDateTime,
+  scheduleIssue,
   passwordSchema,
   siteUrlSchema,
   slugSchema,
@@ -532,4 +533,13 @@ describe('parisDateTime', () => {
   ])('%s', (_, date, time, iso) => {
     expect(parisDateTime(date, time).toISOString()).toBe(iso)
   })
+})
+
+it('borne une publication programmée entre une minute et un an', () => {
+  const now = Date.parse('2026-11-08T12:00:00Z')
+  const at = (ms: number) => scheduleIssue(new Date(now + ms), now)
+  expect(at(30_000)).toMatch(/à venir/)
+  expect(at(120_000)).toBeNull()
+  expect(at(367 * 86_400_000)).toMatch(/année/)
+  expect(scheduleIssue(new Date('x'), now)).toMatch(/date et une heure/)
 })

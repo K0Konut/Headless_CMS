@@ -733,14 +733,26 @@ export interface LastSchedule {
   message?: string
 }
 
-/** Corps de `PUT …/entries/:id/schedule`. `at` est un instant ISO ; ses bornes (au moins une
- *  minute dans le futur, au plus un an) sont vérifiées par l'API à la réception. */
+/** Corps de `PUT …/entries/:id/schedule`. `at` est un instant ISO ; ses bornes sont vérifiées par
+ *  `scheduleIssue`, à la réception par l'API et dans le panneau du dashboard. */
 export const scheduleEntrySchema = z.object({
   version: z.int().min(1),
   at: z.iso.datetime({ offset: true, error: 'Date de publication invalide' }),
 })
 
-const parisParts = new Intl.DateTimeFormat('en-GB', {
+const MINUTE_MS = 60_000
+const YEAR_MS = 366 * 24 * 60 * MINUTE_MS
+
+/** Bornes d'une publication programmée (document UX) : au moins une minute dans le futur, au plus
+ *  un an. Renvoie le message à afficher, ou null. */
+export function scheduleIssue(at: Date, now = Date.now()): string | null {
+  if (Number.isNaN(at.getTime())) return 'Choisissez une date et une heure'
+  if (at.getTime() < now + MINUTE_MS) return 'Choisissez une date à venir'
+  if (at.getTime() > now + YEAR_MS) return 'Choisissez une date dans l’année qui vient'
+  return null
+}
+
+const parisFormat = new Intl.DateTimeFormat('en-GB', {
   timeZone: 'Europe/Paris',
   year: 'numeric',
   month: '2-digit',
@@ -750,10 +762,17 @@ const parisParts = new Intl.DateTimeFormat('en-GB', {
   hourCycle: 'h23',
 })
 
+/** Date et heure de Paris d'un instant, en chiffres : `{ year: '2026', month: '11', day: '17',
+ *  hour: '09', minute: '00' }`. */
+export function parisParts(instant: Date | number) {
+  const p = Object.fromEntries(parisFormat.formatToParts(instant).map((x) => [x.type, x.value]))
+  return { year: p.year!, month: p.month!, day: p.day!, hour: p.hour!, minute: p.minute! }
+}
+
 /** Décalage de l'heure de Paris sur l'UTC à cet instant, en millisecondes. */
 function parisOffset(instant: number) {
-  const p = Object.fromEntries(parisParts.formatToParts(instant).map((x) => [x.type, x.value]))
-  const wall = Date.UTC(+p.year!, +p.month! - 1, +p.day!, +p.hour!, +p.minute!)
+  const p = parisParts(instant)
+  const wall = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute)
   return wall - Math.floor(instant / 60_000) * 60_000
 }
 
