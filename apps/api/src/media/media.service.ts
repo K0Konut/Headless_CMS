@@ -8,16 +8,16 @@ import {
   UnsupportedMediaTypeException,
 } from '@nestjs/common'
 import { Cron } from '@nestjs/schedule'
-import { MAX_MEDIA_BYTES, imageWidths } from '@dashility/shared'
-import { and, eq, inArray, sql } from 'drizzle-orm'
+import { imageWidths, mediaRefs } from '@dashility/shared'
+import { and, eq, inArray, lt, sql } from 'drizzle-orm'
 import { randomUUID } from 'node:crypto'
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import sharp from 'sharp'
 import { DB } from '../db/db.module.js'
 import type { Db } from '../db/index.js'
 import { contentTypes, entries, media } from '../db/schema.js'
 import type { Space } from '../spaces/guards.js'
-import { mediaPath } from './storage.js'
+import { mediaPath, removeMediaDir } from './storage.js'
 
 /** Ce que l'API renvoie d'un média. */
 const mediaColumns = {
@@ -59,9 +59,8 @@ export class MediaService {
    *  est vérifié, l'orientation appliquée, les métadonnées EXIF retirées, et les variantes WebP
    *  et AVIF produites tout de suite. */
   async upload(space: Space, file: UploadedFile | undefined) {
+    // La taille est vérifiée avant, par multer (limits.fileSize du contrôleur).
     if (!file?.buffer.length) throw new BadRequestException('Aucun fichier reçu')
-    if (file.size > MAX_MEDIA_BYTES)
-      throw new BadRequestException('Fichier trop volumineux : 10 Mo au plus')
     const id = randomUUID()
     const name = displayName(file.originalname)
 
@@ -78,40 +77,41 @@ export class MediaService {
           'Type de fichier non accepté : JPEG, PNG, WebP ou PDF',
         )
       }
-      // Orientation appliquée une fois ; les variantes partent de cette image redressée, sans EXIF.
-      const { data, info } = await image
-        .rotate()
-        .toBuffer({ resolveWithObject: true })
-        .catch(() => {
-          throw new UnsupportedMediaTypeException('Image illisible')
-        })
+      // Dimensions une fois l'orientation EXIF appliquée (une photo de téléphone en portrait).
+      const rotated = (meta.orientation ?? 1) >= 5
+      const width = rotated ? meta.height : meta.width
+      const height = rotated ? meta.width : meta.height
+      if (!width || !height) throw new UnsupportedMediaTypeException('Image illisible')
       row = {
         id,
         spaceId: space.id,
         kind: 'image',
         originalName: name,
-        width: info.width,
-        height: info.height,
+        width,
+        height,
         bytes: file.size,
       }
-      await this.write(space, id, async (dir) => {
-        await writeFile(
-          `${dir}/original.${meta.format === 'jpeg' ? 'jpg' : meta.format}`,
-          file.buffer,
-        )
-        for (const width of imageWidths(info.width)) {
-          const resized = sharp(data).resize({ width, withoutEnlargement: true })
-          await resized.clone().webp({ quality: 80 }).toFile(`${dir}/${width}.webp`)
-          await resized.clone().avif({ quality: 55, effort: 4 }).toFile(`${dir}/${width}.avif`)
-        }
-      })
+      // Un seul décodage, redressé ; les variantes (sans EXIF) sont produites en parallèle.
+      const base = image.rotate()
+      await this.write(space, id, (dir) =>
+        Promise.all([
+          writeFile(`${dir}/original.${meta.format === 'jpeg' ? 'jpg' : meta.format}`, file.buffer),
+          ...imageWidths(width).flatMap((w) => {
+            const resized = base.clone().resize({ width: w, withoutEnlargement: true })
+            return [
+              resized.clone().webp({ quality: 80 }).toFile(`${dir}/${w}.webp`),
+              resized.clone().avif({ quality: 55, effort: 4 }).toFile(`${dir}/${w}.avif`),
+            ]
+          }),
+        ]),
+      )
     }
 
     try {
       const [created] = await this.db.insert(media).values(row).returning(mediaColumns)
       return created!
     } catch (err) {
-      await rm(mediaPath(space.id, id), { recursive: true, force: true }).catch(() => undefined)
+      await removeMediaDir(space.id, id)
       throw err
     }
   }
@@ -125,7 +125,7 @@ export class MediaService {
       await files(dir)
     } catch (err) {
       this.logger.error(err)
-      await rm(dir, { recursive: true, force: true }).catch(() => undefined)
+      await removeMediaDir(space.id, id)
       throw new ServiceUnavailableException(UNAVAILABLE)
     }
   }
@@ -178,29 +178,37 @@ export class MediaService {
 
   /** Médias orphelins (architecture, « Fichiers orphelins ») : plus de 24 h, et cités ni par la
    *  version en ligne ni par le brouillon d'aucune entrée de leur espace. Un fichier remplacé
-   *  reste donc servi tant que la version publiée l'utilise. */
+   *  reste donc servi tant que la version publiée l'utilise. Les références sont lues avec la
+   *  définition des champs (`mediaRefs`), comme à l'enregistrement et dans l'API publique. */
   @Cron('30 3 * * *', { timeZone: 'Europe/Paris' })
   async purgeOrphans() {
-    const removed = await this.db
-      .delete(media)
-      .where(
-        and(
-          sql`${media.createdAt} < now() - interval '24 hours'`,
-          sql`not exists (
-            select 1 from ${entries}
-            join ${contentTypes} on ${contentTypes.id} = ${entries.typeId}
-            where ${contentTypes.spaceId} = ${media.spaceId}
-              and (coalesce(${entries.published}::text, '') || coalesce(${entries.draft}::text, ''))
-                like '%' || ${media.id}::text || '%'
-          )`,
-        ),
+    const old = await this.db
+      .select({ id: media.id, spaceId: media.spaceId })
+      .from(media)
+      .where(lt(media.createdAt, sql`now() - interval '24 hours'`))
+    let removed = 0
+    for (const spaceId of new Set(old.map((m) => m.spaceId))) {
+      const rows = await this.db
+        .select({ fields: contentTypes.fields, published: entries.published, draft: entries.draft })
+        .from(entries)
+        .innerJoin(contentTypes, eq(contentTypes.id, entries.typeId))
+        .where(eq(contentTypes.spaceId, spaceId))
+      const used = new Set(
+        rows
+          .flatMap(({ fields, published, draft }) =>
+            [published, draft].flatMap((data) => (data ? mediaRefs(fields, data) : [])),
+          )
+          .map((ref) => ref.id),
       )
-      .returning({ id: media.id, spaceId: media.spaceId })
-    for (const { id, spaceId } of removed) {
-      await rm(mediaPath(spaceId, id), { recursive: true, force: true }).catch((err) =>
-        this.logger.warn(`Fichiers du média ${id} non supprimés : ${String(err)}`),
-      )
+      const orphans = old.filter((m) => m.spaceId === spaceId && !used.has(m.id)).map((m) => m.id)
+      if (!orphans.length) continue
+      await this.db.delete(media).where(inArray(media.id, orphans))
+      for (const id of orphans) {
+        const err = await removeMediaDir(spaceId, id)
+        if (err) this.logger.warn(`Fichiers du média ${id} non supprimés : ${String(err)}`)
+      }
+      removed += orphans.length
     }
-    return removed.length
+    return removed
   }
 }

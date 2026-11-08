@@ -12,8 +12,13 @@ export const mediaDir = () =>
 export const mediaPath = (spaceId: string, id: string, file?: string) =>
   join(mediaDir(), spaceId, id, ...(file ? [file] : []))
 
-/** Supprime les fichiers d'un espace supprimé. Sans effet si le stockage est injoignable : les
- *  fichiers restent, sans plus être servis (leur description a disparu de la base). */
-export async function removeSpaceMedia(spaceId: string) {
-  await rm(join(mediaDir(), spaceId), { recursive: true, force: true }).catch(() => undefined)
+/** Supprime les fichiers d'un média, ou de tout un espace sans `id`. Ne lève jamais : si le
+ *  stockage est injoignable, les fichiers restent, sans plus être servis (leur description a
+ *  disparu de la base). Renvoie l'erreur éventuelle, pour la journaliser. */
+export async function removeMediaDir(spaceId: string, id?: string): Promise<unknown> {
+  const dir = id ? mediaPath(spaceId, id) : join(mediaDir(), spaceId)
+  return rm(dir, { recursive: true, force: true }).then(
+    () => undefined,
+    (err: unknown) => err,
+  )
 }

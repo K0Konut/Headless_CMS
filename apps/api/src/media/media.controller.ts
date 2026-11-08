@@ -1,13 +1,17 @@
 import {
+  type ArgumentsHost,
+  Catch,
   Controller,
+  type ExceptionFilter,
   Get,
   NotFoundException,
   Param,
+  PayloadTooLargeException,
   Post,
   Req,
   Res,
-  UnsupportedMediaTypeException,
   UploadedFile,
+  UseFilters,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common'
@@ -19,22 +23,33 @@ import { type SpaceRequest, SpaceAccessGuard } from '../spaces/guards.js'
 import { uuidOr404 } from '../uuid-or-404.pipe.js'
 import { MediaService, type UploadedFile as File } from './media.service.js'
 
+/** Fichier au-delà de la limite de multer : son message est en anglais. */
+@Catch(PayloadTooLargeException)
+class FileTooLargeFilter implements ExceptionFilter {
+  catch(_err: PayloadTooLargeException, host: ArgumentsHost) {
+    host
+      .switchToHttp()
+      .getResponse<Response>()
+      .status(413)
+      .json({
+        error: { code: 'payload_too_large', message: 'Fichier trop volumineux : 10 Mo au plus' },
+      })
+  }
+}
+
 /** Envoi et description des médias d'un espace : tous ses membres remplissent les entrées. */
 @Controller('spaces/:slug/media')
 @UseGuards(SpaceAccessGuard)
 export class SpaceMediaController {
   constructor(private readonly media: MediaService) {}
 
-  /** `multipart/form-data`, champ `file`. Le formulaire multipart échappe à la règle « JSON
-   *  obligatoire » (CSRF) : l'en-tête `X-Requested-With`, qu'un autre site ne peut pas poser
-   *  sans requête préalable CORS, la remplace. */
+  /** `multipart/form-data`, champ `file`, avec l'en-tête `X-Requested-With: dashility`
+   *  (protection CSRF, vérifiée par le middleware `requireJson`). */
   @Post()
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_MEDIA_BYTES, files: 1 } }))
-  upload(@Req() req: SpaceRequest, @UploadedFile() file: File | undefined) {
-    if (req.headers['x-requested-with'] !== 'dashility') {
-      throw new UnsupportedMediaTypeException('En-tête X-Requested-With: dashility requis')
-    }
-    return this.media.upload(req.space, file)
+  @UseFilters(FileTooLargeFilter)
+  upload(@Req() { space }: SpaceRequest, @UploadedFile() file: File | undefined) {
+    return this.media.upload(space, file)
   }
 
   @Get(':id')
