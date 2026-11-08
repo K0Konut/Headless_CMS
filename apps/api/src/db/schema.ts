@@ -155,10 +155,9 @@ export const entries = pgTable(
     createdAt: createdAt(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
-    /** Publication programmée (V3) : heure prévue et version figée. Toute écriture qui change la
-     *  version annule la programmation (architecture, « Ce qui annule une programmation »). */
+    /** Publication programmée (V3) : heure prévue. La version programmée est la version actuelle,
+     *  puisque tout changement de version annule la programmation (`nextVersion`). */
     scheduledAt: timestamp('scheduled_at', { withTimezone: true }),
-    scheduledVersion: integer('scheduled_version'),
     /** Issue de la dernière programmation, effacée à la prochaine écriture. */
     lastSchedule: jsonb('last_schedule').$type<LastSchedule>(),
   },

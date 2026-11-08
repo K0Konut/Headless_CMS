@@ -15,9 +15,11 @@ import {
   publicationMessage,
   type saveEntrySchema,
   type scheduleEntrySchema,
+  scheduleIssue,
+  type LastSchedule,
   type EntryData,
 } from '@dashility/shared'
-import { and, desc, eq, lte, ne, or, sql } from 'drizzle-orm'
+import { and, desc, eq, lte, ne, or } from 'drizzle-orm'
 import { Cron } from '@nestjs/schedule'
 import type { z } from 'zod'
 import { DB } from '../db/db.module.js'
@@ -27,7 +29,7 @@ import { contentTypes, entries } from '../db/schema.js'
 import type { Space } from '../spaces/guards.js'
 import { DeployService } from '../deploy/deploy.service.js'
 import { MediaService } from '../media/media.service.js'
-import { clearSchedule } from './schedule.js'
+import { SLUG_TAKEN, nextVersion } from './schedule.js'
 import { TypesService } from './types.service.js'
 
 type ContentType = typeof contentTypes.$inferSelect
@@ -47,8 +49,27 @@ const entryColumns = {
   lastSchedule: entries.lastSchedule,
 }
 
-const MINUTE = 60_000
-const YEAR = 366 * 24 * 60 * MINUTE
+/** Contrôles de « Publier », et ce que la publication écrit : la même pour « Publier » et pour
+ *  une publication programmée (architecture, « Exécution »). `change` est null s'il n'y a rien à
+ *  publier (pas de modification en attente). */
+function publication(
+  type: ContentType,
+  entry: { draft: EntryData | null; slug: string | null; draftSlug: string | null },
+) {
+  const slug = entry.draftSlug ?? entry.slug
+  const draft = entry.draft
+  return {
+    issues: draft ? publicationIssues(type, draft, slug) : [],
+    change: draft && {
+      published: draft,
+      draft: null,
+      slug,
+      draftSlug: null,
+      enComplete: isEnComplete(type.fields, draft),
+      publishedAt: new Date(),
+    },
+  }
+}
 
 /** Une entrée d'une collection (identifiant validé par la route), ou celle d'une page unique. */
 export type EntryRef = string | 'single'
@@ -161,7 +182,7 @@ export class EntriesService {
         )
       if (taken) {
         slug = undefined
-        slugError = 'Cet identifiant d’URL est déjà utilisé par une autre entrée'
+        slugError = SLUG_TAKEN
       }
     }
     const slugChange =
@@ -173,9 +194,8 @@ export class EntriesService {
           draft: data,
           ...slugChange,
           enComplete: isEnComplete(type.fields, data),
-          version: sql`${entries.version} + 1`,
           // Programmée entre la lecture et l'écriture : la modification l'annule.
-          ...clearSchedule(true),
+          ...nextVersion(),
           updatedAt: new Date(),
           updatedBy: user.id,
         })
@@ -185,9 +205,7 @@ export class EntriesService {
       return slugError ? { ...entry, slugError } : entry
     } catch (err) {
       // Pris entre la vérification et l'écriture : cas rare, signalé sans perdre la suite.
-      if (isUniqueViolation(err)) {
-        throw new BadRequestException('Cet identifiant d’URL est déjà utilisé par une autre entrée')
-      }
+      if (isUniqueViolation(err)) throw new BadRequestException(SLUG_TAKEN)
       throw err
     }
   }
@@ -197,24 +215,9 @@ export class EntriesService {
   async publish(space: Space, typeSlug: string, id: EntryRef, version: number, user: User) {
     const type = await this.types.row(space, typeSlug)
     const current = await this.current(type, id, version)
-    if (!current.draft)
-      throw new BadRequestException('Rien à publier : aucune modification en attente')
-    const slug = this.checkPublication(type, current)
+    const change = this.checkPublication(type, current)
     // Publier tout de suite retire la programmation, sans message : c'est la publication voulue.
-    const entry = await this.write(
-      current.id,
-      version,
-      user,
-      {
-        published: current.draft,
-        draft: null,
-        slug,
-        draftSlug: null,
-        enComplete: isEnComplete(type.fields, current.draft),
-        publishedAt: new Date(),
-      },
-      false,
-    )
+    const entry = await this.write(current.id, version, user, change, false)
     // Ce que le site affiche a changé : un déploiement est demandé (regroupé sur 10 s).
     this.deploy.schedule(space.id)
     return entry
@@ -275,20 +278,13 @@ export class EntriesService {
   ) {
     const type = await this.types.row(space, typeSlug)
     const current = await this.current(type, id, body.version)
-    if (!current.draft)
-      throw new BadRequestException('Rien à publier : aucune modification en attente')
     const at = new Date(body.at)
-    const now = Date.now()
-    if (at.getTime() < now + MINUTE) {
-      throw new BadRequestException('Choisissez une date à venir (au moins dans une minute)')
-    }
-    if (at.getTime() > now + YEAR) {
-      throw new BadRequestException('Choisissez une date dans l’année qui vient')
-    }
+    const issue = scheduleIssue(at)
+    if (issue) throw new BadRequestException(issue)
     this.checkPublication(type, current)
     const [entry] = await this.db
       .update(entries)
-      .set({ scheduledAt: at, scheduledVersion: body.version, lastSchedule: null })
+      .set({ scheduledAt: at, lastSchedule: null })
       .where(and(eq(entries.id, current.id), eq(entries.version, body.version)))
       .returning(entryColumns)
     if (!entry) throw new ConflictException('Cette entrée a été modifiée ailleurs')
@@ -300,7 +296,7 @@ export class EntriesService {
     const type = await this.types.row(space, typeSlug)
     const [entry] = await this.db
       .update(entries)
-      .set({ scheduledAt: null, scheduledVersion: null, lastSchedule: null })
+      .set({ scheduledAt: null, lastSchedule: null })
       .where(this.byId(type, id))
       .returning(entryColumns)
     if (!entry) throw new NotFoundException('Entrée introuvable')
@@ -312,6 +308,14 @@ export class EntriesService {
    *  `skip locked` : deux instances de l'API ne publient pas deux fois la même entrée. */
   @Cron('* * * * *')
   async publishDue() {
+    // Une minute sans rien à publier coûte une requête, sans transaction ni verrou.
+    const [any] = await this.db
+      .select({ id: entries.id })
+      .from(entries)
+      .where(lte(entries.scheduledAt, new Date()))
+      .limit(1)
+    if (!any) return
+
     const spaces = await this.db.transaction(async (tx) => {
       const due = await tx
         .select({ entry: entries, type: contentTypes })
@@ -321,60 +325,46 @@ export class EntriesService {
         .for('update', { of: entries, skipLocked: true })
       const published = new Set<string>()
       for (const { entry, type } of due) {
-        const outcome = (result: 'published' | 'cancelled' | 'failed', message?: string) => ({
+        const outcome = (result: LastSchedule['outcome'], message?: string): LastSchedule => ({
           plannedAt: entry.scheduledAt!.toISOString(),
           outcome: result,
           at: new Date().toISOString(),
           ...(message && { message }),
         })
-        const done = { scheduledAt: null, scheduledVersion: null }
-        // Garde-fou : une écriture qui change la version annule déjà la programmation.
-        if (entry.version !== entry.scheduledVersion || !entry.draft) {
-          await tx
+        /** Programmation terminée sans publication. */
+        const end = (lastSchedule: LastSchedule) =>
+          tx
             .update(entries)
-            .set({ ...done, lastSchedule: outcome('cancelled') })
+            .set({ scheduledAt: null, lastSchedule })
             .where(eq(entries.id, entry.id))
+
+        const { issues, change } = publication(type, entry)
+        if (!change) {
+          await end(outcome('cancelled'))
           continue
         }
-        const slug = entry.draftSlug ?? entry.slug
-        const issues = publicationIssues(type, entry.draft, slug)
-        const failed = issues.length ? publicationMessage(issues) : null
+        // Une règle a changé depuis la programmation : rien n'est publié.
+        if (issues.length) {
+          await end(outcome('failed', publicationMessage(issues)))
+          continue
+        }
         try {
           // Point de reprise : un identifiant pris entre-temps n'annule pas les autres publications.
-          await tx.transaction(async (step) => {
-            await step
+          await tx.transaction((step) =>
+            step
               .update(entries)
-              .set(
-                failed
-                  ? { ...done, lastSchedule: outcome('failed', failed) }
-                  : {
-                      ...done,
-                      published: entry.draft,
-                      draft: null,
-                      slug,
-                      draftSlug: null,
-                      enComplete: isEnComplete(type.fields, entry.draft!),
-                      publishedAt: new Date(),
-                      version: sql`${entries.version} + 1`,
-                      updatedAt: new Date(),
-                      lastSchedule: outcome('published'),
-                    },
-              )
-              .where(eq(entries.id, entry.id))
-          })
-          if (!failed) published.add(type.spaceId)
+              .set({
+                ...change,
+                ...nextVersion(false),
+                lastSchedule: outcome('published'),
+                updatedAt: new Date(),
+              })
+              .where(eq(entries.id, entry.id)),
+          )
+          published.add(type.spaceId)
         } catch (err) {
           if (!isUniqueViolation(err)) throw err
-          await tx
-            .update(entries)
-            .set({
-              ...done,
-              lastSchedule: outcome(
-                'failed',
-                'Cet identifiant d’URL est déjà utilisé par une autre entrée',
-              ),
-            })
-            .where(eq(entries.id, entry.id))
+          await end(outcome('failed', SLUG_TAKEN))
         }
       }
       return published
@@ -383,14 +373,13 @@ export class EntriesService {
     for (const spaceId of spaces) this.deploy.schedule(spaceId)
   }
 
-  /** Contrôles de « Publier » sur la version en cours d'édition ; renvoie l'identifiant d'URL
-   *  qui sera mis en ligne. */
+  /** Contrôles de « Publier » ; renvoie le changement à écrire, ou lève l'erreur à afficher. */
   private checkPublication(
     type: ContentType,
     entry: { draft: EntryData | null; slug: string | null; draftSlug: string | null },
   ) {
-    const slug = entry.draftSlug ?? entry.slug
-    const issues = publicationIssues(type, entry.draft!, slug)
+    const { issues, change } = publication(type, entry)
+    if (!change) throw new BadRequestException('Rien à publier : aucune modification en attente')
     if (issues.length) {
       throw new BadRequestException({
         code: 'publication_invalid',
@@ -398,7 +387,7 @@ export class EntriesService {
         issues,
       })
     }
-    return slug
+    return change
   }
 
   /** L'entrée, à condition que la version lue soit toujours la sienne. */
@@ -427,8 +416,7 @@ export class EntriesService {
         .update(entries)
         .set({
           ...change,
-          ...clearSchedule(notice),
-          version: sql`${entries.version} + 1`,
+          ...nextVersion(notice),
           updatedAt: new Date(),
           updatedBy: user.id,
         })
@@ -439,9 +427,7 @@ export class EntriesService {
     } catch (err) {
       // Publier ou dépublier met en ligne l'identifiant en attente : une autre entrée a pu le
       // prendre entre-temps.
-      if (isUniqueViolation(err)) {
-        throw new BadRequestException('Cet identifiant d’URL est déjà utilisé par une autre entrée')
-      }
+      if (isUniqueViolation(err)) throw new BadRequestException(SLUG_TAKEN)
       throw err
     }
   }
