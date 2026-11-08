@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IMAGE_MIME_TYPES, type ImageValue, MAX_MEDIA_BYTES, imageWidths } from '@dashility/shared'
+import { IMAGE_MIME_TYPES, type ImageValue, imageWidths } from '@dashility/shared'
 import { ImageUp } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { Button } from '@/components/ui/button'
@@ -23,7 +23,6 @@ const { media, loadError, uploading, uploadError, upload } = useMedia(
 )
 const fileInput = ref<HTMLInputElement | null>(null)
 const dragging = ref(false)
-const localError = ref('')
 
 /** Aperçu : la plus petite variante WebP, servie par l'API (même origine, permise par la CSP). */
 const preview = computed(() =>
@@ -33,17 +32,10 @@ const preview = computed(() =>
 )
 
 async function send(file: File | undefined) {
-  localError.value = ''
-  if (!file) return
-  if (!(IMAGE_MIME_TYPES as readonly string[]).includes(file.type)) {
-    localError.value = 'Type de fichier non accepté : JPEG, PNG ou WebP.'
-    return
-  }
-  if (file.size > MAX_MEDIA_BYTES) {
-    localError.value = 'Fichier trop volumineux : 10 Mo au plus.'
-    return
-  }
-  const created = await upload(file)
+  const created = await upload(file, {
+    types: IMAGE_MIME_TYPES,
+    error: 'Type de fichier non accepté : JPEG, PNG ou WebP.',
+  })
   // Les textes alternatifs restent : ils se corrigent si la nouvelle image est différente.
   if (created) value.value = { id: created.id, alt: image.value?.alt ?? { fr: '', en: '' } }
 }
@@ -57,9 +49,7 @@ function setAlt(lang: 'fr' | 'en', text: string) {
   if (image.value) value.value = { ...image.value, alt: { ...image.value.alt, [lang]: text } }
 }
 
-const message = computed(
-  () => localError.value || uploadError.value || loadError.value || props.error || '',
-)
+const message = computed(() => uploadError.value || loadError.value || props.error || '')
 const errorId = computed(() => `${props.id}-error`)
 const altError = computed(() => !!props.error && !!image.value && !image.value.alt.fr.trim())
 </script>

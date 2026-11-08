@@ -24,15 +24,15 @@ export const richtextExtensions = [
     horizontalRule: false,
     strike: false,
     underline: false,
-    // Extensions d'édition seulement : sans effet sur le HTML produit.
     heading: { levels: [2, 3] },
     link: {
+      // Options d'édition seulement, sans effet sur le HTML produit.
       openOnClick: false,
       autolink: true,
       defaultProtocol: 'https',
       protocols: ['mailto'],
       // Un lien collé ou tapé hors http(s) et mailto n'est pas créé.
-      isAllowedUri: (url) => isAllowedLink(url),
+      isAllowedUri: isAllowedLink,
       HTMLAttributes: { target: null, rel: null },
     },
   }),

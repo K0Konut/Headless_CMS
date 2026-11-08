@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { type RichtextDoc, isValidLink } from '@dashility/shared'
+import { LINK_ERROR, type RichtextDoc, isValidLink } from '@dashility/shared'
 import { Bold, Heading2, Heading3, Highlighter, Italic, Link, List, ListOrdered } from '@lucide/vue'
 import { EditorContent, useEditor } from '@tiptap/vue-3'
-import { type Component, computed, onBeforeUnmount, watch } from 'vue'
-import { richtextExtensions } from '@/lib/richtext'
+import { type Component, computed, onBeforeUnmount, toRaw, watch } from 'vue'
+import { richtextExtensions } from '@dashility/shared/richtext'
 
 /** Texte riche (document UX, « Les types de champs ») : éditeur visuel limité, avec sa barre
  *  d'outils. La valeur est le document JSON de Tiptap, ou `null` quand il n'y a pas de texte. */
@@ -15,6 +15,9 @@ const props = defineProps<{
   describedby?: string
 }>()
 const model = defineModel<unknown>()
+
+/** Dernière valeur envoyée par l'éditeur. */
+let emitted: unknown
 
 const editor = useEditor({
   extensions: richtextExtensions,
@@ -31,7 +34,8 @@ const editor = useEditor({
     },
   },
   onUpdate: ({ editor }) => {
-    model.value = editor.isEmpty ? null : editor.getJSON()
+    emitted = editor.isEmpty ? null : editor.getJSON()
+    model.value = emitted
   },
 })
 
@@ -39,10 +43,12 @@ const editor = useEditor({
 // la reprend, sans renvoyer de modification.
 watch(model, (value) => {
   const current = editor.value
-  if (!current) return
+  // Sa propre modification, renvoyée par le parent : rien à reprendre.
+  if (!current || toRaw(value) === emitted) return
   const mine = current.isEmpty ? null : current.getJSON()
   if (JSON.stringify(mine) === JSON.stringify(value ?? null)) return
   current.commands.setContent((value as RichtextDoc | null) ?? '', { emitUpdate: false })
+  emitted = toRaw(value) ?? null
 })
 
 // Attributs d'accessibilité qui changent avec la validation.
@@ -70,7 +76,7 @@ function editLink() {
   const chain = current.chain().focus().extendMarkRange('link')
   if (!href.trim() || href.trim() === 'https://') return void chain.unsetLink().run()
   if (!isValidLink(href.trim())) {
-    window.alert('Adresse invalide : elle doit commencer par https:// ou mailto:')
+    window.alert(LINK_ERROR)
     return
   }
   chain.setLink({ href: href.trim() }).run()

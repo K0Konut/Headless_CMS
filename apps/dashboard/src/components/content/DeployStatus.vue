@@ -17,20 +17,25 @@ const state = ref<DeployState | null>(null)
 const busy = ref(false)
 const error = ref('')
 let poll: ReturnType<typeof setTimeout> | undefined
+let unmounted = false
 const base = computed(() => `/spaces/${encodeURIComponent(props.space)}/deploy`)
 
 async function load() {
   clearTimeout(poll)
   try {
     state.value = await api<DeployState>(base.value)
-    // Un appel est attendu (regroupement de 10 s) : on relit jusqu'à son résultat.
-    if (state.value.pending) poll = setTimeout(load, 2000)
+    // Un appel est attendu (regroupement de 10 s) : on relit jusqu'à son résultat, tant que
+    // l'éditeur est affiché (la réponse peut arriver après qu'on l'a quitté).
+    if (state.value.pending && !unmounted) poll = setTimeout(load, 2000)
   } catch {
     // L'état du déploiement est secondaire : l'éditeur reste utilisable sans lui.
   }
 }
 watch(() => [props.space, props.refreshKey], load, { immediate: true })
-onBeforeUnmount(() => clearTimeout(poll))
+onBeforeUnmount(() => {
+  unmounted = true
+  clearTimeout(poll)
+})
 
 async function relaunch() {
   busy.value = true

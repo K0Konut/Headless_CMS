@@ -1,7 +1,7 @@
-import type { Media } from '@dashility/shared'
+import { MAX_MEDIA_BYTES, type Media } from '@dashility/shared'
 import { type Ref, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { api, errorMessage, uploadFile } from '@/lib/api'
+import { api, errorMessage } from '@/lib/api'
 
 /** Description d'un média cité par une valeur, et son envoi. Les médias appartiennent à
  *  l'espace de l'URL. */
@@ -36,13 +36,27 @@ export function useMedia(id: Ref<string | null | undefined>) {
     { immediate: true },
   )
 
-  /** Envoie un fichier ; renvoie sa description, ou null après un échec (message dans
-   *  `uploadError`). */
-  async function upload(file: File) {
-    uploading.value = true
+  /** Vérifie puis envoie un fichier ; renvoie sa description, ou null après un refus ou un échec
+   *  (message dans `uploadError`). Les mêmes contrôles sont refaits par l'API. */
+  async function upload(
+    file: File | undefined,
+    accept: { types: readonly string[]; error: string },
+  ) {
     uploadError.value = ''
+    if (!file) return null
+    if (!accept.types.includes(file.type)) {
+      uploadError.value = accept.error
+      return null
+    }
+    if (file.size > MAX_MEDIA_BYTES) {
+      uploadError.value = 'Fichier trop volumineux : 10 Mo au plus.'
+      return null
+    }
+    uploading.value = true
+    const body = new FormData()
+    body.append('file', file)
     try {
-      const created = await uploadFile<Media>(base, file)
+      const created = await api<Media>(base, { method: 'POST', body })
       media.value = created
       return created
     } catch (err) {

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { MAX_MEDIA_BYTES } from '@dashility/shared'
 import { Download, FileUp } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { Button } from '@/components/ui/button'
@@ -14,7 +13,6 @@ const value = defineModel<unknown>()
 const fileId = computed(() => (typeof value.value === 'string' ? value.value : null))
 const { media, loadError, uploading, uploadError, upload } = useMedia(fileId)
 const fileInput = ref<HTMLInputElement | null>(null)
-const localError = ref('')
 
 function choose() {
   if (
@@ -29,23 +27,14 @@ function choose() {
 }
 
 async function send(file: File | undefined) {
-  localError.value = ''
-  if (!file) return
-  if (file.type !== 'application/pdf') {
-    localError.value = 'Seuls les fichiers PDF sont acceptés.'
-    return
-  }
-  if (file.size > MAX_MEDIA_BYTES) {
-    localError.value = 'Fichier trop volumineux : 10 Mo au plus.'
-    return
-  }
-  const created = await upload(file)
+  const created = await upload(file, {
+    types: ['application/pdf'],
+    error: 'Seuls les fichiers PDF sont acceptés.',
+  })
   if (created) value.value = created.id
 }
 
-const message = computed(
-  () => localError.value || uploadError.value || loadError.value || props.error || '',
-)
+const message = computed(() => uploadError.value || loadError.value || props.error || '')
 const errorId = computed(() => `${props.id}-error`)
 </script>
 

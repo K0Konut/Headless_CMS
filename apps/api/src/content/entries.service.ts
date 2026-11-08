@@ -6,16 +6,16 @@ import {
   NotFoundException,
 } from '@nestjs/common'
 import {
-  type EntryData,
   entryDataSchema,
   entryStatus,
   entryTitle,
   isEnComplete,
   mediaRefs,
   publicationIssues,
+  publicationMessage,
   type saveEntrySchema,
 } from '@dashility/shared'
-import { and, desc, eq, ne, sql } from 'drizzle-orm'
+import { and, desc, eq, ne, or, sql } from 'drizzle-orm'
 import type { z } from 'zod'
 import { DB } from '../db/db.module.js'
 import { isUniqueViolation } from '../db/errors.js'
@@ -32,6 +32,7 @@ type ContentType = typeof contentTypes.$inferSelect
 const entryColumns = {
   id: entries.id,
   slug: entries.slug,
+  draftSlug: entries.draftSlug,
   published: entries.published,
   draft: entries.draft,
   enComplete: entries.enComplete,
@@ -112,31 +113,43 @@ export class EntriesService {
       throw new BadRequestException('Une page unique n’a pas d’identifiant d’URL')
     }
     const [current] = await this.db
-      .select({ id: entries.id, slug: entries.slug })
+      .select({ id: entries.id, slug: entries.slug, published: entries.published })
       .from(entries)
       .where(this.byId(type, id))
     if (!current) throw new NotFoundException('Entrée introuvable')
 
-    // Un identifiant d'URL déjà pris n'empêche pas d'enregistrer le contenu : l'entrée garde son
-    // identifiant actuel et la réponse le signale.
+    // Sur une entrée publiée, l'identifiant d'URL attend « Publier », comme le contenu : il va
+    // dans `draftSlug` (null : rien en attente, l'entrée garde son adresse).
+    const live = !!current.published
     let slug = body.slug
+    if (live && slug === null) slug = current.slug
+    // Un identifiant déjà pris (en ligne ou en attente) n'empêche pas d'enregistrer le contenu :
+    // il n'est pas changé, et la réponse le signale.
     let slugError: string | undefined
     if (slug && slug !== current.slug) {
       const [taken] = await this.db
         .select({ id: entries.id })
         .from(entries)
-        .where(and(eq(entries.typeId, type.id), eq(entries.slug, slug), ne(entries.id, current.id)))
+        .where(
+          and(
+            eq(entries.typeId, type.id),
+            ne(entries.id, current.id),
+            or(eq(entries.slug, slug), eq(entries.draftSlug, slug)),
+          ),
+        )
       if (taken) {
         slug = undefined
         slugError = 'Cet identifiant d’URL est déjà utilisé par une autre entrée'
       }
     }
+    const slugChange =
+      slug === undefined ? {} : live ? { draftSlug: slug === current.slug ? null : slug } : { slug }
     try {
       const [entry] = await this.db
         .update(entries)
         .set({
           draft: data,
-          ...(slug !== undefined && { slug }),
+          ...slugChange,
           enComplete: isEnComplete(type.fields, data),
           version: sql`${entries.version} + 1`,
           updatedAt: new Date(),
@@ -162,20 +175,20 @@ export class EntriesService {
     const current = await this.current(type, id, version)
     if (!current.draft)
       throw new BadRequestException('Rien à publier : aucune modification en attente')
-    const issues = publicationIssues(type, current.draft, current.slug)
+    const slug = current.draftSlug ?? current.slug
+    const issues = publicationIssues(type, current.draft, slug)
     if (issues.length) {
       throw new BadRequestException({
         code: 'publication_invalid',
-        message:
-          issues.length === 1
-            ? `Publication impossible : ${issues[0]!.message.toLowerCase()}`
-            : `Publication impossible : ${issues.length} champs à corriger`,
+        message: publicationMessage(issues),
         issues,
       })
     }
     const entry = await this.write(current.id, version, user, {
       published: current.draft,
       draft: null,
+      slug,
+      draftSlug: null,
       enComplete: isEnComplete(type.fields, current.draft),
       publishedAt: new Date(),
     })
@@ -193,6 +206,7 @@ export class EntriesService {
     }
     return this.write(current.id, version, user, {
       draft: null,
+      draftSlug: null,
       enComplete: isEnComplete(type.fields, current.published),
     })
   }
@@ -206,6 +220,9 @@ export class EntriesService {
     const entry = await this.write(current.id, version, user, {
       published: null,
       draft: current.draft ?? current.published,
+      // Hors ligne, l'identifiant en attente redevient l'identifiant tout court.
+      slug: current.draftSlug ?? current.slug,
+      draftSlug: null,
     })
     this.deploy.schedule(space.id)
     return entry
@@ -239,23 +256,32 @@ export class EntriesService {
     id: string,
     version: number,
     user: User,
-    change: Partial<Record<'published' | 'draft', EntryData | null>> & {
-      enComplete?: boolean
-      publishedAt?: Date
-    },
+    change: Pick<
+      Partial<typeof entries.$inferInsert>,
+      'published' | 'draft' | 'slug' | 'draftSlug' | 'enComplete' | 'publishedAt'
+    >,
   ) {
-    const [entry] = await this.db
-      .update(entries)
-      .set({
-        ...change,
-        version: sql`${entries.version} + 1`,
-        updatedAt: new Date(),
-        updatedBy: user.id,
-      })
-      .where(and(eq(entries.id, id), eq(entries.version, version)))
-      .returning(entryColumns)
-    if (!entry) throw new ConflictException('Cette entrée a été modifiée ailleurs')
-    return entry
+    try {
+      const [entry] = await this.db
+        .update(entries)
+        .set({
+          ...change,
+          version: sql`${entries.version} + 1`,
+          updatedAt: new Date(),
+          updatedBy: user.id,
+        })
+        .where(and(eq(entries.id, id), eq(entries.version, version)))
+        .returning(entryColumns)
+      if (!entry) throw new ConflictException('Cette entrée a été modifiée ailleurs')
+      return entry
+    } catch (err) {
+      // Publier ou dépublier met en ligne l'identifiant en attente : une autre entrée a pu le
+      // prendre entre-temps.
+      if (isUniqueViolation(err)) {
+        throw new BadRequestException('Cet identifiant d’URL est déjà utilisé par une autre entrée')
+      }
+      throw err
+    }
   }
 
   /** `single` désigne l'entrée d'une page unique, la seule de son type. */

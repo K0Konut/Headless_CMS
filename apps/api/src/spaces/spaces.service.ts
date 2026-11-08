@@ -2,25 +2,17 @@ import { ConflictException, Inject, Injectable, NotFoundException } from '@nestj
 import { randomBytes } from 'node:crypto'
 import { and, asc, eq, gt, isNull } from 'drizzle-orm'
 import { hashToken, newToken } from '../auth/tokens.js'
-import { generateApiKey, hashApiKey } from '../public-api/api-key.js'
-import { removeSpaceMedia } from '../media/storage.js'
+import { generateApiKey } from '../public-api/api-key.js'
+import { removeMediaDir } from '../media/storage.js'
 import { DB } from '../db/db.module.js'
 import { isUniqueViolation } from '../db/errors.js'
 import type { Db } from '../db/index.js'
 import { memberships, spaces, tokens, users } from '../db/schema.js'
-import type { Space } from './guards.js'
+import { type Space, spaceColumns } from './guards.js'
 
 const INVITATION_TTL_MS = 72 * 60 * 60 * 1000
 
 type SpaceFields = { name: string; slug: string; siteUrl: string }
-
-/** Un espace tel que l'API le renvoie : jamais l'empreinte de sa clé API. */
-export function withoutSecrets(space: Space) {
-  // Le déploiement a sa propre route, qui ne renvoie jamais le jeton.
-  const { apiKeyHash, deployUrl, deployToken, deployCalledAt, deployStatus, ...rest } = space
-  void [apiKeyHash, deployUrl, deployToken, deployCalledAt, deployStatus]
-  return rest
-}
 
 @Injectable()
 export class SpacesService {
@@ -32,17 +24,17 @@ export class SpacesService {
       this.db
         .insert(spaces)
         .values({ ...fields, publicKey })
-        .returning(),
+        .returning(spaceColumns),
     )
-    return withoutSecrets(space!)
+    return space!
   }
 
   async update(space: Space, fields: Partial<SpaceFields>) {
-    if (!Object.keys(fields).length) return withoutSecrets(space)
+    if (!Object.keys(fields).length) return space
     const [updated] = await this.uniqueSlug(() =>
-      this.db.update(spaces).set(fields).where(eq(spaces.id, space.id)).returning(),
+      this.db.update(spaces).set(fields).where(eq(spaces.id, space.id)).returning(spaceColumns),
     )
-    return withoutSecrets(updated!)
+    return updated!
   }
 
   /** Génère ou régénère la clé de l'API de lecture. Elle n'est renvoyée qu'ici, une seule fois ;
@@ -51,7 +43,7 @@ export class SpacesService {
     const key = generateApiKey()
     const [updated] = await this.db
       .update(spaces)
-      .set({ apiKeyHash: hashApiKey(key), apiKeyCreatedAt: new Date() })
+      .set({ apiKeyHash: hashToken(key), apiKeyCreatedAt: new Date() })
       .where(eq(spaces.id, space.id))
       .returning({ createdAt: spaces.apiKeyCreatedAt })
     return { key, createdAt: updated!.createdAt! }
@@ -60,7 +52,7 @@ export class SpacesService {
   async remove(space: Space) {
     await this.db.delete(spaces).where(eq(spaces.id, space.id))
     // Les descriptions des médias disparaissent avec l'espace ; leurs fichiers aussi.
-    await removeSpaceMedia(space.id)
+    await removeMediaDir(space.id)
   }
 
   /** Membres (hors super-admins, qui voient tout sans adhésion) et invitations en attente. */

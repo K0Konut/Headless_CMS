@@ -225,6 +225,39 @@ describe('publication', () => {
     expect(discarded.body).toMatchObject({ published: READY, draft: null, enComplete: true })
   })
 
+  it('un identifiant d’URL modifié sur une entrée publiée attend « Publier »', async () => {
+    const entry = await entryWith(READY)
+    const published = await act(entry.id, 'publish', entry.version).expect(200)
+    const renamed = await api('patch', `${BASE}/${entry.id}`, member)
+      .send({ version: published.body.version, data: READY, slug: 'nouveau-nom' })
+      .expect(200)
+    // L'adresse en ligne ne change pas : le nouvel identifiant est en attente.
+    expect(renamed.body).toMatchObject({ slug: 'ce-portfolio', draftSlug: 'nouveau-nom' })
+    // Vider le champ ne retire pas l'adresse en ligne.
+    const emptied = await api('patch', `${BASE}/${entry.id}`, member)
+      .send({ version: renamed.body.version, data: READY, slug: null })
+      .expect(200)
+    expect(emptied.body).toMatchObject({ slug: 'ce-portfolio', draftSlug: null })
+    const again = await api('patch', `${BASE}/${entry.id}`, member)
+      .send({ version: emptied.body.version, data: READY, slug: 'nouveau-nom' })
+      .expect(200)
+    // Une autre entrée ne peut pas prendre un identifiant en attente.
+    const other = await entryWith(READY, null)
+    const taken = await api('patch', `${BASE}/${other.id}`, member)
+      .send({ version: other.version, data: READY, slug: 'nouveau-nom' })
+      .expect(200)
+    expect(taken.body.slugError).toMatch(/déjà utilisé/)
+    // « Annuler les modifications » rétablit l'identifiant en ligne…
+    const discarded = await act(entry.id, 'discard', again.body.version).expect(200)
+    expect(discarded.body).toMatchObject({ slug: 'ce-portfolio', draftSlug: null })
+    // … et « Publier » met le nouveau en ligne.
+    const pending = await api('patch', `${BASE}/${entry.id}`, member)
+      .send({ version: discarded.body.version, data: READY, slug: 'nouveau-nom' })
+      .expect(200)
+    const republished = await act(entry.id, 'publish', pending.body.version).expect(200)
+    expect(republished.body).toMatchObject({ slug: 'nouveau-nom', draftSlug: null })
+  })
+
   it('dépublie en gardant le contenu, modifications en attente comprises', async () => {
     const entry = await entryWith(READY)
     const published = await act(entry.id, 'publish', entry.version).expect(200)

@@ -13,6 +13,9 @@ export function setupApp(app: NestExpressApplication) {
   app.use(cookieParser())
   // Corps de la collecte : JSON envoyé en text/plain, quelques centaines d'octets au plus.
   app.useBodyParser('text', { limit: '2kb' })
+  // Une entrée avec un long texte riche dépasse les 100 Ko par défaut (le JSON de Tiptap est
+  // verbeux). Les envois de fichiers passent par multer, avec leur propre limite.
+  app.useBodyParser('json', { limit: '1mb' })
   // Documentation de l'API de lecture des sites : /api/docs (et /api/docs-json).
   SwaggerModule.setup('api/docs', app, openApiDocument)
   return app

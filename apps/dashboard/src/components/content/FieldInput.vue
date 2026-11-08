@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { type Field, isValidLink } from '@dashility/shared'
+import { type Field, LINK_ERROR, isValidLink } from '@dashility/shared'
 import { X } from '@lucide/vue'
 import { computed, defineAsyncComponent, ref } from 'vue'
 import { Button } from '@/components/ui/button'
@@ -37,10 +37,7 @@ const linkError = computed(
   () => props.field.type === 'link' && !!text.value && !isValidLink(text.value),
 )
 /** Erreur affichée : celle de la publication, sinon un lien invalide, signalé dès la saisie. */
-const shownError = computed(
-  () =>
-    props.error || (linkError.value ? 'Adresse invalide : elle doit commencer par https://' : ''),
-)
+const shownError = computed(() => props.error || (linkError.value ? LINK_ERROR : ''))
 const invalid = computed(() => !!shownError.value || undefined)
 const describedby = computed(() => (shownError.value ? `${props.id}-error` : undefined))
 
