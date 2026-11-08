@@ -15,7 +15,7 @@ flowchart LR
         BK --> NAS[("NAS")]
     end
     U["Toi, membres"] -- "dashility.costamask.dev/" --> NPM
-    SITE["Portfolio<br/>dashility"] -- "POST /api/e<br/>(vues, CV)" --> NPM
+    SITE["Portfolio<br/>@dashility/client"] -- "POST /api/e<br/>(vues, CV)" --> NPM
 ```
 
 - **Un seul conteneur applicatif.** NestJS sert l'API sous `/api` et les fichiers compilés du dashboard sous `/`. Le dashboard et l'API sont sur la même origine, il n'y a donc pas de CORS pour le dashboard et le cookie de session reste en `SameSite=Strict`.
@@ -189,7 +189,7 @@ Toutes les routes sont préfixées par `/api`. Le corps des requêtes et les ré
 ### Script (`packages/client`)
 
 ```ts
-import { initAnalytics } from 'dashility'
+import { initAnalytics } from '@dashility/client'
 initAnalytics({ key: '<clé publique de l\'espace>', endpoint: 'https://dashility.costamask.dev/api/e' })
 ```
 
@@ -443,7 +443,7 @@ Toute écriture qui change la version de l'entrée annule sa programmation, dans
 - `backup` : un `pg_dump` quotidien vers le NAS (`/mnt/nas/media/backups/dashility`, monté en NFS sur le serveur), qui garde 7 sauvegardes.
 - Nginx Proxy Manager, déjà en place, redirige `dashility.costamask.dev` vers `app:3000`.
 
-**Publication du package** : `packages/client` est publié sur npm à la main (`npm publish`) quand une version change. Il est publié sans scope, sous le nom `dashility` (`npm i dashility`) ; `prepublishOnly` le reconstruit avant chaque publication.
+**Publication du package** : `packages/client` est publié sur npm à la main (`npm publish`) quand une version change. Il est publié sous `@dashility/client`, dans l'organisation npm `dashility` du propriétaire, en accès public (`publishConfig`) ; `prepublishOnly` le reconstruit avant chaque publication.
 `shortcut: publication manuelle, passer à un workflow sur tag si les versions deviennent fréquentes`
 
 ## Ordre de construction de la V1
