@@ -1,7 +1,7 @@
 import { richtextSchema } from '@dashility/shared'
 import { Editor } from '@tiptap/core'
 import { afterEach, describe, expect, it } from 'vitest'
-import { richtextExtensions } from './richtext'
+import { richtextExtensions } from '@dashility/shared/richtext'
 
 let editor: Editor | undefined
 afterEach(() => editor?.destroy())

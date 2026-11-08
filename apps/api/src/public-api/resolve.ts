@@ -5,6 +5,7 @@ import {
   type Locale,
   type RichtextDoc,
   imageWidths,
+  richtextHasText,
 } from '@dashility/shared'
 import { richtextExtensions } from '@dashility/shared/richtext'
 import { generateHTML } from '@tiptap/html'
@@ -22,6 +23,25 @@ export interface ResolveContext {
   /** Origine publique du CMS (`https://dashility.costamask.dev`) : les adresses sont absolues. */
   origin: string
   media: Map<string, MediaInfo>
+}
+
+// Le même document est converti à chaque lecture (un build lit tout le contenu) : on garde le
+// HTML des derniers documents vus. generateHTML ouvre un DOM complet à chaque appel.
+const htmlCache = new Map<string, string>()
+const HTML_CACHE_SIZE = 1000
+
+/** HTML d'un texte riche, ou null s'il n'a pas de texte (un paragraphe vide). */
+function richtextHtml(value: unknown) {
+  if (!richtextHasText(value)) return null
+  const key = JSON.stringify(value)
+  let html = htmlCache.get(key)
+  if (html === undefined) {
+    // Mêmes extensions que l'éditeur : seulement leurs balises, texte échappé.
+    html = generateHTML(value as RichtextDoc, richtextExtensions)
+    if (htmlCache.size >= HTML_CACHE_SIZE) htmlCache.delete(htmlCache.keys().next().value!)
+    htmlCache.set(key, html)
+  }
+  return { html }
 }
 
 const url = (ctx: ResolveContext, id: string, file: string) =>
@@ -67,8 +87,7 @@ function resolveValue(field: Exclude<Field, { type: 'group' }>, raw: unknown, ct
       return choice ? { key: choice.key, label: choice[ctx.locale] } : null
     }
     case 'richtext':
-      // HTML produit avec les mêmes extensions que l'éditeur : seulement leurs balises, texte échappé.
-      return value ? { html: generateHTML(value as RichtextDoc, richtextExtensions) } : null
+      return richtextHtml(value)
     case 'image':
       return resolveImage(raw as ImageValue | null | undefined, ctx)
     case 'pdf': {
