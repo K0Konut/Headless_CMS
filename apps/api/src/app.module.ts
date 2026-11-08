@@ -80,13 +80,6 @@ import { SpacesService } from './spaces/spaces.service.js'
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     // La collecte reçoit du text/plain (sendBeacon) ; elle n'utilise ni session ni cookie.
-    // L'envoi d'un média est en multipart ; sa protection CSRF est dans son contrôleur.
-    consumer
-      .apply(requireJson)
-      .exclude(
-        { path: 'e', method: RequestMethod.POST },
-        { path: 'spaces/:slug/media', method: RequestMethod.POST },
-      )
-      .forRoutes('*')
+    consumer.apply(requireJson).exclude({ path: 'e', method: RequestMethod.POST }).forRoutes('*')
   }
 }

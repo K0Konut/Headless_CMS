@@ -426,6 +426,24 @@ describe('richtextSchema', () => {
     expect(richtextSchema.safeParse({ type: 'doc', content: [node] }).success).toBe(false)
   })
 
+  it('accepte ce que l’éditeur produit : intertitre dans une liste, imbrication profonde, long texte', () => {
+    const item = (content: object[]) => ({ type: 'listItem', content })
+    let nested: object = { type: 'paragraph', content: [text('fond')] }
+    for (let i = 0; i < 8; i++) nested = { type: 'bulletList', content: [item([nested])] }
+    const doc = {
+      type: 'doc',
+      content: [
+        {
+          type: 'bulletList',
+          content: [item([{ type: 'paragraph' }, { type: 'heading', attrs: { level: 3 } }])],
+        },
+        nested,
+        { type: 'paragraph', content: [text('a'.repeat(50_000))] },
+      ],
+    }
+    expect(richtextSchema.safeParse(doc).success).toBe(true)
+  })
+
   it('compte un document sans texte comme vide pour la publication', () => {
     const fields = [
       { key: 'body', label: 'Texte', type: 'richtext', required: true, translatable: true },

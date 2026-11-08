@@ -21,11 +21,17 @@ export async function api<T = void>(
   path: string,
   options: { method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; body?: unknown } = {},
 ): Promise<T> {
+  // Toujours JSON : l'API refuse les écritures sans ce Content-Type (protection CSRF). Un envoi
+  // de fichier (FormData, multipart) porte à la place l'en-tête X-Requested-With.
+  const form = options.body instanceof FormData
   const res = await fetch(`/api${path}`, {
     method: options.method ?? 'GET',
-    // Toujours JSON : l'API refuse les écritures sans ce Content-Type (protection CSRF).
-    headers: { 'Content-Type': 'application/json' },
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    headers: form ? { 'X-Requested-With': 'dashility' } : { 'Content-Type': 'application/json' },
+    body: form
+      ? (options.body as FormData)
+      : options.body === undefined
+        ? undefined
+        : JSON.stringify(options.body),
   })
   if (res.ok) return (res.status === 204 ? undefined : await res.json()) as T
 
@@ -43,25 +49,3 @@ export async function api<T = void>(
 /** Message à afficher pour une erreur d'appel : celui de l'API, sinon un message générique. */
 export const errorMessage = (err: unknown) =>
   err instanceof ApiError ? err.message : 'Une erreur est survenue'
-
-/** Envoi d'un fichier en `multipart/form-data` (images et PDF des entrées). L'en-tête
- *  `X-Requested-With` remplace, pour cette route, la règle « JSON obligatoire » de l'API (CSRF). */
-export async function uploadFile<T>(path: string, file: File): Promise<T> {
-  const body = new FormData()
-  body.append('file', file)
-  const res = await fetch(`/api${path}`, {
-    method: 'POST',
-    headers: { 'X-Requested-With': 'dashility' },
-    body,
-  })
-  if (res.ok) return (await res.json()) as T
-  const payload = (await res.json().catch(() => null)) as {
-    error?: { code: string; message: string }
-  } | null
-  if (res.status === 401) onUnauthorized?.()
-  throw new ApiError(
-    res.status,
-    payload?.error?.code ?? 'error',
-    payload?.error?.message ?? 'Le serveur ne répond pas. Réessayez dans un instant.',
-  )
-}

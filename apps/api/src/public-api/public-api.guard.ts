@@ -13,7 +13,8 @@ import { DB } from '../db/db.module.js'
 import type { Db } from '../db/index.js'
 import { spaces } from '../db/schema.js'
 import type { Space } from '../spaces/guards.js'
-import { hashApiKey } from './api-key.js'
+import { hashToken } from '../auth/tokens.js'
+import { spaceColumns } from '../spaces/guards.js'
 
 export type ApiKeyRequest = Request & { space: Space }
 
@@ -33,8 +34,11 @@ export class ApiKeyGuard implements CanActivate {
     const req = ctx.switchToHttp().getRequest<ApiKeyRequest>()
     const match = /^Bearer (dly_[A-Za-z0-9_-]{20,100})$/.exec(req.headers.authorization ?? '')
     if (!match) throw new UnauthorizedException('Clé API absente ou mal formée')
-    const hash = hashApiKey(match[1]!)
-    const [space] = await this.db.select().from(spaces).where(eq(spaces.apiKeyHash, hash))
+    const hash = hashToken(match[1]!)
+    const [space] = await this.db
+      .select(spaceColumns)
+      .from(spaces)
+      .where(eq(spaces.apiKeyHash, hash))
     if (!space) throw new UnauthorizedException('Clé API invalide')
 
     const now = Date.now()

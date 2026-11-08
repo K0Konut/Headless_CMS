@@ -6,6 +6,7 @@ import {
   entryTitle,
   isEnComplete,
   publicationIssues,
+  publicationMessage,
 } from '@dashility/shared'
 import { ArrowLeft, Ellipsis, Trash2, Undo2 } from '@lucide/vue'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
@@ -87,7 +88,7 @@ function apply(loaded: Entry) {
   entry.value = loaded
   version = loaded.version
   data.value = structuredClone(loaded.draft ?? loaded.published ?? {})
-  slug.value = loaded.slug ?? ''
+  slug.value = loaded.draftSlug ?? loaded.slug ?? ''
   lastSaved.value = snapshot()
 }
 
@@ -118,7 +119,9 @@ async function send() {
   const sent = snapshot()
   state.value = 'saving'
   // Identifiant mal formé : on garde le précédent plutôt que de refuser tout l'enregistrement.
-  const nextSlug = slugInvalid.value ? entry.value!.slug : slug.value || null
+  const nextSlug = slugInvalid.value
+    ? (entry.value!.draftSlug ?? entry.value!.slug)
+    : slug.value || null
   try {
     const saved = await api<Entry & { slugError?: string }>(base.value, {
       method: 'PATCH',
@@ -209,8 +212,7 @@ async function publish() {
   if (!(await saveFirst())) return
   checking.value = true
   if (issues.value.length) {
-    const n = issues.value.length
-    actionError.value = `Publication impossible : ${n === 1 ? 'un champ' : `${n} champs`} à corriger.`
+    actionError.value = publicationMessage(issues.value)
     return focusPath(issues.value[0]!.path)
   }
   if (
@@ -224,23 +226,22 @@ async function publish() {
   await act('publish', status.value === 'draft' ? 'Entrée publiée.' : 'Modifications publiées.')
 }
 
-async function discard() {
-  if (!(await saveFirst())) return
-  if (!window.confirm('Annuler les modifications et revenir à la version en ligne ?')) return
-  await act('discard', 'Modifications annulées : la version en ligne est rétablie.')
+/** Action confirmée : la saisie est d'abord enregistrée, puis la question posée. */
+async function confirmAndAct(action: 'discard' | 'unpublish', question: string, done: string) {
+  if ((await saveFirst()) && window.confirm(question)) await act(action, done)
 }
-
-async function unpublish() {
-  if (!(await saveFirst())) return
-  if (
-    !window.confirm(
-      'Dépublier cette entrée ? Elle repasse en brouillon et sera retirée du site au prochain déploiement.',
-    )
-  ) {
-    return
-  }
-  await act('unpublish', 'Entrée dépubliée : elle est de nouveau en brouillon.')
-}
+const discard = () =>
+  confirmAndAct(
+    'discard',
+    'Annuler les modifications et revenir à la version en ligne ?',
+    'Modifications annulées : la version en ligne est rétablie.',
+  )
+const unpublish = () =>
+  confirmAndAct(
+    'unpublish',
+    'Dépublier cette entrée ? Elle repasse en brouillon et sera retirée du site au prochain déploiement.',
+    'Entrée dépubliée : elle est de nouveau en brouillon.',
+  )
 
 async function remove() {
   const name = title.value || 'Sans titre'
@@ -369,9 +370,11 @@ onBeforeUnmount(() => {
       </p>
       <p id="entry-slug-hint" class="text-sm text-muted-foreground">
         {{
-          entry.publishedAt
-            ? 'Le changer casse les liens déjà partagés vers cette entrée.'
-            : 'Suit le titre français jusqu’à la première publication.'
+          entry.published
+            ? `En ligne : ${entry.slug}. Un nouvel identifiant ne s’applique qu’à la publication, et casse alors les liens déjà partagés.`
+            : entry.publishedAt
+              ? 'Figé depuis la première publication. Le changer casse les liens déjà partagés.'
+              : 'Suit le titre français jusqu’à la première publication.'
         }}
       </p>
     </div>

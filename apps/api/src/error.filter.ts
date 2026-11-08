@@ -29,12 +29,7 @@ export class ErrorFilter implements ExceptionFilter {
       const code =
         typeof body?.code === 'string' ? body.code : (HttpStatus[status] ?? 'error').toLowerCase()
       const issues = Array.isArray(body?.issues) ? { issues: body.issues } : {}
-      // Fichier au-delà de la limite de multer : son message est en anglais.
-      const message =
-        status === HttpStatus.PAYLOAD_TOO_LARGE
-          ? 'Fichier trop volumineux : 10 Mo au plus'
-          : err.message
-      return res.status(status).json({ error: { code, message, ...issues } })
+      return res.status(status).json({ error: { code, message: err.message, ...issues } })
     }
     this.logger.error(err)
     res.status(500).json({ error: { code: 'internal_server_error', message: 'Erreur interne' } })

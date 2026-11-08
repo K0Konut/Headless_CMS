@@ -173,6 +173,20 @@ describe('lecture du contenu publié', () => {
     await read('/content/projets?locale=de', key).expect(400)
   })
 
+  it('un texte riche sans texte vaut null, comme les autres champs vides', async () => {
+    const key = (await api('post', '/spaces/portfolio/api-key', admin).expect(201)).body.key
+    const blank = {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: ' ' }] }],
+    }
+    await publish(
+      { title: { fr: 'Vide', en: 'Empty' }, kind: 'perso', body: { fr: blank, en: blank } },
+      'vide',
+    )
+    const res = await read('/content/projets/vide', key).expect(200)
+    expect(res.body.fields.body).toBeNull()
+  })
+
   it('masque en anglais une entrée dont la version anglaise est incomplète', async () => {
     await publish({ title: { fr: 'Complet', en: 'Complete' }, kind: 'perso' }, 'complet')
     await publish({ title: { fr: 'Seulement en français' }, kind: 'perso' }, 'francais')

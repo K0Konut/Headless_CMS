@@ -24,12 +24,15 @@ const translated = (field: Field, lang: 'fr' | 'en') =>
 function setTranslated(field: Field, lang: 'fr' | 'en', value: unknown) {
   data.value[field.key] = { ...(data.value[field.key] as object | undefined), [lang]: value }
 }
-/** Erreur d'une valeur ; une date peut l'avoir sur son début ou sa fin, une image sur son texte
- *  alternatif. */
+/** Erreur d'une valeur, ou d'une de ses parties (début d'une date, texte alternatif d'une
+ *  image…), quel que soit le suffixe ajouté par les règles de publication. */
 function errorOf(field: Field, lang?: 'fr' | 'en') {
   const at = `${props.path ?? ''}${field.key}${lang ? `.${lang}` : ''}`
   const errors = props.errors ?? {}
-  return errors[at] ?? errors[`${at}.start`] ?? errors[`${at}.end`] ?? errors[`${at}.alt.fr`]
+  // Un groupe n'a que ses propres erreurs : celles de ses éléments s'affichent sur leurs champs.
+  if (errors[at] || field.type === 'group') return errors[at]
+  const part = Object.keys(errors).find((path) => path.startsWith(`${at}.`))
+  return part && errors[part]
 }
 
 const id = (field: Field, lang?: string) =>

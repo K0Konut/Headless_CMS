@@ -265,11 +265,14 @@ const partialDate = z.string().regex(/^\d{4}-\d{2}(-\d{2})?$/, 'Date invalide')
 
 // ── Texte riche : document Tiptap (JSON) ──────────────────────────────────────────────
 
+/** Message d'une adresse refusée, pour un champ « lien » comme pour un lien de texte riche. */
+export const LINK_ERROR = 'Adresse invalide : elle doit commencer par https://, http:// ou mailto:'
+
 /** Adresse d'un lien de texte riche : http(s) ou mailto (architecture, « Texte riche »). */
 const richtextHref = z
   .string()
   .max(2048)
-  .refine((href) => isValidLink(href), 'Lien invalide : http(s) ou mailto uniquement')
+  .refine((href) => isValidLink(href), LINK_ERROR)
 
 /** Marques permises : gras, italique, lien, mise en avant (`<mark>` sur le site). Les attributs
  *  inconnus d'une marque ou d'un nœud sont retirés, pas refusés. */
@@ -283,7 +286,8 @@ const richtextMark = z.discriminatedUnion('type', [
 const richtextText = z
   .object({
     type: z.literal('text'),
-    text: z.string().min(1).max(10_000),
+    // La taille d'un document est bornée par celle du corps de la requête (1 Mo, app.setup).
+    text: z.string().min(1).max(200_000),
     marks: z.array(richtextMark).max(4).optional(),
   })
   .strict()
@@ -301,15 +305,24 @@ const richtextParagraph = z
   .object({ type: z.literal('paragraph'), content: inlineContent })
   .strict()
 
-/** Un élément de liste contient des paragraphes et des listes imbriquées ; la profondeur est
- *  bornée pour qu'un document ne puisse pas épuiser la pile de validation. */
+const richtextHeading = z
+  .object({
+    type: z.literal('heading'),
+    attrs: z.object({ level: z.union([z.literal(2), z.literal(3)]) }),
+    content: inlineContent,
+  })
+  .strict()
+
+/** Un élément de liste contient ce que Tiptap y permet : paragraphes, intertitres et listes
+ *  imbriquées. La profondeur est bornée (bien au-delà de l'usage) pour qu'un document ne puisse
+ *  pas épuiser la pile de validation. */
 function listSchemas(depth: number): z.ZodType<RichtextBlock>[] {
   if (depth === 0) return []
   const item = z
     .object({
       type: z.literal('listItem'),
       content: z
-        .array(z.union([richtextParagraph, ...listSchemas(depth - 1)]))
+        .array(z.union([richtextParagraph, richtextHeading, ...listSchemas(depth - 1)]))
         .min(1)
         .max(100),
     })
@@ -333,21 +346,7 @@ function listSchemas(depth: number): z.ZodType<RichtextBlock>[] {
 export const richtextSchema = z
   .object({
     type: z.literal('doc'),
-    content: z
-      .array(
-        z.union([
-          richtextParagraph,
-          z
-            .object({
-              type: z.literal('heading'),
-              attrs: z.object({ level: z.union([z.literal(2), z.literal(3)]) }),
-              content: inlineContent,
-            })
-            .strict(),
-          ...listSchemas(4),
-        ]),
-      )
-      .max(1000),
+    content: z.array(z.union([richtextParagraph, richtextHeading, ...listSchemas(10)])).max(1000),
   })
   .strict()
 export type RichtextDoc = z.infer<typeof richtextSchema>
@@ -474,14 +473,14 @@ export function entryDataSchema(fields: Field[]): z.ZodType<Record<string, unkno
 export type EntryData = Record<string, unknown>
 
 const isFilled = (value: unknown) =>
-  // Un document de texte riche sans texte (un paragraphe vide) est vide.
-  !(value && typeof value === 'object' && (value as { type?: unknown }).type === 'doc'
-    ? !richtextHasText(value)
-    : false) &&
   value !== undefined &&
   value !== null &&
   !(typeof value === 'string' && !value.trim()) &&
   !(Array.isArray(value) && !value.length)
+
+/** Valeur présente pour ce champ : un texte riche sans texte (un paragraphe vide) est vide. */
+const hasValue = (field: Field, value: unknown) =>
+  field.type === 'richtext' ? richtextHasText(value) : isFilled(value)
 
 /** Les champs obligatoires traduisibles ont leur valeur anglaise, dans les groupes aussi : sinon
  *  l'entrée est masquée sur le site en anglais (PRD, « Langues »). */
@@ -500,7 +499,7 @@ export function isEnComplete(fields: Field[], data: EntryData): boolean {
     return (
       !field.required ||
       !field.translatable ||
-      isFilled((value as { en?: unknown } | undefined)?.en)
+      hasValue(field, (value as { en?: unknown } | undefined)?.en)
     )
   })
 }
@@ -586,7 +585,7 @@ function isValidPartialDate(value: string, precision: 'day' | 'month') {
 /** Erreurs de format d'une valeur dans une langue. Une valeur vide n'en a pas. */
 function formatIssue(field: Field, value: unknown): { suffix?: string; message: string } | null {
   if (field.type === 'link' && typeof value === 'string' && value && !isValidLink(value)) {
-    return { message: 'Adresse invalide : elle doit commencer par https://' }
+    return { message: LINK_ERROR }
   }
   if (field.type === 'text' && field.maxLength && typeof value === 'string') {
     if (value.length > field.maxLength) {
@@ -616,7 +615,7 @@ function formatIssue(field: Field, value: unknown): { suffix?: string; message: 
 function isMissing(field: Field, value: unknown) {
   if (field.type === 'boolean') return false
   if (field.type === 'date') return !(value as { start?: string } | undefined)?.start
-  return !isFilled(value)
+  return !hasValue(field, value)
 }
 
 function collectIssues(fields: Field[], data: EntryData, prefix: string, out: PublicationIssue[]) {
@@ -663,6 +662,13 @@ function collectIssues(fields: Field[], data: EntryData, prefix: string, out: Pu
       }
     }
   }
+}
+
+/** Message d'une publication refusée, le même dans l'API et dans le dashboard. */
+export function publicationMessage(issues: PublicationIssue[]) {
+  return issues.length === 1
+    ? `Publication impossible : ${issues[0]!.message.charAt(0).toLowerCase()}${issues[0]!.message.slice(1)}`
+    : `Publication impossible : ${issues.length} champs à corriger`
 }
 
 /** Contrôles de publication (document UX, « Publier ») : champs obligatoires en français, formats

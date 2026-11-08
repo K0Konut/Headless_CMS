@@ -24,6 +24,8 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 let site: Server
 let calls: { headers: Record<string, unknown>; body: unknown }[]
 let status = 204
+/** Délai de réponse du faux site, pour simuler un build lent à accepter l'appel. */
+let slowMs = 0
 
 /** Les tests appellent un serveur local en http ; l'API, elle, n'accepte que https. */
 async function useLocalSite(token: string | null = 'jeton-secret') {
@@ -52,12 +54,13 @@ async function publishedEntry(title: string) {
 beforeEach(async () => {
   calls = []
   status = 204
+  slowMs = 0
   site = createServer((req, res) => {
     let raw = ''
     req.on('data', (chunk) => (raw += chunk))
     req.on('end', () => {
       calls.push({ headers: req.headers, body: JSON.parse(raw) })
-      res.writeHead(status).end()
+      setTimeout(() => res.writeHead(status).end(), slowMs)
     })
   })
   await new Promise<void>((resolve) => site.listen(0, '127.0.0.1', resolve))
@@ -104,6 +107,17 @@ describe('réglages du déploiement', () => {
       hasToken: true,
     })
     expect(JSON.stringify(saved.body)).not.toContain('ghp_x')
+    // Les routes qui renvoient l'espace ne chargent même pas ses secrets.
+    await api('post', '/spaces/portfolio/api-key', admin).expect(201)
+    for (const res of [
+      await api('get', '/spaces/portfolio', admin).expect(200),
+      await api('patch', '/spaces/portfolio', admin).send({ name: 'Portfolio' }).expect(200),
+    ]) {
+      expect(Object.keys(res.body)).not.toEqual(
+        expect.arrayContaining(['deployUrl', 'deployToken', 'apiKeyHash']),
+      )
+      expect(JSON.stringify(res.body)).not.toMatch(/ghp_x|api\.github\.com/)
+    }
     // Un jeton absent du corps reste tel quel ; une URL nulle retire tout.
     await api('put', '/spaces/portfolio/deploy', admin).send({ url: settings.url }).expect(200)
     expect((await api('get', '/spaces/portfolio/deploy', admin)).body.hasToken).toBe(true)
@@ -173,5 +187,31 @@ describe('appel à la publication', () => {
     await wait(400)
     const state = await api('get', '/spaces/portfolio/deploy', member).expect(200)
     expect(state.body).toEqual({ configured: false, pending: false, last: null })
+  })
+})
+
+describe('appels qui se croisent', () => {
+  it('retirer l’URL pendant l’attente annule l’appel prévu', async () => {
+    await useLocalSite()
+    await publishedEntry('A')
+    await api('put', '/spaces/portfolio/deploy', admin).send({ url: null }).expect(200)
+    expect((await api('get', '/spaces/portfolio/deploy', member)).body.pending).toBe(false)
+    await wait(400)
+    expect(calls).toHaveLength(0)
+  })
+
+  it('une demande arrivée pendant un appel en relance un après lui', async () => {
+    await useLocalSite()
+    slowMs = 300
+    // `.then` envoie la requête tout de suite : supertest attend sinon qu'on l'attende.
+    const first = api('post', '/spaces/portfolio/deploy', admin)
+      .expect(200)
+      .then((res) => res)
+    await wait(100)
+    // Le premier appel est en cours : celle-ci ne doit pas se perdre dans lui.
+    await api('post', '/spaces/portfolio/deploy', admin).expect(200)
+    await first
+    await wait(500)
+    expect(calls).toHaveLength(2)
   })
 })

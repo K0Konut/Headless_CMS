@@ -102,7 +102,10 @@ export interface EntrySummary {
 /** Réponse de `GET …/entries/:id`. */
 export interface Entry {
   id: string
+  /** Identifiant d'URL en ligne. */
   slug: string | null
+  /** Identifiant modifié sur une entrée publiée, en attente de « Publier ». */
+  draftSlug: string | null
   published: EntryData | null
   draft: EntryData | null
   version: number

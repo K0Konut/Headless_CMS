@@ -142,6 +142,9 @@ export const entries = pgTable(
       .notNull()
       .references(() => contentTypes.id, { onDelete: 'cascade' }),
     slug: text('slug'),
+    /** Identifiant d'URL modifié sur une entrée publiée : comme `draft`, il n'est en ligne
+     *  qu'après « Publier » (le site lit `slug`). Null s'il n'y a pas de changement en attente. */
+    draftSlug: text('draft_slug'),
     published: jsonb('published').$type<EntryData>(),
     draft: jsonb('draft').$type<EntryData>(),
     /** Calculé à chaque écriture, sur la version la plus récente (brouillon, sinon publiée). */

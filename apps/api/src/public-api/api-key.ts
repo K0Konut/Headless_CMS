@@ -1,8 +1,6 @@
-import { createHash, randomBytes } from 'node:crypto'
+import { newToken } from '../auth/tokens.js'
 
-/** Clé de l'API de lecture : 32 octets aléatoires, préfixés par `dly_` pour être reconnue si
- *  elle se retrouve dans un dépôt de code par erreur (architecture, « API publique »). */
-export const generateApiKey = () => `dly_${randomBytes(32).toString('base64url')}`
-
-/** Seule l'empreinte est gardée en base, comme pour les sessions. */
-export const hashApiKey = (key: string) => createHash('sha256').update(key).digest('hex')
+/** Clé de l'API de lecture : un jeton de 32 octets, préfixé par `dly_` pour être reconnu s'il
+ *  se retrouve dans un dépôt de code par erreur (architecture, « API publique »). Comme pour les
+ *  sessions, seule son empreinte (`hashToken`) est gardée en base. */
+export const generateApiKey = () => `dly_${newToken()}`

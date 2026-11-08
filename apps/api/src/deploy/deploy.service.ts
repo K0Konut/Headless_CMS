@@ -20,6 +20,8 @@ export class DeployService implements OnModuleDestroy {
   // une seule instance ; « Lancer un déploiement » rattrape le cas (architecture)
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>()
   private readonly running = new Map<string, Promise<void>>()
+  /** Une demande est arrivée pendant un appel : elle en relancera un après lui. */
+  private readonly again = new Set<string>()
 
   constructor(@Inject(DB) private readonly db: Db) {}
 
@@ -40,17 +42,34 @@ export class DeployService implements OnModuleDestroy {
 
   /** « Lancer un déploiement », « Relancer » : tout de suite, sans attendre le regroupement. */
   async callNow(space: Space) {
-    clearTimeout(this.timers.get(space.id))
+    this.cancelTimer(space.id)
     await this.call(space.id)
   }
 
+  /** Un appel à la fois par espace. Une demande arrivée pendant un appel en cours en relance un
+   *  après lui : le contenu publié entre-temps n'est jamais oublié. */
   private call(spaceId: string): Promise<void> {
-    this.timers.delete(spaceId)
+    this.cancelTimer(spaceId)
     const current = this.running.get(spaceId)
-    if (current) return current
-    const run = this.send(spaceId).finally(() => this.running.delete(spaceId))
+    if (current) {
+      this.again.add(spaceId)
+      return current
+    }
+    // Une erreur (base injoignable) est journalisée : un appel relancé tout seul n'a personne
+    // pour la recevoir.
+    const run = this.send(spaceId)
+      .catch((err: unknown) => this.logger.error(`Déploiement : ${String(err)}`))
+      .finally(() => {
+        this.running.delete(spaceId)
+        if (this.again.delete(spaceId)) void this.call(spaceId)
+      })
     this.running.set(spaceId, run)
     return run
+  }
+
+  private cancelTimer(spaceId: string) {
+    clearTimeout(this.timers.get(spaceId))
+    this.timers.delete(spaceId)
   }
 
   /** `POST deploy_url` au format `repository_dispatch` de GitHub ; les hooks de build qui
@@ -88,18 +107,18 @@ export class DeployService implements OnModuleDestroy {
 
   async state(space: Space, superAdmin: boolean): Promise<DeployState> {
     const [row] = await this.db.select().from(spaces).where(eq(spaces.id, space.id))
-    const status = row!.deployStatus
+    const { deployStatus: status, deployCalledAt, deployUrl, deployToken } = row!
     return {
-      configured: !!row!.deployUrl,
+      configured: !!deployUrl,
       pending: this.timers.has(space.id) || this.running.has(space.id),
-      last: row!.deployCalledAt
+      last: deployCalledAt
         ? {
-            at: row!.deployCalledAt.toISOString(),
+            at: deployCalledAt.toISOString(),
             status,
             ok: status !== null && status >= 200 && status < 300,
           }
         : null,
-      ...(superAdmin && { url: row!.deployUrl, hasToken: !!row!.deployToken }),
+      ...(superAdmin && { url: deployUrl, hasToken: !!deployToken }),
     }
   }
 
@@ -114,6 +133,9 @@ export class DeployService implements OnModuleDestroy {
           : body.token !== undefined && { deployToken: body.token }),
       })
       .where(eq(spaces.id, space.id))
-    if (body.url === null) clearTimeout(this.timers.get(space.id))
+    if (body.url === null) {
+      this.cancelTimer(space.id)
+      this.again.delete(space.id)
+    }
   }
 }

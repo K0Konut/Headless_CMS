@@ -5,13 +5,20 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, getTableColumns } from 'drizzle-orm'
 import type { AuthedRequest } from '../auth/session.guard.js'
 import { DB } from '../db/db.module.js'
 import type { Db } from '../db/index.js'
 import { memberships, spaces } from '../db/schema.js'
 
-export type Space = typeof spaces.$inferSelect
+/** Colonnes d'un espace chargées par les gardes : sans ses secrets (empreinte de la clé API,
+ *  URL et jeton de déploiement, dernier appel). Ils ne peuvent donc pas sortir par une route qui
+ *  renvoie l'espace ; les services qui en ont besoin les lisent eux-mêmes. */
+const { apiKeyHash, deployUrl, deployToken, deployCalledAt, deployStatus, ...spaceColumns } =
+  getTableColumns(spaces)
+export { spaceColumns }
+
+export type Space = { [K in keyof typeof spaceColumns]: (typeof spaces.$inferSelect)[K] }
 export type SpaceRequest = AuthedRequest & { space: Space }
 
 /** Charge l'espace `:slug` et vérifie l'accès. Un espace inaccessible renvoie 404, jamais 403,
@@ -24,7 +31,7 @@ export class SpaceAccessGuard implements CanActivate {
   async canActivate(ctx: ExecutionContext) {
     const req = ctx.switchToHttp().getRequest<SpaceRequest>()
     const [row] = await this.db
-      .select({ space: spaces, memberId: memberships.userId })
+      .select({ space: spaceColumns, memberId: memberships.userId })
       .from(spaces)
       .leftJoin(
         memberships,

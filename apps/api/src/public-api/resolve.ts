@@ -5,6 +5,7 @@ import {
   type Locale,
   type RichtextDoc,
   imageWidths,
+  richtextHasText,
 } from '@dashility/shared'
 import { richtextExtensions } from '@dashility/shared/richtext'
 import { generateHTML } from '@tiptap/html'
@@ -22,6 +23,32 @@ export interface ResolveContext {
   /** Origine publique du CMS (`https://dashility.costamask.dev`) : les adresses sont absolues. */
   origin: string
   media: Map<string, MediaInfo>
+}
+
+// Le même document est converti à chaque lecture (un build lit tout le contenu) : on garde le
+// HTML des derniers documents vus. generateHTML ouvre un DOM complet à chaque appel. Le cache
+// est borné en taille (clés et HTML compris), pas en nombre : un document peut peser 1 Mo.
+const htmlCache = new Map<string, string>()
+const HTML_CACHE_CHARS = 20_000_000
+let cachedChars = 0
+
+/** HTML d'un texte riche, ou null s'il n'a pas de texte (un paragraphe vide). */
+function richtextHtml(value: unknown) {
+  if (!richtextHasText(value)) return null
+  const key = JSON.stringify(value)
+  let html = htmlCache.get(key)
+  if (html === undefined) {
+    // Mêmes extensions que l'éditeur : seulement leurs balises, texte échappé.
+    html = generateHTML(value as RichtextDoc, richtextExtensions)
+    htmlCache.set(key, html)
+    cachedChars += key.length + html.length
+    for (const [oldKey, oldHtml] of htmlCache) {
+      if (cachedChars <= HTML_CACHE_CHARS) break
+      htmlCache.delete(oldKey)
+      cachedChars -= oldKey.length + oldHtml.length
+    }
+  }
+  return { html }
 }
 
 const url = (ctx: ResolveContext, id: string, file: string) =>
@@ -67,8 +94,7 @@ function resolveValue(field: Exclude<Field, { type: 'group' }>, raw: unknown, ct
       return choice ? { key: choice.key, label: choice[ctx.locale] } : null
     }
     case 'richtext':
-      // HTML produit avec les mêmes extensions que l'éditeur : seulement leurs balises, texte échappé.
-      return value ? { html: generateHTML(value as RichtextDoc, richtextExtensions) } : null
+      return richtextHtml(value)
     case 'image':
       return resolveImage(raw as ImageValue | null | undefined, ctx)
     case 'pdf': {
