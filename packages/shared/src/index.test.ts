@@ -17,6 +17,7 @@ import {
   frozenFieldChange,
   isEnComplete,
   isValidLink,
+  parisDateTime,
   passwordSchema,
   siteUrlSchema,
   slugSchema,
@@ -518,5 +519,17 @@ describe('médias', () => {
       entryDataSchema(fields).safeParse({ cover: { id: 'x', alt: { fr: '', en: '' } } }).success,
     ).toBe(false)
     expect(entryDataSchema(fields).safeParse({ cv: { fr: '../etc/passwd' } }).success).toBe(false)
+  })
+})
+
+describe('parisDateTime', () => {
+  it.each([
+    ['hiver (UTC+1)', '2026-11-17', '09:00', '2026-11-17T08:00:00.000Z'],
+    ['été (UTC+2)', '2026-07-01', '09:00', '2026-07-01T07:00:00.000Z'],
+    ['heure inexistante, avancée', '2026-03-29', '02:30', '2026-03-29T01:30:00.000Z'],
+    ['heure en double, la seconde', '2026-10-25', '02:30', '2026-10-25T01:30:00.000Z'],
+    ['minuit', '2026-12-31', '00:00', '2026-12-30T23:00:00.000Z'],
+  ])('%s', (_, date, time, iso) => {
+    expect(parisDateTime(date, time).toISOString()).toBe(iso)
   })
 })
