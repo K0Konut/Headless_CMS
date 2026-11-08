@@ -1,4 +1,4 @@
-import type { EntryData, Field } from '@dashility/shared'
+import type { EntryData, Field, LastSchedule } from '@dashility/shared'
 import { sql } from 'drizzle-orm'
 import {
   bigint,
@@ -155,9 +155,19 @@ export const entries = pgTable(
     createdAt: createdAt(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    /** Publication programmée (V3) : heure prévue et version figée. Toute écriture qui change la
+     *  version annule la programmation (architecture, « Ce qui annule une programmation »). */
+    scheduledAt: timestamp('scheduled_at', { withTimezone: true }),
+    scheduledVersion: integer('scheduled_version'),
+    /** Issue de la dernière programmation, effacée à la prochaine écriture. */
+    lastSchedule: jsonb('last_schedule').$type<LastSchedule>(),
   },
   (t) => [
     unique('entries_type_slug').on(t.typeId, t.slug),
+    // La tâche de chaque minute ne lit que les entrées programmées.
+    index('entries_scheduled_at_idx')
+      .on(t.scheduledAt)
+      .where(sql`${t.scheduledAt} is not null`),
     check('entries_has_data', sql`${t.published} is not null or ${t.draft} is not null`),
   ],
 )
