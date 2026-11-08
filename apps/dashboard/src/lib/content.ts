@@ -1,5 +1,17 @@
-import type { ContentTypeInput, EntryData, EntryStatus, Field, FieldType } from '@dashility/shared'
+import type {
+  ContentTypeInput,
+  EntryData,
+  EntryStatus,
+  Field,
+  FieldType,
+  LastSchedule,
+} from '@dashility/shared'
+import type { InjectionKey, Ref } from 'vue'
 import { slugify } from './slug'
+
+/** Fourni par l'éditeur d'entrée : vrai pendant une publication programmée (champs figés). Les
+ *  saisies que le fieldset ne désactive pas (texte riche, glisser-déposer) le lisent. */
+export const READONLY_KEY: InjectionKey<Ref<boolean>> = Symbol('entry-readonly')
 
 /** Un type tel que l'API le renvoie (liste, lecture, création, modification), avec ses compteurs. */
 export type ContentType = ContentTypeInput & {
@@ -87,6 +99,7 @@ export interface TypeCounts {
   total: number
   published: number
   enIncomplete: number
+  scheduled: number
 }
 
 /** Ligne de `GET …/entries`. */
@@ -97,6 +110,7 @@ export interface EntrySummary {
   status: EntryStatus
   enComplete: boolean
   updatedAt: string
+  scheduledAt: string | null
 }
 
 /** Réponse de `GET …/entries/:id`. */
@@ -111,4 +125,7 @@ export interface Entry {
   version: number
   publishedAt: string | null
   updatedAt: string
+  /** Publication programmée (V3) : heure prévue, et issue de la dernière programmation. */
+  scheduledAt: string | null
+  lastSchedule: LastSchedule | null
 }

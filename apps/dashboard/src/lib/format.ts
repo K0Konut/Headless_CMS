@@ -38,3 +38,43 @@ export function formatBytes(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} Ko`
   return `${decimal.format(bytes / 1024 / 1024)} Mo`
 }
+
+const parisShort = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'short',
+  timeZone: 'Europe/Paris',
+})
+const parisLong = new Intl.DateTimeFormat('fr-FR', {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+  timeZone: 'Europe/Paris',
+})
+const parisClock = new Intl.DateTimeFormat('fr-FR', {
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZone: 'Europe/Paris',
+})
+const parisInput = new Intl.DateTimeFormat('en-CA', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+  timeZone: 'Europe/Paris',
+})
+
+/** Instant ISO → « 17 nov. à 9:00 », à l'heure de Paris (badge « Programmé »). */
+export const formatShortDateTime = (iso: string) =>
+  `${parisShort.format(new Date(iso))} à ${parisClock.format(new Date(iso))}`
+
+/** Instant ISO → « lundi 17 novembre à 9:00 », à l'heure de Paris. */
+export const formatLongDateTime = (iso: string) =>
+  `${parisLong.format(new Date(iso))} à ${parisClock.format(new Date(iso))}`
+
+/** Date et heure de Paris d'un instant, pour des champs `date` et `time` : `2026-11-17`, `09:00`. */
+export function parisInputs(date: Date) {
+  const p = Object.fromEntries(parisInput.formatToParts(date).map((x) => [x.type, x.value]))
+  return { date: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}` }
+}
