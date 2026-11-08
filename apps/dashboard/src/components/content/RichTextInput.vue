@@ -2,7 +2,8 @@
 import { LINK_ERROR, type RichtextDoc, isValidLink } from '@dashility/shared'
 import { Bold, Heading2, Heading3, Highlighter, Italic, Link, List, ListOrdered } from '@lucide/vue'
 import { EditorContent, useEditor } from '@tiptap/vue-3'
-import { type Component, computed, onBeforeUnmount, toRaw, watch } from 'vue'
+import { type Component, computed, inject, onBeforeUnmount, ref, toRaw, watch } from 'vue'
+import { READONLY_KEY } from '@/lib/content'
 import { richtextExtensions } from '@dashility/shared/richtext'
 
 /** Texte riche (document UX, « Les types de champs ») : éditeur visuel limité, avec sa barre
@@ -19,8 +20,11 @@ const model = defineModel<unknown>()
 /** Dernière valeur envoyée par l'éditeur. */
 let emitted: unknown
 
+const readonly = inject(READONLY_KEY, ref(false))
+
 const editor = useEditor({
   extensions: richtextExtensions,
+  editable: !readonly.value,
   content: (model.value as RichtextDoc | null | undefined) ?? '',
   editorProps: {
     attributes: {
@@ -50,6 +54,9 @@ watch(model, (value) => {
   current.commands.setContent((value as RichtextDoc | null) ?? '', { emitUpdate: false })
   emitted = toRaw(value) ?? null
 })
+
+// Publication programmée : le texte est figé, comme les autres champs (fieldset désactivé).
+watch(readonly, (value) => editor.value?.setEditable(!value))
 
 // Attributs d'accessibilité qui changent avec la validation.
 watch(

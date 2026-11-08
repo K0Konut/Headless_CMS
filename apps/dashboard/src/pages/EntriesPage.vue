@@ -78,6 +78,7 @@ const FILTERS: Record<string, { label: string; keep: (e: EntrySummary) => boolea
   draft: { label: 'Brouillons', keep: (e) => e.status === 'draft' },
   published: { label: 'Publiées', keep: (e) => e.status !== 'draft' },
   incomplete: { label: 'EN incomplet', keep: (e) => !e.enComplete },
+  scheduled: { label: 'Programmées', keep: (e) => !!e.scheduledAt },
 }
 const filter = ref('all')
 const shown = computed(() => (entries.value ?? []).filter(FILTERS[filter.value]!.keep))
@@ -150,7 +151,11 @@ async function add() {
               </RouterLink>
             </TableCell>
             <TableCell>
-              <StatusBadges :status="entry.status" :en-complete="entry.enComplete" />
+              <StatusBadges
+                :status="entry.status"
+                :en-complete="entry.enComplete"
+                :scheduled-at="entry.scheduledAt"
+              />
             </TableCell>
             <TableCell class="hidden text-muted-foreground sm:table-cell">
               {{ formatDate(entry.updatedAt) }}

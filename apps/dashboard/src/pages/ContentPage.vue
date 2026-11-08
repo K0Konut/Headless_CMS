@@ -83,6 +83,9 @@ const ready = computed(() => types.value?.filter((t) => t.fields.length) ?? [])
         <span v-else class="text-sm text-muted-foreground">
           {{ type.counts.published ? 'Publiée' : 'Brouillon' }}
         </span>
+        <span v-if="type.counts.scheduled" class="text-sm">
+          {{ plural(type.counts.scheduled, 'programmé') }}
+        </span>
         <span v-if="type.counts.enIncomplete" class="text-sm">
           {{ plural(type.counts.enIncomplete, 'EN incomplet') }}
         </span>

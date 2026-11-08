@@ -8,8 +8,8 @@ import {
   publicationIssues,
   publicationMessage,
 } from '@dashility/shared'
-import { ArrowLeft, Ellipsis, Trash2, Undo2 } from '@lucide/vue'
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { ArrowLeft, CalendarClock, Ellipsis, Trash2, Undo2 } from '@lucide/vue'
+import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
 import { RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate, useRouter } from 'vue-router'
 import FormError from '@/components/FormError.vue'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -24,11 +24,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError, api, errorMessage } from '@/lib/api'
-import type { ContentType, Entry } from '@/lib/content'
-import { formatTime } from '@/lib/format'
+import { type ContentType, type Entry, READONLY_KEY } from '@/lib/content'
+import { formatLongDateTime, formatTime } from '@/lib/format'
 import { slugify } from '@/lib/slug'
 import FieldRows from './FieldRows.vue'
 import DeployStatus from './DeployStatus.vue'
+import SchedulePanel from './SchedulePanel.vue'
 import StatusBadges from './StatusBadges.vue'
 
 const props = defineProps<{ space: string; type: ContentType; entryId: string }>()
@@ -134,6 +135,7 @@ async function send() {
     saveError.value = ''
     slugError.value = saved.slugError ?? ''
   } catch (err) {
+    if (await reloadIfStale(err)) return
     const conflict = err instanceof ApiError && err.status === 409
     state.value = conflict ? 'conflict' : 'error'
     saveError.value = conflict ? '' : errorMessage(err)
@@ -188,41 +190,69 @@ async function saveFirst() {
   return false
 }
 
-async function act(action: 'publish' | 'discard' | 'unpublish', done: string) {
+/** Action sur l'entrée (publier, programmer…) : l'entrée renvoyée par l'API remplace l'affichée,
+ *  et l'action réussie est annoncée. */
+/** La programmation a changé ailleurs (programmée dans un autre onglet, ou déjà publiée par la
+ *  tâche) : on relit l'entrée, dont l'état s'explique de lui-même. */
+async function reloadIfStale(err: unknown) {
+  if (!(err instanceof ApiError) || !['entry_scheduled', 'not_scheduled'].includes(err.code)) {
+    return false
+  }
+  await load()
+  return true
+}
+
+async function act(
+  path: 'publish' | 'discard' | 'unpublish' | 'schedule',
+  done: string,
+  request: { method: 'POST' | 'PUT' | 'DELETE'; body?: object } = {
+    method: 'POST',
+    body: { version },
+  },
+) {
   busy.value = true
+  actionError.value = ''
   try {
-    const result = await api<Entry>(`${base.value}/${action}`, {
-      method: 'POST',
-      body: { version },
-    })
-    apply(result)
+    apply(await api<Entry>(`${base.value}/${path}`, request))
     checking.value = false
     announcement.value = done
     // Publier ou dépublier demande un déploiement : son état est relu.
-    deployRefresh.value++
+    if (path === 'publish' || path === 'unpublish') deployRefresh.value++
+    return true
   } catch (err) {
-    if (err instanceof ApiError && err.status === 409) state.value = 'conflict'
-    else actionError.value = errorMessage(err)
+    if (await reloadIfStale(err)) {
+      // L'état relu explique ce qui s'est passé.
+    } else if (err instanceof ApiError && err.status === 409) {
+      state.value = 'conflict'
+    } else {
+      actionError.value = errorMessage(err)
+    }
+    return false
   } finally {
     busy.value = false
   }
 }
 
-async function publish() {
-  if (!(await saveFirst())) return
+/** Avant de publier ou de programmer : la saisie est enregistrée, les contrôles de publication
+ *  passent, et une version anglaise incomplète est confirmée. */
+async function readyToPublish(verb: 'Publier' | 'Programmer') {
+  if (!(await saveFirst())) return false
   checking.value = true
   if (issues.value.length) {
     actionError.value = publicationMessage(issues.value)
-    return focusPath(issues.value[0]!.path)
+    void focusPath(issues.value[0]!.path)
+    return false
   }
-  if (
-    !enComplete.value &&
-    !window.confirm(
-      'La version anglaise est incomplète : cette entrée sera masquée sur le site en anglais. Publier quand même ?',
+  return (
+    enComplete.value ||
+    window.confirm(
+      `La version anglaise est incomplète : cette entrée sera masquée sur le site en anglais. ${verb} quand même ?`,
     )
-  ) {
-    return
-  }
+  )
+}
+
+async function publish() {
+  if (!(await readyToPublish('Publier'))) return
   await act('publish', status.value === 'draft' ? 'Entrée publiée.' : 'Modifications publiées.')
 }
 
@@ -275,12 +305,90 @@ async function confirmLeave() {
 }
 onBeforeRouteLeave(confirmLeave)
 onBeforeRouteUpdate(confirmLeave)
+
+// ── Publication programmée (V3, document UX « Publication programmée ») ───────────────────
+
+/** Classes d'un fieldset figé : ses contrôles désactivés restent lisibles (document UX). */
+const FROZEN = '[&_:disabled]:cursor-default [&_:disabled]:opacity-100'
+
+/** Programmée : la version est figée, les champs sont en lecture seule. */
+const scheduled = computed(() => !!entry.value?.scheduledAt)
+provide(READONLY_KEY, scheduled)
+const panelOpen = ref(false)
+
+async function scheduleAt(at: string) {
+  if (!(await readyToPublish('Programmer'))) {
+    // Des champs à corriger : le panneau se ferme pour les laisser voir.
+    if (issues.value.length) panelOpen.value = false
+    return
+  }
+  const done = `Publication programmée le ${formatLongDateTime(at)}.`
+  if (await act('schedule', done, { method: 'PUT', body: { version, at } })) {
+    panelOpen.value = false
+  }
+}
+
+const unschedule = (done = 'Programmation annulée.') => act('schedule', done, { method: 'DELETE' })
+
+async function editEntry() {
+  if (!window.confirm('Modifier l’entrée annule la publication programmée. Continuer ?')) return
+  await unschedule('Programmation annulée : l’entrée est modifiable.')
+}
+
+/** Issue de la dernière programmation, tant que l'entrée n'a pas été réécrite. */
+const outcome = computed(() => {
+  const last = entry.value?.lastSchedule
+  if (!last || scheduled.value) return null
+  const planned = formatLongDateTime(last.plannedAt)
+  const late = Date.parse(last.at) - Date.parse(last.plannedAt) > 2 * 60_000
+  if (last.outcome === 'published') {
+    return {
+      error: false,
+      text: late
+        ? `Publiée le ${formatLongDateTime(last.at)}, au lieu du ${planned} (le serveur était arrêté).`
+        : `Publiée le ${planned}, comme prévu.`,
+    }
+  }
+  if (last.outcome === 'cancelled') {
+    return {
+      error: false,
+      text: `La publication programmée du ${planned} a été annulée : l’entrée a été modifiée (par un membre ou par un changement de structure).`,
+      again: true,
+    }
+  }
+  return {
+    error: true,
+    text: `La publication programmée du ${planned} a échoué : ${last.message ?? 'erreur inconnue'}.`,
+  }
+})
+
+/** Relit l'entrée après l'heure prévue. Pas encore traitée (serveur arrêté ou en retard) : on
+ *  réessaie dans une minute. */
+async function checkOutcome() {
+  await load()
+  const at = entry.value?.scheduledAt
+  if (at && Date.parse(at) < Date.now()) outcomeTimer = setTimeout(checkOutcome, 60_000)
+}
+
+// Une fois l'heure prévue passée, l'issue est relue (la tâche passe chaque minute).
+let outcomeTimer: ReturnType<typeof setTimeout> | undefined
+watch(
+  () => entry.value?.scheduledAt,
+  (at) => {
+    clearTimeout(outcomeTimer)
+    if (!at) return
+    const wait = Math.max(0, Date.parse(at) - Date.now() + 75_000)
+    // setTimeout ne sait pas attendre plus de 24 jours : au-delà, on relira à la prochaine visite.
+    if (wait < 2 ** 31 - 1) outcomeTimer = setTimeout(checkOutcome, wait)
+  },
+)
 const onUnload = (event: BeforeUnloadEvent) => {
   if (pending.value || state.value === 'saving') event.preventDefault()
 }
 window.addEventListener('beforeunload', onUnload)
 onBeforeUnmount(() => {
   clearTimeout(timer)
+  clearTimeout(outcomeTimer)
   window.removeEventListener('beforeunload', onUnload)
 })
 </script>
@@ -301,7 +409,11 @@ onBeforeUnmount(() => {
         <h1 class="text-2xl font-semibold tracking-tight">
           {{ isCollection ? title || 'Sans titre' : type.name }}
         </h1>
-        <StatusBadges :status="status" :en-complete="enComplete" />
+        <StatusBadges
+          :status="status"
+          :en-complete="enComplete"
+          :scheduled-at="entry.scheduledAt"
+        />
       </div>
       <p class="text-sm text-muted-foreground">
         <template v-if="state === 'saving'">Enregistrement…</template>
@@ -311,12 +423,21 @@ onBeforeUnmount(() => {
       <DeployStatus :space="space" :refresh-key="deployRefresh" />
       <div class="flex flex-wrap items-center gap-2">
         <template v-if="status === 'modified'">
-          <Button variant="outline" :disabled="busy" @click="discard">
+          <Button v-if="!scheduled" variant="outline" :disabled="busy" @click="discard">
             <Undo2 aria-hidden="true" />Annuler les modifications
           </Button>
           <Button :disabled="busy" @click="publish">Publier les modifications</Button>
         </template>
         <Button v-else-if="status === 'draft'" :disabled="busy" @click="publish">Publier</Button>
+        <Button
+          v-if="status !== 'published' && !scheduled"
+          variant="outline"
+          :disabled="busy"
+          :aria-expanded="panelOpen"
+          @click="panelOpen = !panelOpen"
+        >
+          <CalendarClock aria-hidden="true" />Programmer…
+        </Button>
         <DropdownMenu v-if="status !== 'draft' || isCollection">
           <DropdownMenuTrigger as-child>
             <Button variant="outline" size="icon" :disabled="busy" aria-label="Autres actions">
@@ -324,7 +445,7 @@ onBeforeUnmount(() => {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
-            <DropdownMenuItem v-if="status !== 'draft'" @select="unpublish">
+            <DropdownMenuItem v-if="status !== 'draft' && !scheduled" @select="unpublish">
               <Undo2 aria-hidden="true" />Dépublier
             </DropdownMenuItem>
             <DropdownMenuItem v-if="isCollection" variant="destructive" @select="remove">
@@ -332,6 +453,53 @@ onBeforeUnmount(() => {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+      </div>
+      <SchedulePanel
+        v-if="panelOpen"
+        :initial="entry.scheduledAt"
+        :busy="busy"
+        @submit="scheduleAt"
+        @cancel="panelOpen = false"
+      />
+      <div
+        v-if="scheduled && !panelOpen"
+        class="grid gap-3 rounded-lg border border-primary/40 bg-primary/5 p-4 text-sm"
+      >
+        <p class="flex items-start gap-2">
+          <CalendarClock aria-hidden="true" class="mt-0.5 size-4 shrink-0" />
+          <span>
+            Publication programmée le
+            <strong>{{ formatLongDateTime(entry.scheduledAt!) }}</strong> (heure de Paris). Les
+            champs sont en lecture seule.
+          </span>
+        </p>
+        <div class="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" :disabled="busy" @click="panelOpen = true">
+            Changer la date
+          </Button>
+          <Button size="sm" variant="outline" :disabled="busy" @click="unschedule()">
+            Annuler la programmation
+          </Button>
+          <Button size="sm" variant="outline" :disabled="busy" @click="editEntry">
+            Modifier l’entrée
+          </Button>
+        </div>
+      </div>
+      <div
+        v-else-if="outcome"
+        class="flex flex-wrap items-center gap-3 rounded-lg border p-4 text-sm"
+        :class="outcome.error ? 'border-destructive/50 text-destructive' : ''"
+      >
+        <span>{{ outcome.text }}</span>
+        <Button
+          v-if="outcome.again"
+          size="sm"
+          variant="outline"
+          :disabled="busy"
+          @click="panelOpen = true"
+        >
+          Programmer à nouveau
+        </Button>
       </div>
       <p role="status" class="sr-only">{{ announcement }}</p>
       <FormError :message="actionError" />
@@ -352,7 +520,8 @@ onBeforeUnmount(() => {
       </Alert>
     </header>
 
-    <div v-if="isCollection" class="grid max-w-md gap-1.5">
+    <!-- Programmée : lecture seule. Le fieldset désactive tous ses contrôles ; ils restent lisibles. -->
+    <fieldset v-if="isCollection" :disabled="scheduled" :class="['grid max-w-md gap-1.5', FROZEN]">
       <Label for="entry-slug">Identifiant d’URL</Label>
       <Input
         id="entry-slug"
@@ -377,7 +546,7 @@ onBeforeUnmount(() => {
               : 'Suit le titre français jusqu’à la première publication.'
         }}
       </p>
-    </div>
+    </fieldset>
 
     <section aria-label="Champs" class="grid gap-2">
       <div class="flex gap-1 md:hidden" role="group" aria-label="Langue affichée">
@@ -403,13 +572,18 @@ onBeforeUnmount(() => {
       <p v-if="!type.fields.length" class="text-sm text-muted-foreground">
         Ce type n’a encore aucun champ.
       </p>
-      <FieldRows
-        v-model="data"
-        :fields="type.fields"
-        id-prefix="entry"
-        :lang="lang"
-        :errors="errors"
-      />
+      <fieldset :disabled="scheduled" :class="['min-w-0', FROZEN]">
+        <legend class="sr-only">
+          {{ scheduled ? 'Champs (lecture seule : publication programmée)' : 'Champs' }}
+        </legend>
+        <FieldRows
+          v-model="data"
+          :fields="type.fields"
+          id-prefix="entry"
+          :lang="lang"
+          :errors="errors"
+        />
+      </fieldset>
     </section>
   </div>
 </template>

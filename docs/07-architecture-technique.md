@@ -389,21 +389,20 @@ S'appuie sur le document UX, section « V3 : publication programmée », et sur 
 
 ### Données
 
-`entries` gagne trois colonnes :
+`entries` gagne deux colonnes :
 
 | Colonne | Rôle |
 | --- | --- |
 | `scheduled_at` (timestamptz, null) | Heure prévue de la publication ; null s'il n'y a pas de programmation |
-| `scheduled_version` (int, null) | Version de l'entrée programmée : c'est elle, et seulement elle, qui sera publiée |
 | `last_schedule` (jsonb, null) | Issue de la dernière programmation, pour le message de l'éditeur : `{ plannedAt, outcome, at, message? }`, avec `outcome` = `published`, `cancelled` ou `failed` |
 
-- **Une version figée sans copie** : comme toute modification annule la programmation, la version programmée est simplement la version actuelle de l'entrée. Pas de troisième exemplaire du contenu.
+- **Une version figée sans copie** : comme toute modification annule la programmation, la version programmée est simplement la version actuelle de l'entrée. Pas de troisième exemplaire du contenu, ni de numéro de version à garder à part.
 - **Index partiel** sur `scheduled_at` (`where scheduled_at is not null`) : la tâche de chaque minute ne lit que les entrées programmées.
 - `last_schedule` est effacé à la prochaine écriture de l'entrée : le message « Publiée comme prévu » ne reste que jusqu'au prochain enregistrement (document UX).
 
 ### Ce qui annule une programmation
 
-Toute écriture qui change la version de l'entrée annule sa programmation, dans la même requête SQL : `scheduled_at` et `scheduled_version` passent à null et `last_schedule` reçoit `{ outcome: 'cancelled' }`.
+Toute écriture qui change la version de l'entrée annule sa programmation, dans la même requête SQL : `scheduled_at` passe à null et `last_schedule` reçoit `{ outcome: 'cancelled' }`. C'est le helper `nextVersion` qui change la version : il porte l'annulation, et aucune écriture ne peut l'oublier.
 
 - **« Modifier l'entrée »** : le dashboard appelle d'abord l'annulation (route ci-dessous), puis rend les champs modifiables. La sauvegarde automatique d'une entrée programmée est refusée par l'API (409, code `entry_scheduled`) : un éditeur ouvert avant la programmation ne peut donc rien écrire sans le savoir.
 - **Changement de structure** : `TypesService.update` change déjà la version de toutes les entrées du type (V2) ; il annule leurs programmations au passage.
@@ -413,7 +412,7 @@ Toute écriture qui change la version de l'entrée annule sa programmation, dans
 
 | Méthode et route | Accès | Rôle |
 | --- | --- | --- |
-| `PUT /spaces/:slug/types/:type/entries/:id/schedule` | Membre | `{ version, at }` : programme ou change la date. Mêmes contrôles que `publish` (`publicationIssues`, identifiant d'URL), `at` entre maintenant + 1 min et + 1 an. N'écrit que si `version` est la version actuelle, et ne la change pas |
+| `PUT /spaces/:slug/types/:type/entries/:id/schedule` | Membre | `{ version, at }` : programme ou change la date. Mêmes contrôles que `publish` (`publicationIssues`, identifiant d'URL), `at` entre maintenant + 1 min et + 1 an (`scheduleIssue`, partagé avec le dashboard). N'écrit que si `version` est la version actuelle, et ne la change pas |
 | `DELETE /spaces/:slug/types/:type/entries/:id/schedule` | Membre | Annule la programmation, sans message d'annulation (c'est un choix, pas un incident) |
 
 - L'entrée renvoyée par l'API gagne `scheduledAt` et `lastSchedule` ; la liste des entrées, `scheduledAt` ; les compteurs d'un type, `scheduled`.
@@ -422,7 +421,7 @@ Toute écriture qui change la version de l'entrée annule sa programmation, dans
 ### Exécution
 
 - **Une tâche chaque minute** (`@nestjs/schedule`, `@Cron('* * * * *')`) lit les entrées dont `scheduled_at <= now()`, avec `for update skip locked` : deux instances de l'API ne publieraient pas deux fois la même entrée.
-- **Pour chaque entrée** : si la version est toujours `scheduled_version`, la publication est faite comme `publish` (mêmes contrôles, même écriture : `published` reçoit `draft`, l'identifiant en attente passe en ligne, la version change) ; `last_schedule` reçoit `{ outcome: 'published', at }`. Si un contrôle échoue (une règle a changé), rien n'est publié et `last_schedule` reçoit `{ outcome: 'failed', message }`. Dans tous les cas, la programmation est retirée.
+- **Pour chaque entrée** : la publication est faite comme `publish`, avec les mêmes contrôles et la même écriture (`published` reçoit `draft`, l'identifiant en attente passe en ligne, la version change) ; `last_schedule` reçoit `{ outcome: 'published', at }`. Si un contrôle échoue (une règle a changé), rien n'est publié et `last_schedule` reçoit `{ outcome: 'failed', message }`. Dans tous les cas, la programmation est retirée.
 - **Déploiement** : chaque espace touché reçoit `DeployService.schedule`, donc un seul build pour plusieurs publications de la même minute.
 - **Rattrapage** : une publication manquée pendant un arrêt de l'API part au premier passage de la tâche après le démarrage (au plus une minute). `last_schedule.at` garde l'heure réelle, que l'éditeur affiche à côté de l'heure prévue.
 - **Auteur** : la tâche ne change pas `updated_by`, qui reste l'auteur de la dernière modification du contenu publié.

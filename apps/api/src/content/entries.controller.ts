@@ -7,12 +7,13 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Req,
   NotFoundException,
   type PipeTransform,
   UseGuards,
 } from '@nestjs/common'
-import { entryActionSchema, saveEntrySchema } from '@dashility/shared'
+import { entryActionSchema, saveEntrySchema, scheduleEntrySchema } from '@dashility/shared'
 import { type SpaceRequest, SpaceAccessGuard } from '../spaces/guards.js'
 import { uuidOr404 } from '../uuid-or-404.pipe.js'
 import { EntriesService, type EntryRef } from './entries.service.js'
@@ -67,6 +68,27 @@ export class EntriesController {
     @Body() body: unknown,
   ) {
     return this.entries.save(space, type, id, saveEntrySchema.parse(body), user)
+  }
+
+  /** Programmer la publication, ou changer sa date (V3). */
+  @Put(':id/schedule')
+  schedule(
+    @Req() { space }: SpaceRequest,
+    @Param('type') type: string,
+    @Param('id', singleOrUuid) id: EntryRef,
+    @Body() body: unknown,
+  ) {
+    return this.entries.schedule(space, type, id, scheduleEntrySchema.parse(body))
+  }
+
+  /** Annuler la programmation. */
+  @Delete(':id/schedule')
+  unschedule(
+    @Req() { space }: SpaceRequest,
+    @Param('type') type: string,
+    @Param('id', singleOrUuid) id: EntryRef,
+  ) {
+    return this.entries.unschedule(space, type, id)
   }
 
   /** Publier, annuler les modifications, dépublier : `single` ou l'identifiant d'une entrée. */

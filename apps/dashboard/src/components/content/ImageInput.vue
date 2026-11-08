@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { IMAGE_MIME_TYPES, type ImageValue, imageWidths } from '@dashility/shared'
 import { ImageUp } from '@lucide/vue'
-import { computed, ref } from 'vue'
+import { computed, inject, ref } from 'vue'
+import { READONLY_KEY } from '@/lib/content'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useMedia } from '@/composables/useMedia'
@@ -23,6 +24,7 @@ const { media, loadError, uploading, uploadError, upload } = useMedia(
 )
 const fileInput = ref<HTMLInputElement | null>(null)
 const dragging = ref(false)
+const readonly = inject(READONLY_KEY, ref(false))
 
 /** Aperçu : la plus petite variante WebP, servie par l'API (même origine, permise par la CSP). */
 const preview = computed(() =>
@@ -42,7 +44,8 @@ async function send(file: File | undefined) {
 
 function onDrop(event: DragEvent) {
   dragging.value = false
-  void send(event.dataTransfer?.files[0])
+  // Le fieldset désactivé (entrée programmée) bloque les boutons, pas le dépôt d'un fichier.
+  if (!readonly.value) void send(event.dataTransfer?.files[0])
 }
 
 function setAlt(lang: 'fr' | 'en', text: string) {
