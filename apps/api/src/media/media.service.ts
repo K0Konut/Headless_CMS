@@ -40,6 +40,13 @@ export interface UploadedFile {
 const IMAGE_FORMATS = new Set(['jpeg', 'png', 'webp'])
 const UNAVAILABLE = 'Le stockage des fichiers est indisponible. Réessayez dans un instant.'
 
+/** Attend toutes les écritures, puis lève la première erreur : le dossier n'est nettoyé qu'une
+ *  fois plus rien n'y écrit. */
+async function settled(writes: Promise<unknown>[]) {
+  const failed = (await Promise.allSettled(writes)).find((r) => r.status === 'rejected')
+  if (failed) throw failed.reason
+}
+
 /** Nom affiché d'un fichier : sans chemin ni caractères de contrôle, 200 caractères au plus. */
 function displayName(name: string) {
   // Multer lit le nom en latin-1 : on le relit en UTF-8 (« CV Léa.pdf »).
@@ -77,30 +84,34 @@ export class MediaService {
           'Type de fichier non accepté : JPEG, PNG, WebP ou PDF',
         )
       }
-      // Dimensions une fois l'orientation EXIF appliquée (une photo de téléphone en portrait).
-      const rotated = (meta.orientation ?? 1) >= 5
-      const width = rotated ? meta.height : meta.width
-      const height = rotated ? meta.width : meta.height
-      if (!width || !height) throw new UnsupportedMediaTypeException('Image illisible')
+      // Décodée une seule fois, orientation appliquée : une image abîmée est refusée ici, avant
+      // d'écrire quoi que ce soit. Les variantes partent de ces pixels bruts (sans EXIF).
+      const { data, info } = await image
+        .rotate()
+        .raw()
+        .toBuffer({ resolveWithObject: true })
+        .catch(() => {
+          throw new UnsupportedMediaTypeException('Image illisible')
+        })
+      const pixels = () =>
+        sharp(data, { raw: { width: info.width, height: info.height, channels: info.channels } })
       row = {
         id,
         spaceId: space.id,
         kind: 'image',
         originalName: name,
-        width,
-        height,
+        width: info.width,
+        height: info.height,
         bytes: file.size,
       }
-      // Un seul décodage, redressé ; les variantes (sans EXIF) sont produites en parallèle.
-      const base = image.rotate()
       await this.write(space, id, (dir) =>
-        Promise.all([
+        settled([
           writeFile(`${dir}/original.${meta.format === 'jpeg' ? 'jpg' : meta.format}`, file.buffer),
-          ...imageWidths(width).flatMap((w) => {
-            const resized = base.clone().resize({ width: w, withoutEnlargement: true })
+          ...imageWidths(info.width).flatMap((w) => {
+            const resized = () => pixels().resize({ width: w, withoutEnlargement: true })
             return [
-              resized.clone().webp({ quality: 80 }).toFile(`${dir}/${w}.webp`),
-              resized.clone().avif({ quality: 55, effort: 4 }).toFile(`${dir}/${w}.avif`),
+              resized().webp({ quality: 80 }).toFile(`${dir}/${w}.webp`),
+              resized().avif({ quality: 55, effort: 4 }).toFile(`${dir}/${w}.avif`),
             ]
           }),
         ]),

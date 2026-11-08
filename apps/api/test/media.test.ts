@@ -1,6 +1,7 @@
 import argon2 from 'argon2'
 import { eq, sql } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
+import { readdir } from 'node:fs/promises'
 import sharp from 'sharp'
 import request from 'supertest'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -109,6 +110,17 @@ describe('envoi et service des médias', () => {
       .attach('file', PDF, 'cv.pdf')
       .expect(415)
     await upload(member, PDF, 'cv.pdf', 'blog').expect(404)
+  })
+
+  it('refuse une image abîmée sans laisser de fichier derrière elle', async () => {
+    // En-tête JPEG valide, données tronquées : lisible pour les métadonnées, pas pour le décodage.
+    const jpeg = await photo(1200, 800)
+    const truncated = jpeg.subarray(0, Math.floor(jpeg.length / 3))
+    const files = () => readdir(process.env.MEDIA_DIR!, { recursive: true })
+    const before = (await files()).length
+    const res = await upload(member, truncated, 'photo.jpg').expect(415)
+    expect(res.body.error.message).toBe('Image illisible')
+    expect((await files()).length).toBe(before)
   })
 
   it('répond 503 quand le stockage est injoignable', async () => {

@@ -26,9 +26,11 @@ export interface ResolveContext {
 }
 
 // Le même document est converti à chaque lecture (un build lit tout le contenu) : on garde le
-// HTML des derniers documents vus. generateHTML ouvre un DOM complet à chaque appel.
+// HTML des derniers documents vus. generateHTML ouvre un DOM complet à chaque appel. Le cache
+// est borné en taille (clés et HTML compris), pas en nombre : un document peut peser 1 Mo.
 const htmlCache = new Map<string, string>()
-const HTML_CACHE_SIZE = 1000
+const HTML_CACHE_CHARS = 20_000_000
+let cachedChars = 0
 
 /** HTML d'un texte riche, ou null s'il n'a pas de texte (un paragraphe vide). */
 function richtextHtml(value: unknown) {
@@ -38,8 +40,13 @@ function richtextHtml(value: unknown) {
   if (html === undefined) {
     // Mêmes extensions que l'éditeur : seulement leurs balises, texte échappé.
     html = generateHTML(value as RichtextDoc, richtextExtensions)
-    if (htmlCache.size >= HTML_CACHE_SIZE) htmlCache.delete(htmlCache.keys().next().value!)
     htmlCache.set(key, html)
+    cachedChars += key.length + html.length
+    for (const [oldKey, oldHtml] of htmlCache) {
+      if (cachedChars <= HTML_CACHE_CHARS) break
+      htmlCache.delete(oldKey)
+      cachedChars -= oldKey.length + oldHtml.length
+    }
   }
   return { html }
 }

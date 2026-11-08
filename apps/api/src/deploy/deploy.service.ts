@@ -49,16 +49,20 @@ export class DeployService implements OnModuleDestroy {
   /** Un appel à la fois par espace. Une demande arrivée pendant un appel en cours en relance un
    *  après lui : le contenu publié entre-temps n'est jamais oublié. */
   private call(spaceId: string): Promise<void> {
-    this.timers.delete(spaceId)
+    this.cancelTimer(spaceId)
     const current = this.running.get(spaceId)
     if (current) {
       this.again.add(spaceId)
       return current
     }
-    const run = this.send(spaceId).finally(() => {
-      this.running.delete(spaceId)
-      if (this.again.delete(spaceId)) void this.call(spaceId)
-    })
+    // Une erreur (base injoignable) est journalisée : un appel relancé tout seul n'a personne
+    // pour la recevoir.
+    const run = this.send(spaceId)
+      .catch((err: unknown) => this.logger.error(`Déploiement : ${String(err)}`))
+      .finally(() => {
+        this.running.delete(spaceId)
+        if (this.again.delete(spaceId)) void this.call(spaceId)
+      })
     this.running.set(spaceId, run)
     return run
   }

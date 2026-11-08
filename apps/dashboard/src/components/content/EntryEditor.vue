@@ -372,7 +372,9 @@ onBeforeUnmount(() => {
         {{
           entry.published
             ? `En ligne : ${entry.slug}. Un nouvel identifiant ne s’applique qu’à la publication, et casse alors les liens déjà partagés.`
-            : 'Suit le titre français jusqu’à la première publication.'
+            : entry.publishedAt
+              ? 'Figé depuis la première publication. Le changer casse les liens déjà partagés.'
+              : 'Suit le titre français jusqu’à la première publication.'
         }}
       </p>
     </div>

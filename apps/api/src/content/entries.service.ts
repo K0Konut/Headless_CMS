@@ -184,23 +184,14 @@ export class EntriesService {
         issues,
       })
     }
-    let entry
-    try {
-      entry = await this.write(current.id, version, user, {
-        published: current.draft,
-        draft: null,
-        slug,
-        draftSlug: null,
-        enComplete: isEnComplete(type.fields, current.draft),
-        publishedAt: new Date(),
-      })
-    } catch (err) {
-      // Identifiant pris en ligne entre-temps par une autre entrée.
-      if (isUniqueViolation(err)) {
-        throw new BadRequestException('Cet identifiant d’URL est déjà utilisé par une autre entrée')
-      }
-      throw err
-    }
+    const entry = await this.write(current.id, version, user, {
+      published: current.draft,
+      draft: null,
+      slug,
+      draftSlug: null,
+      enComplete: isEnComplete(type.fields, current.draft),
+      publishedAt: new Date(),
+    })
     // Ce que le site affiche a changé : un déploiement est demandé (regroupé sur 10 s).
     this.deploy.schedule(space.id)
     return entry
@@ -270,18 +261,27 @@ export class EntriesService {
       'published' | 'draft' | 'slug' | 'draftSlug' | 'enComplete' | 'publishedAt'
     >,
   ) {
-    const [entry] = await this.db
-      .update(entries)
-      .set({
-        ...change,
-        version: sql`${entries.version} + 1`,
-        updatedAt: new Date(),
-        updatedBy: user.id,
-      })
-      .where(and(eq(entries.id, id), eq(entries.version, version)))
-      .returning(entryColumns)
-    if (!entry) throw new ConflictException('Cette entrée a été modifiée ailleurs')
-    return entry
+    try {
+      const [entry] = await this.db
+        .update(entries)
+        .set({
+          ...change,
+          version: sql`${entries.version} + 1`,
+          updatedAt: new Date(),
+          updatedBy: user.id,
+        })
+        .where(and(eq(entries.id, id), eq(entries.version, version)))
+        .returning(entryColumns)
+      if (!entry) throw new ConflictException('Cette entrée a été modifiée ailleurs')
+      return entry
+    } catch (err) {
+      // Publier ou dépublier met en ligne l'identifiant en attente : une autre entrée a pu le
+      // prendre entre-temps.
+      if (isUniqueViolation(err)) {
+        throw new BadRequestException('Cet identifiant d’URL est déjà utilisé par une autre entrée')
+      }
+      throw err
+    }
   }
 
   /** `single` désigne l'entrée d'une page unique, la seule de son type. */

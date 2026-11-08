@@ -29,7 +29,8 @@ function setTranslated(field: Field, lang: 'fr' | 'en', value: unknown) {
 function errorOf(field: Field, lang?: 'fr' | 'en') {
   const at = `${props.path ?? ''}${field.key}${lang ? `.${lang}` : ''}`
   const errors = props.errors ?? {}
-  if (errors[at]) return errors[at]
+  // Un groupe n'a que ses propres erreurs : celles de ses éléments s'affichent sur leurs champs.
+  if (errors[at] || field.type === 'group') return errors[at]
   const part = Object.keys(errors).find((path) => path.startsWith(`${at}.`))
   return part && errors[part]
 }

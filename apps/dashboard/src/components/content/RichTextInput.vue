@@ -48,6 +48,7 @@ watch(model, (value) => {
   const mine = current.isEmpty ? null : current.getJSON()
   if (JSON.stringify(mine) === JSON.stringify(value ?? null)) return
   current.commands.setContent((value as RichtextDoc | null) ?? '', { emitUpdate: false })
+  emitted = toRaw(value) ?? null
 })
 
 // Attributs d'accessibilité qui changent avec la validation.
