@@ -1,39 +1,33 @@
 <script setup lang="ts">
-import { parisDateTime } from '@dashility/shared'
+import { parisDateTime, scheduleIssue } from '@dashility/shared'
 import { computed, ref } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { parisInputs } from '@/lib/format'
+import { addDays, today } from '@/lib/period'
 
 /** « Programmer la publication » (document UX, « Programmer, dans l'éditeur ») : date et heure,
- *  toujours à l'heure de Paris. Par défaut, demain à 9:00 ; pour changer une date, la date prévue. */
+ *  toujours à l'heure de Paris. Par défaut, demain à 9:00 ; pour changer une date, la date prévue.
+ *  Les bornes sont celles que l'API vérifie (`scheduleIssue`). */
 const props = defineProps<{ initial?: string | null; busy: boolean }>()
 const emit = defineEmits<{ submit: [at: string]; cancel: [] }>()
 
-const MINUTE = 60_000
-const YEAR = 366 * 24 * 60 * MINUTE
-const tomorrow = parisInputs(new Date(Date.now() + 24 * 60 * MINUTE)).date
 const start = props.initial
   ? parisInputs(new Date(props.initial))
-  : { date: tomorrow, time: '09:00' }
+  : { date: addDays(today(), 1), time: '09:00' }
 const date = ref(start.date)
 const time = ref(start.time)
-const today = parisInputs(new Date()).date
-const lastDay = parisInputs(new Date(Date.now() + YEAR - 24 * 60 * MINUTE)).date
 
-const error = computed(() => {
-  if (!date.value || !time.value) return 'Choisissez une date et une heure'
-  const at = parisDateTime(date.value, time.value).getTime()
-  if (at < Date.now() + MINUTE) return 'Choisissez une date à venir'
-  if (at > Date.now() + YEAR) return 'Choisissez une date dans l’année qui vient'
-  return ''
-})
+const at = computed(() =>
+  date.value && time.value ? parisDateTime(date.value, time.value) : new Date(NaN),
+)
+const error = computed(() => scheduleIssue(at.value) ?? '')
 const touched = ref(false)
 
 function submit() {
   touched.value = true
-  if (!error.value) emit('submit', parisDateTime(date.value, time.value).toISOString())
+  if (!error.value) emit('submit', at.value.toISOString())
 }
 </script>
 
@@ -53,8 +47,8 @@ function submit() {
           v-model="date"
           type="date"
           class="w-44"
-          :min="today"
-          :max="lastDay"
+          :min="today()"
+          :max="addDays(today(), 365)"
           :aria-invalid="(touched && !!error) || undefined"
           aria-describedby="schedule-hint schedule-error"
         />

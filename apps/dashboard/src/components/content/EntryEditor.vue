@@ -189,41 +189,60 @@ async function saveFirst() {
   return false
 }
 
-async function act(action: 'publish' | 'discard' | 'unpublish', done: string) {
+/** Action sur l'entrée (publier, programmer…) : l'entrée renvoyée par l'API remplace l'affichée,
+ *  et l'action réussie est annoncée. */
+async function act(
+  path: 'publish' | 'discard' | 'unpublish' | 'schedule',
+  done: string,
+  request: { method: 'POST' | 'PUT' | 'DELETE'; body?: object } = {
+    method: 'POST',
+    body: { version },
+  },
+) {
   busy.value = true
+  actionError.value = ''
   try {
-    const result = await api<Entry>(`${base.value}/${action}`, {
-      method: 'POST',
-      body: { version },
-    })
-    apply(result)
+    apply(await api<Entry>(`${base.value}/${path}`, request))
     checking.value = false
     announcement.value = done
     // Publier ou dépublier demande un déploiement : son état est relu.
     deployRefresh.value++
+    return true
   } catch (err) {
-    if (err instanceof ApiError && err.status === 409) state.value = 'conflict'
-    else actionError.value = errorMessage(err)
+    if (err instanceof ApiError && err.code === 'entry_scheduled') {
+      // Programmée dans un autre onglet : la relire affiche la programmation et fige les champs.
+      await load()
+    } else if (err instanceof ApiError && err.status === 409) {
+      state.value = 'conflict'
+    } else {
+      actionError.value = errorMessage(err)
+    }
+    return false
   } finally {
     busy.value = false
   }
 }
 
-async function publish() {
-  if (!(await saveFirst())) return
+/** Avant de publier ou de programmer : la saisie est enregistrée, les contrôles de publication
+ *  passent, et une version anglaise incomplète est confirmée. */
+async function readyToPublish(verb: 'Publier' | 'Programmer') {
+  if (!(await saveFirst())) return false
   checking.value = true
   if (issues.value.length) {
     actionError.value = publicationMessage(issues.value)
-    return focusPath(issues.value[0]!.path)
+    void focusPath(issues.value[0]!.path)
+    return false
   }
-  if (
-    !enComplete.value &&
-    !window.confirm(
-      'La version anglaise est incomplète : cette entrée sera masquée sur le site en anglais. Publier quand même ?',
+  return (
+    enComplete.value ||
+    window.confirm(
+      `La version anglaise est incomplète : cette entrée sera masquée sur le site en anglais. ${verb} quand même ?`,
     )
-  ) {
-    return
-  }
+  )
+}
+
+async function publish() {
+  if (!(await readyToPublish('Publier'))) return
   await act('publish', status.value === 'draft' ? 'Entrée publiée.' : 'Modifications publiées.')
 }
 
@@ -279,53 +298,27 @@ onBeforeRouteUpdate(confirmLeave)
 
 // ── Publication programmée (V3, document UX « Publication programmée ») ───────────────────
 
+/** Classes d'un fieldset figé : ses contrôles désactivés restent lisibles (document UX). */
+const FROZEN = '[&_:disabled]:cursor-default [&_:disabled]:opacity-100'
+
 /** Programmée : la version est figée, les champs sont en lecture seule. */
 const scheduled = computed(() => !!entry.value?.scheduledAt)
 provide(READONLY_KEY, scheduled)
 const panelOpen = ref(false)
 
 async function scheduleAt(at: string) {
-  if (!(await saveFirst())) return
-  checking.value = true
-  if (issues.value.length) {
-    actionError.value = publicationMessage(issues.value)
-    panelOpen.value = false
-    return focusPath(issues.value[0]!.path)
-  }
-  if (
-    !enComplete.value &&
-    !window.confirm(
-      'La version anglaise est incomplète : cette entrée sera masquée sur le site en anglais. Programmer quand même ?',
-    )
-  ) {
+  if (!(await readyToPublish('Programmer'))) {
+    // Des champs à corriger : le panneau se ferme pour les laisser voir.
+    if (issues.value.length) panelOpen.value = false
     return
   }
-  busy.value = true
-  try {
-    apply(await api<Entry>(`${base.value}/schedule`, { method: 'PUT', body: { version, at } }))
+  const done = `Publication programmée le ${formatLongDateTime(at)}.`
+  if (await act('schedule', done, { method: 'PUT', body: { version, at } })) {
     panelOpen.value = false
-    checking.value = false
-    announcement.value = `Publication programmée le ${formatLongDateTime(at)}.`
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 409) state.value = 'conflict'
-    else actionError.value = errorMessage(err)
-  } finally {
-    busy.value = false
   }
 }
 
-async function unschedule(done = 'Programmation annulée.') {
-  busy.value = true
-  actionError.value = ''
-  try {
-    apply(await api<Entry>(`${base.value}/schedule`, { method: 'DELETE' }))
-    announcement.value = done
-  } catch (err) {
-    actionError.value = errorMessage(err)
-  } finally {
-    busy.value = false
-  }
-}
+const unschedule = (done = 'Programmation annulée.') => act('schedule', done, { method: 'DELETE' })
 
 async function editEntry() {
   if (!window.confirm('Modifier l’entrée annule la publication programmée. Continuer ?')) return
@@ -365,9 +358,10 @@ watch(
   () => entry.value?.scheduledAt,
   (at) => {
     clearTimeout(outcomeTimer)
-    const wait = at ? Date.parse(at) - Date.now() + 75_000 : -1
+    if (!at) return
+    const wait = Math.max(0, Date.parse(at) - Date.now() + 75_000)
     // setTimeout ne sait pas attendre plus de 24 jours : au-delà, on relira à la prochaine visite.
-    if (wait >= 0 && wait < 2 ** 31 - 1) outcomeTimer = setTimeout(load, wait)
+    if (wait < 2 ** 31 - 1) outcomeTimer = setTimeout(load, wait)
   },
 )
 const onUnload = (event: BeforeUnloadEvent) => {
@@ -509,11 +503,7 @@ onBeforeUnmount(() => {
     </header>
 
     <!-- Programmée : lecture seule. Le fieldset désactive tous ses contrôles ; ils restent lisibles. -->
-    <fieldset
-      v-if="isCollection"
-      :disabled="scheduled"
-      class="grid max-w-md gap-1.5 [&_:disabled]:cursor-default [&_:disabled]:opacity-100"
-    >
+    <fieldset v-if="isCollection" :disabled="scheduled" :class="['grid max-w-md gap-1.5', FROZEN]">
       <Label for="entry-slug">Identifiant d’URL</Label>
       <Input
         id="entry-slug"
@@ -564,10 +554,7 @@ onBeforeUnmount(() => {
       <p v-if="!type.fields.length" class="text-sm text-muted-foreground">
         Ce type n’a encore aucun champ.
       </p>
-      <fieldset
-        :disabled="scheduled"
-        class="min-w-0 [&_:disabled]:cursor-default [&_:disabled]:opacity-100"
-      >
+      <fieldset :disabled="scheduled" :class="['min-w-0', FROZEN]">
         <legend class="sr-only">
           {{ scheduled ? 'Champs (lecture seule : publication programmée)' : 'Champs' }}
         </legend>

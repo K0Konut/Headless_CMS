@@ -1,3 +1,5 @@
+import { parisParts } from '@dashility/shared'
+
 const integer = new Intl.NumberFormat('fr-FR')
 const percent = new Intl.NumberFormat('fr-FR', { style: 'percent', maximumFractionDigits: 1 })
 const day = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' })
@@ -39,11 +41,6 @@ export function formatBytes(bytes: number) {
   return `${decimal.format(bytes / 1024 / 1024)} Mo`
 }
 
-const parisShort = new Intl.DateTimeFormat('fr-FR', {
-  day: 'numeric',
-  month: 'short',
-  timeZone: 'Europe/Paris',
-})
 const parisLong = new Intl.DateTimeFormat('fr-FR', {
   weekday: 'long',
   day: 'numeric',
@@ -55,19 +52,10 @@ const parisClock = new Intl.DateTimeFormat('fr-FR', {
   minute: '2-digit',
   timeZone: 'Europe/Paris',
 })
-const parisInput = new Intl.DateTimeFormat('en-CA', {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  hourCycle: 'h23',
-  timeZone: 'Europe/Paris',
-})
 
 /** Instant ISO → « 17 nov. à 9:00 », à l'heure de Paris (badge « Programmé »). */
 export const formatShortDateTime = (iso: string) =>
-  `${parisShort.format(new Date(iso))} à ${parisClock.format(new Date(iso))}`
+  `${formatDate(iso)} à ${parisClock.format(new Date(iso))}`
 
 /** Instant ISO → « lundi 17 novembre à 9:00 », à l'heure de Paris. */
 export const formatLongDateTime = (iso: string) =>
@@ -75,6 +63,6 @@ export const formatLongDateTime = (iso: string) =>
 
 /** Date et heure de Paris d'un instant, pour des champs `date` et `time` : `2026-11-17`, `09:00`. */
 export function parisInputs(date: Date) {
-  const p = Object.fromEntries(parisInput.formatToParts(date).map((x) => [x.type, x.value]))
+  const p = parisParts(date)
   return { date: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}` }
 }
