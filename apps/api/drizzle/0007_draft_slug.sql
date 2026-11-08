@@ -1,0 +1,1 @@
+ALTER TABLE "entries" ADD COLUMN "draft_slug" text;

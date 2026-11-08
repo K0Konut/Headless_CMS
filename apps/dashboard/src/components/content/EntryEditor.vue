@@ -87,7 +87,7 @@ function apply(loaded: Entry) {
   entry.value = loaded
   version = loaded.version
   data.value = structuredClone(loaded.draft ?? loaded.published ?? {})
-  slug.value = loaded.slug ?? ''
+  slug.value = loaded.draftSlug ?? loaded.slug ?? ''
   lastSaved.value = snapshot()
 }
 
@@ -118,7 +118,9 @@ async function send() {
   const sent = snapshot()
   state.value = 'saving'
   // Identifiant mal formé : on garde le précédent plutôt que de refuser tout l'enregistrement.
-  const nextSlug = slugInvalid.value ? entry.value!.slug : slug.value || null
+  const nextSlug = slugInvalid.value
+    ? (entry.value!.draftSlug ?? entry.value!.slug)
+    : slug.value || null
   try {
     const saved = await api<Entry & { slugError?: string }>(base.value, {
       method: 'PATCH',
@@ -369,8 +371,8 @@ onBeforeUnmount(() => {
       </p>
       <p id="entry-slug-hint" class="text-sm text-muted-foreground">
         {{
-          entry.publishedAt
-            ? 'Le changer casse les liens déjà partagés vers cette entrée.'
+          entry.published
+            ? `En ligne : ${entry.slug}. Un nouvel identifiant ne s’applique qu’à la publication, et casse alors les liens déjà partagés.`
             : 'Suit le titre français jusqu’à la première publication.'
         }}
       </p>

@@ -50,6 +50,13 @@
       "when": 1794076371022,
       "tag": "0006_deploy",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794159993444,
+      "tag": "0007_draft_slug",
+      "breakpoints": true
     }
   ]
 }
