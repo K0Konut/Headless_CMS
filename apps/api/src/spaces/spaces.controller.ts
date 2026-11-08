@@ -16,7 +16,7 @@ import { CurrentUser, SuperAdminGuard } from '../auth/session.guard.js'
 import type { User } from '../db/index.js'
 import { type SpaceRequest, SpaceAccessGuard } from './guards.js'
 import { uuidOr404 } from '../uuid-or-404.pipe.js'
-import { SpacesService, withoutSecrets } from './spaces.service.js'
+import { SpacesService } from './spaces.service.js'
 
 @Controller('spaces')
 export class SpacesController {
@@ -46,8 +46,7 @@ export class SpaceController {
    *  Intégration) ; l'empreinte de la clé API, jamais. */
   @Get()
   get(@Req() { space, user }: SpaceRequest) {
-    const { id, publicKey, apiKeyCreatedAt, ...rest } = withoutSecrets(space)
-    void id
+    const { id, publicKey, apiKeyCreatedAt, ...rest } = space
     return user.isSuperAdmin ? { ...rest, publicKey, apiKeyCreatedAt } : rest
   }
 

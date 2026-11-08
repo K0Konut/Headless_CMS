@@ -107,6 +107,17 @@ describe('réglages du déploiement', () => {
       hasToken: true,
     })
     expect(JSON.stringify(saved.body)).not.toContain('ghp_x')
+    // Les routes qui renvoient l'espace ne chargent même pas ses secrets.
+    await api('post', '/spaces/portfolio/api-key', admin).expect(201)
+    for (const res of [
+      await api('get', '/spaces/portfolio', admin).expect(200),
+      await api('patch', '/spaces/portfolio', admin).send({ name: 'Portfolio' }).expect(200),
+    ]) {
+      expect(Object.keys(res.body)).not.toEqual(
+        expect.arrayContaining(['deployUrl', 'deployToken', 'apiKeyHash']),
+      )
+      expect(JSON.stringify(res.body)).not.toMatch(/ghp_x|api\.github\.com/)
+    }
     // Un jeton absent du corps reste tel quel ; une URL nulle retire tout.
     await api('put', '/spaces/portfolio/deploy', admin).send({ url: settings.url }).expect(200)
     expect((await api('get', '/spaces/portfolio/deploy', admin)).body.hasToken).toBe(true)
