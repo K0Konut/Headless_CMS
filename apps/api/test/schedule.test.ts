@@ -134,6 +134,18 @@ describe('publication programmée', () => {
       .expect(200)
   })
 
+  it('annuler une programmation déjà publiée par la tâche ne l’efface pas (409)', async () => {
+    const entry = await entryWith(READY)
+    await api('put', `${BASE}/${entry.id}/schedule`, member)
+      .send({ version: entry.version, at: inHours(24) })
+      .expect(200)
+    await runDue(entry.id)
+    const late = await api('delete', `${BASE}/${entry.id}/schedule`, member).expect(409)
+    expect(late.body.error.code).toBe('not_scheduled')
+    const after = (await api('get', `${BASE}/${entry.id}`, member).expect(200)).body
+    expect(after.lastSchedule).toMatchObject({ outcome: 'published' })
+  })
+
   it('un changement de structure annule la programmation, avec un message', async () => {
     const entry = await entryWith(READY)
     await api('put', `${BASE}/${entry.id}/schedule`, member)

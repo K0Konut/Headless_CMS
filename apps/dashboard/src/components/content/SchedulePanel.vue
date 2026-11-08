@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { parisDateTime, scheduleIssue } from '@dashility/shared'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -22,12 +22,16 @@ const time = ref(start.time)
 const at = computed(() =>
   date.value && time.value ? parisDateTime(date.value, time.value) : new Date(NaN),
 )
-const error = computed(() => scheduleIssue(at.value) ?? '')
+// L'heure avance pendant que le panneau est ouvert : la borne est revérifiée à l'envoi.
+const checked = ref('')
+const error = computed(() => (touched.value ? checked.value : ''))
 const touched = ref(false)
+watch(at, () => (checked.value = scheduleIssue(at.value) ?? ''))
 
 function submit() {
   touched.value = true
-  if (!error.value) emit('submit', at.value.toISOString())
+  checked.value = scheduleIssue(at.value) ?? ''
+  if (!checked.value) emit('submit', at.value.toISOString())
 }
 </script>
 
@@ -49,7 +53,7 @@ function submit() {
           class="w-44"
           :min="today()"
           :max="addDays(today(), 365)"
-          :aria-invalid="(touched && !!error) || undefined"
+          :aria-invalid="!!error || undefined"
           aria-describedby="schedule-hint schedule-error"
         />
       </div>
@@ -60,13 +64,13 @@ function submit() {
           v-model="time"
           type="time"
           class="w-32"
-          :aria-invalid="(touched && !!error) || undefined"
+          :aria-invalid="!!error || undefined"
           aria-describedby="schedule-hint schedule-error"
         />
       </div>
       <p id="schedule-hint" class="pb-2 text-sm text-muted-foreground">heure de Paris</p>
     </div>
-    <p v-if="touched && error" id="schedule-error" class="text-sm text-destructive">
+    <p v-if="error" id="schedule-error" class="text-sm text-destructive">
       {{ error }}
     </p>
     <div class="flex flex-wrap gap-2">

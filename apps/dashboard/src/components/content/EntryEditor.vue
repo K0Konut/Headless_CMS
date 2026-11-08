@@ -135,6 +135,7 @@ async function send() {
     saveError.value = ''
     slugError.value = saved.slugError ?? ''
   } catch (err) {
+    if (await reloadIfStale(err)) return
     const conflict = err instanceof ApiError && err.status === 409
     state.value = conflict ? 'conflict' : 'error'
     saveError.value = conflict ? '' : errorMessage(err)
@@ -191,6 +192,16 @@ async function saveFirst() {
 
 /** Action sur l'entrée (publier, programmer…) : l'entrée renvoyée par l'API remplace l'affichée,
  *  et l'action réussie est annoncée. */
+/** La programmation a changé ailleurs (programmée dans un autre onglet, ou déjà publiée par la
+ *  tâche) : on relit l'entrée, dont l'état s'explique de lui-même. */
+async function reloadIfStale(err: unknown) {
+  if (!(err instanceof ApiError) || !['entry_scheduled', 'not_scheduled'].includes(err.code)) {
+    return false
+  }
+  await load()
+  return true
+}
+
 async function act(
   path: 'publish' | 'discard' | 'unpublish' | 'schedule',
   done: string,
@@ -206,12 +217,11 @@ async function act(
     checking.value = false
     announcement.value = done
     // Publier ou dépublier demande un déploiement : son état est relu.
-    deployRefresh.value++
+    if (path === 'publish' || path === 'unpublish') deployRefresh.value++
     return true
   } catch (err) {
-    if (err instanceof ApiError && err.code === 'entry_scheduled') {
-      // Programmée dans un autre onglet : la relire affiche la programmation et fige les champs.
-      await load()
+    if (await reloadIfStale(err)) {
+      // L'état relu explique ce qui s'est passé.
     } else if (err instanceof ApiError && err.status === 409) {
       state.value = 'conflict'
     } else {
@@ -352,6 +362,14 @@ const outcome = computed(() => {
   }
 })
 
+/** Relit l'entrée après l'heure prévue. Pas encore traitée (serveur arrêté ou en retard) : on
+ *  réessaie dans une minute. */
+async function checkOutcome() {
+  await load()
+  const at = entry.value?.scheduledAt
+  if (at && Date.parse(at) < Date.now()) outcomeTimer = setTimeout(checkOutcome, 60_000)
+}
+
 // Une fois l'heure prévue passée, l'issue est relue (la tâche passe chaque minute).
 let outcomeTimer: ReturnType<typeof setTimeout> | undefined
 watch(
@@ -361,7 +379,7 @@ watch(
     if (!at) return
     const wait = Math.max(0, Date.parse(at) - Date.now() + 75_000)
     // setTimeout ne sait pas attendre plus de 24 jours : au-delà, on relira à la prochaine visite.
-    if (wait < 2 ** 31 - 1) outcomeTimer = setTimeout(load, wait)
+    if (wait < 2 ** 31 - 1) outcomeTimer = setTimeout(checkOutcome, wait)
   },
 )
 const onUnload = (event: BeforeUnloadEvent) => {
@@ -427,7 +445,7 @@ onBeforeUnmount(() => {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
-            <DropdownMenuItem v-if="status !== 'draft'" @select="unpublish">
+            <DropdownMenuItem v-if="status !== 'draft' && !scheduled" @select="unpublish">
               <Undo2 aria-hidden="true" />Dépublier
             </DropdownMenuItem>
             <DropdownMenuItem v-if="isCollection" variant="destructive" @select="remove">

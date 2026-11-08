@@ -3,6 +3,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common'
 import {
@@ -19,7 +20,7 @@ import {
   type LastSchedule,
   type EntryData,
 } from '@dashility/shared'
-import { and, desc, eq, lte, ne, or } from 'drizzle-orm'
+import { and, desc, eq, isNotNull, lte, ne, or } from 'drizzle-orm'
 import { Cron } from '@nestjs/schedule'
 import type { z } from 'zod'
 import { DB } from '../db/db.module.js'
@@ -76,6 +77,8 @@ export type EntryRef = string | 'single'
 
 @Injectable()
 export class EntriesService {
+  private readonly logger = new Logger(EntriesService.name)
+
   constructor(
     @Inject(DB) private readonly db: Db,
     private readonly types: TypesService,
@@ -297,10 +300,16 @@ export class EntriesService {
     const [entry] = await this.db
       .update(entries)
       .set({ scheduledAt: null, lastSchedule: null })
-      .where(this.byId(type, id))
+      // Déjà publiée par la tâche (ou annulée ailleurs) : ne pas effacer l'issue ni annoncer une
+      // annulation qui n'a pas eu lieu.
+      .where(and(this.byId(type, id), isNotNull(entries.scheduledAt)))
       .returning(entryColumns)
-    if (!entry) throw new NotFoundException('Entrée introuvable')
-    return entry
+    if (entry) return entry
+    await this.get(space, typeSlug, id)
+    throw new ConflictException({
+      code: 'not_scheduled',
+      message: 'Cette entrée n’est plus programmée : elle a peut-être déjà été publiée',
+    })
   }
 
   /** Publications programmées arrivées à l'heure, chaque minute (architecture, « Exécution »).
@@ -338,17 +347,14 @@ export class EntriesService {
             .set({ scheduledAt: null, lastSchedule })
             .where(eq(entries.id, entry.id))
 
-        const { issues, change } = publication(type, entry)
-        if (!change) {
-          await end(outcome('cancelled'))
-          continue
-        }
-        // Une règle a changé depuis la programmation : rien n'est publié.
-        if (issues.length) {
-          await end(outcome('failed', publicationMessage(issues)))
-          continue
-        }
         try {
+          const { issues, change } = publication(type, entry)
+          // Une règle a changé depuis la programmation : rien n'est publié. (Sans brouillon, rien
+          // à publier : impossible, puisque l'écriture qui le retire annule la programmation.)
+          if (!change || issues.length) {
+            await end(outcome('failed', change ? publicationMessage(issues) : 'rien à publier'))
+            continue
+          }
           // Point de reprise : un identifiant pris entre-temps n'annule pas les autres publications.
           await tx.transaction((step) =>
             step
@@ -363,8 +369,10 @@ export class EntriesService {
           )
           published.add(type.spaceId)
         } catch (err) {
-          if (!isUniqueViolation(err)) throw err
-          await end(outcome('failed', SLUG_TAKEN))
+          // Une entrée en erreur ne bloque pas les autres : elle est marquée en échec, et la tâche
+          // ne la reprendra pas à la minute suivante.
+          if (!isUniqueViolation(err)) this.logger.error(err)
+          await end(outcome('failed', isUniqueViolation(err) ? SLUG_TAKEN : 'erreur interne'))
         }
       }
       return published
