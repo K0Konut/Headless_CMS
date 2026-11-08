@@ -12,6 +12,7 @@ import {
   isEnComplete,
   mediaRefs,
   publicationIssues,
+  publicationMessage,
   type saveEntrySchema,
 } from '@dashility/shared'
 import { and, desc, eq, ne, or, sql } from 'drizzle-orm'
@@ -179,10 +180,7 @@ export class EntriesService {
     if (issues.length) {
       throw new BadRequestException({
         code: 'publication_invalid',
-        message:
-          issues.length === 1
-            ? `Publication impossible : ${issues[0]!.message.toLowerCase()}`
-            : `Publication impossible : ${issues.length} champs à corriger`,
+        message: publicationMessage(issues),
         issues,
       })
     }

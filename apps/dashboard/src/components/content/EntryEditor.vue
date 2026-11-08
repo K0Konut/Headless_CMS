@@ -6,6 +6,7 @@ import {
   entryTitle,
   isEnComplete,
   publicationIssues,
+  publicationMessage,
 } from '@dashility/shared'
 import { ArrowLeft, Ellipsis, Trash2, Undo2 } from '@lucide/vue'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
@@ -211,8 +212,7 @@ async function publish() {
   if (!(await saveFirst())) return
   checking.value = true
   if (issues.value.length) {
-    const n = issues.value.length
-    actionError.value = `Publication impossible : ${n === 1 ? 'un champ' : `${n} champs`} à corriger.`
+    actionError.value = publicationMessage(issues.value)
     return focusPath(issues.value[0]!.path)
   }
   if (
@@ -226,23 +226,22 @@ async function publish() {
   await act('publish', status.value === 'draft' ? 'Entrée publiée.' : 'Modifications publiées.')
 }
 
-async function discard() {
-  if (!(await saveFirst())) return
-  if (!window.confirm('Annuler les modifications et revenir à la version en ligne ?')) return
-  await act('discard', 'Modifications annulées : la version en ligne est rétablie.')
+/** Action confirmée : la saisie est d'abord enregistrée, puis la question posée. */
+async function confirmAndAct(action: 'discard' | 'unpublish', question: string, done: string) {
+  if ((await saveFirst()) && window.confirm(question)) await act(action, done)
 }
-
-async function unpublish() {
-  if (!(await saveFirst())) return
-  if (
-    !window.confirm(
-      'Dépublier cette entrée ? Elle repasse en brouillon et sera retirée du site au prochain déploiement.',
-    )
-  ) {
-    return
-  }
-  await act('unpublish', 'Entrée dépubliée : elle est de nouveau en brouillon.')
-}
+const discard = () =>
+  confirmAndAct(
+    'discard',
+    'Annuler les modifications et revenir à la version en ligne ?',
+    'Modifications annulées : la version en ligne est rétablie.',
+  )
+const unpublish = () =>
+  confirmAndAct(
+    'unpublish',
+    'Dépublier cette entrée ? Elle repasse en brouillon et sera retirée du site au prochain déploiement.',
+    'Entrée dépubliée : elle est de nouveau en brouillon.',
+  )
 
 async function remove() {
   const name = title.value || 'Sans titre'

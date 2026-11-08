@@ -2,7 +2,7 @@
 import { LINK_ERROR, type RichtextDoc, isValidLink } from '@dashility/shared'
 import { Bold, Heading2, Heading3, Highlighter, Italic, Link, List, ListOrdered } from '@lucide/vue'
 import { EditorContent, useEditor } from '@tiptap/vue-3'
-import { type Component, computed, onBeforeUnmount, watch } from 'vue'
+import { type Component, computed, onBeforeUnmount, toRaw, watch } from 'vue'
 import { richtextExtensions } from '@dashility/shared/richtext'
 
 /** Texte riche (document UX, « Les types de champs ») : éditeur visuel limité, avec sa barre
@@ -15,6 +15,9 @@ const props = defineProps<{
   describedby?: string
 }>()
 const model = defineModel<unknown>()
+
+/** Dernière valeur envoyée par l'éditeur. */
+let emitted: unknown
 
 const editor = useEditor({
   extensions: richtextExtensions,
@@ -31,7 +34,8 @@ const editor = useEditor({
     },
   },
   onUpdate: ({ editor }) => {
-    model.value = editor.isEmpty ? null : editor.getJSON()
+    emitted = editor.isEmpty ? null : editor.getJSON()
+    model.value = emitted
   },
 })
 
@@ -39,7 +43,8 @@ const editor = useEditor({
 // la reprend, sans renvoyer de modification.
 watch(model, (value) => {
   const current = editor.value
-  if (!current) return
+  // Sa propre modification, renvoyée par le parent : rien à reprendre.
+  if (!current || toRaw(value) === emitted) return
   const mine = current.isEmpty ? null : current.getJSON()
   if (JSON.stringify(mine) === JSON.stringify(value ?? null)) return
   current.commands.setContent((value as RichtextDoc | null) ?? '', { emitUpdate: false })

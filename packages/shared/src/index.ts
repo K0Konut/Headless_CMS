@@ -664,6 +664,13 @@ function collectIssues(fields: Field[], data: EntryData, prefix: string, out: Pu
   }
 }
 
+/** Message d'une publication refusée, le même dans l'API et dans le dashboard. */
+export function publicationMessage(issues: PublicationIssue[]) {
+  return issues.length === 1
+    ? `Publication impossible : ${issues[0]!.message.charAt(0).toLowerCase()}${issues[0]!.message.slice(1)}`
+    : `Publication impossible : ${issues.length} champs à corriger`
+}
+
 /** Contrôles de publication (document UX, « Publier ») : champs obligatoires en français, formats
  *  (lien, nombre entier, dates, longueur, nombre d'éléments d'un groupe) et, pour une
  *  collection, l'identifiant d'URL. Liste vide : l'entrée peut être publiée. */

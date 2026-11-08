@@ -59,7 +59,7 @@ test('envoyer une image et un PDF, avec les textes alternatifs, puis publier', a
   await page.getByRole('button', { name: 'Publier', exact: true }).click()
   const altFr = page.getByLabel('Texte alternatif (français)')
   await expect(altFr).toBeFocused()
-  await expect(page.getByText('Texte alternatif obligatoire')).toBeVisible()
+  await expect(page.getByText('Texte alternatif obligatoire', { exact: true })).toBeVisible()
   await altFr.fill('Léa devant son bureau')
   await page.getByLabel('Texte alternatif (anglais)').fill('Léa at her desk')
 
