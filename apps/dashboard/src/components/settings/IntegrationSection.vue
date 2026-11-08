@@ -9,7 +9,7 @@ import SettingsSection from './SettingsSection.vue'
 const props = defineProps<{ space: SpaceDetail }>()
 
 const snippet = computed(
-  () => `import { initAnalytics } from '@dashility/client'
+  () => `import { initAnalytics } from 'dashility'
 
 initAnalytics({
   key: '${props.space.publicKey}',
@@ -28,7 +28,7 @@ const projets = await res.json()`
   <SettingsSection
     id="integration"
     title="Intégration"
-    description="Installez le package @dashility/client dans le site, puis appelez initAnalytics au démarrage."
+    description="Installez le package dashility dans le site, puis appelez initAnalytics au démarrage."
   >
     <div class="grid max-w-2xl grid-cols-1 gap-4">
       <div class="grid grid-cols-1 gap-2">

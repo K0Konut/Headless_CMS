@@ -1,8 +1,12 @@
 {
-  "name": "@dashility/client",
+  "name": "dashility",
   "version": "0.1.0",
   "description": "Script analytics des sites gérés par Dashility",
-  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/K0Konut/Headless_CMS.git",
+    "directory": "packages/client"
+  },
   "type": "module",
   "sideEffects": false,
   "files": [
@@ -16,7 +20,8 @@
   },
   "scripts": {
     "build": "vite build && tsc -p tsconfig.build.json && node scripts/check-size.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
   },
   "devDependencies": {
     "happy-dom": "^21.0.4",
