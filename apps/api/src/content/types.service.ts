@@ -19,6 +19,7 @@ import { DB } from '../db/db.module.js'
 import { isUniqueViolation } from '../db/errors.js'
 import type { Db } from '../db/index.js'
 import { contentTypes, entries } from '../db/schema.js'
+import { nextVersion } from './schedule.js'
 import type { Space } from '../spaces/guards.js'
 
 /** Ce que l'API renvoie d'un type : sans identifiants internes. */
@@ -115,10 +116,7 @@ export class TypesService {
       if (isDeepStrictEqual(current.fields, body.fields)) return
       // Champs modifiés : toutes les entrées changent de version, pour qu'un éditeur ouvert sur
       // l'ancienne structure recharge au lieu d'envoyer des valeurs qu'elle ne connaît plus.
-      await tx
-        .update(entries)
-        .set({ version: sql`${entries.version} + 1` })
-        .where(eq(entries.typeId, current.id))
+      await tx.update(entries).set(nextVersion()).where(eq(entries.typeId, current.id))
       // Les valeurs des champs ou des choix supprimés disparaissent des entrées.
       const rows = await tx.select().from(entries).where(eq(entries.typeId, current.id))
       const pruner = entryPruner(body.fields)
@@ -180,6 +178,7 @@ export class TypesService {
             total: sql<number>`count(${entries.id})::int`,
             published: sql<number>`count(${entries.id}) filter (where ${entries.published} is not null)::int`,
             enIncomplete: sql<number>`count(${entries.id}) filter (where not ${entries.enComplete})::int`,
+            scheduled: sql<number>`count(${entries.id}) filter (where ${entries.scheduledAt} is not null)::int`,
           },
         })
         .from(contentTypes)

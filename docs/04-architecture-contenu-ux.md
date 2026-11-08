@@ -2,7 +2,7 @@
 
 4 novembre 2026, complété le 6 novembre 2026 pour la V2 · s'appuie sur `01-PRD.md` et `decisions.md`
 
-Ce document organise les écrans et les parcours du dashboard. Les écrans V1 et V2 sont détaillés (wireframes et états) ; la V3 n'est décrite qu'en arborescence et en parcours.
+Ce document organise les écrans et les parcours du dashboard. Les écrans V1 et V2 sont détaillés (wireframes et états), ainsi que la publication programmée de la V3 ; le reste de la V3 n'est décrit qu'en arborescence et en parcours.
 
 Méthode allégée : pas de territoire de marque ni de DA. Le dashboard est neutre et construit avec shadcn-vue (PRD, « Exigences de qualité »).
 
@@ -442,6 +442,71 @@ La V2 est acceptée quand le super-admin peut créer ces types dans Structure, s
 
 **CV** (page unique) : un champ « Fichier PDF » traduisible et obligatoire.
 
+## V3 : publication programmée
+
+On choisit le jour et l'heure où une entrée part en ligne : un projet relu le vendredi est publié le lundi à 9 h.
+
+### Principes
+
+- **On programme une version relue.** La programmation fige l'entrée telle qu'elle est : c'est cette version qui part en ligne, jamais une phrase en cours d'écriture (principe de la V2).
+- **Modifier l'entrée annule la programmation.** Pendant une programmation, les champs sont en lecture seule. Le bouton « Modifier l'entrée » annule la programmation, après confirmation, et rend les champs modifiables. Une modification venue d'ailleurs (un autre membre, un changement de structure) l'annule aussi, et l'éditeur dit pourquoi.
+- **On ne programme que la publication.** « Publier » pour un brouillon, « Publier les modifications » pour une entrée en ligne. Dépublier reste immédiat.
+- **À la minute, à l'heure de Paris.** L'entrée est publiée dans la minute qui suit l'heure choisie, puis le déploiement est demandé comme pour une publication manuelle.
+- **Mêmes droits et mêmes contrôles que « Publier ».** Tout membre de l'espace peut programmer. Les champs obligatoires en français et les formats sont vérifiés au moment de programmer ; une version anglaise incomplète demande la même confirmation.
+
+### Statut et badge
+
+| Situation | Badge dans les listes | Ce que voit le site |
+| --- | --- | --- |
+| Brouillon programmé | « Brouillon » + « Programmé le 17 nov. à 9:00 » | Rien, jusqu'à l'heure prévue |
+| Publié, modifications programmées | « Publié » + « Programmé le 17 nov. à 9:00 » | La version publiée, jusqu'à l'heure prévue |
+
+- **Liste des entrées** : filtre « Programmées » en plus des autres.
+- **Contenu** : la carte d'un type compte ses entrées programmées (« 1 programmé »).
+
+### Programmer, dans l'éditeur
+
+```
+Ce portfolio                                    Brouillon
+Enregistré à 14:02                [Publier] [Programmer…] [⋯]
+
+          ┌ Programmer la publication ─────────────────────┐
+          │ Date   [17/11/2026]   Heure  [09:00]  heure de Paris │
+          │                       [Annuler] [Programmer]    │
+          └─────────────────────────────────────────────────┘
+```
+
+- **« Programmer… »** est à côté de « Publier » (ou de « Publier les modifications »). Il ouvre un panneau sous l'en-tête : date et heure, avec l'indication « heure de Paris ». La date proposée est demain à 9:00.
+- **Bornes** : au moins une minute dans le futur, au plus un an. Une heure passée est refusée sur le champ (« Choisissez une date à venir »).
+- **« Programmer »** enregistre d'abord la saisie en cours, puis fait les contrôles de « Publier ». S'il manque des champs, la programmation est refusée et les champs fautifs sont signalés, comme pour une publication.
+
+### Pendant la programmation
+
+```
+Ce portfolio                          Brouillon · Programmé
+┌──────────────────────────────────────────────────────────────┐
+│ ⏱ Publication programmée le lundi 17 novembre à 9:00          │
+│   (heure de Paris). Les champs sont en lecture seule.        │
+│   [Changer la date] [Annuler la programmation] [Modifier l'entrée] │
+└──────────────────────────────────────────────────────────────┘
+Titre *        [Ce portfolio      ] (lecture seule)
+```
+
+- **Changer la date** : rouvre le panneau, avec la date actuelle.
+- **Annuler la programmation** : l'entrée reste dans son état (brouillon, ou publiée avec ses modifications en attente). Pas de confirmation : rien n'est perdu.
+- **Modifier l'entrée** : confirmation (« Modifier l'entrée annule la publication programmée. Continuer ? »), puis les champs redeviennent modifiables.
+- **Publier tout de suite** reste possible : « Publier » publie maintenant et retire la programmation.
+- Les champs en lecture seule restent lisibles et sélectionnables (pas grisés au point d'être illisibles), et annoncés comme tels aux lecteurs d'écran.
+
+### Après l'heure prévue
+
+| État | Affichage dans l'éditeur |
+| --- | --- |
+| Publiée | Le badge « Programmé » disparaît ; message « Publiée le 17 nov. à 9:00, comme prévu » jusqu'au prochain enregistrement. L'état du déploiement s'affiche comme d'habitude |
+| Serveur arrêté à l'heure prévue | L'entrée est publiée dès son redémarrage ; le message donne l'heure réelle (« Publiée le 17 nov. à 9:12, au lieu de 9:00 ») |
+| Programmation annulée par une modification venue d'ailleurs | Bandeau « La publication programmée du 17 nov. à 9:00 a été annulée : l'entrée a été modifiée (par un membre ou par un changement de structure). » et le bouton « Programmer à nouveau » |
+| Publication refusée à l'heure prévue (cas rare : une règle a changé depuis) | Bandeau d'erreur « La publication programmée du 17 nov. à 9:00 a échoué : … », les champs fautifs signalés ; l'entrée reste dans son état |
+
 ## Parcours utilisateurs
 
 ### 1. Toi, premier lancement : brancher le portfolio (V1)
@@ -499,11 +564,15 @@ flowchart LR
 
 Il ouvre le projet depuis Contenu › Projets et corrige une phrase : la correction est enregistrée, l'entrée affiche « Modifications non publiées », et le site garde l'ancienne version. Il clique sur « Publier les modifications » ; le déploiement est demandé et son état s'affiche dans l'en-tête. S'il change d'avis avant de publier, « Annuler les modifications » le ramène à la version en ligne.
 
+### 8. Toi : publier un projet lundi à 9 h (V3)
+
+Le vendredi, tu termines le projet, puis « Programmer… » : lundi, 9:00. Les contrôles passent, l'entrée affiche « Programmé le 17 nov. à 9:00 » et ses champs passent en lecture seule. Le lundi à 9:00, elle est publiée et le déploiement est demandé ; le site est à jour quelques minutes plus tard. Si tu avais voulu corriger une faute entre-temps, « Modifier l'entrée » aurait annulé la programmation : il aurait fallu la relancer après la correction.
+
 ## V3 et au-delà : ce qui s'ajoute
 
 | Écran | Rôle | Version |
 | --- | --- | --- |
-| Éditeur d'entrée | Boutons « Prévisualiser » et « Programmer la publication » | V3 |
+| Éditeur d'entrée | Bouton « Prévisualiser » (la publication programmée est détaillée plus haut) | V3 |
 | Analytics | Classement des projets par score et projets mis en avant | V3 |
 | Connexion et Mon compte | Double authentification TOTP : étape de code à la connexion, activation dans Mon compte, désactivation par le super-admin si un membre perd son téléphone | Après la V1 |
 

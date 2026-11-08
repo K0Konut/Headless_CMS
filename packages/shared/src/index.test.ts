@@ -17,6 +17,8 @@ import {
   frozenFieldChange,
   isEnComplete,
   isValidLink,
+  parisDateTime,
+  scheduleIssue,
   passwordSchema,
   siteUrlSchema,
   slugSchema,
@@ -519,4 +521,25 @@ describe('médias', () => {
     ).toBe(false)
     expect(entryDataSchema(fields).safeParse({ cv: { fr: '../etc/passwd' } }).success).toBe(false)
   })
+})
+
+describe('parisDateTime', () => {
+  it.each([
+    ['hiver (UTC+1)', '2026-11-17', '09:00', '2026-11-17T08:00:00.000Z'],
+    ['été (UTC+2)', '2026-07-01', '09:00', '2026-07-01T07:00:00.000Z'],
+    ['heure inexistante, avancée', '2026-03-29', '02:30', '2026-03-29T01:30:00.000Z'],
+    ['heure en double, la seconde', '2026-10-25', '02:30', '2026-10-25T01:30:00.000Z'],
+    ['minuit', '2026-12-31', '00:00', '2026-12-30T23:00:00.000Z'],
+  ])('%s', (_, date, time, iso) => {
+    expect(parisDateTime(date, time).toISOString()).toBe(iso)
+  })
+})
+
+it('borne une publication programmée entre une minute et un an', () => {
+  const now = Date.parse('2026-11-08T12:00:00Z')
+  const at = (ms: number) => scheduleIssue(new Date(now + ms), now)
+  expect(at(30_000)).toMatch(/à venir/)
+  expect(at(120_000)).toBeNull()
+  expect(at(367 * 86_400_000)).toMatch(/année/)
+  expect(scheduleIssue(new Date('x'), now)).toMatch(/date et une heure/)
 })
