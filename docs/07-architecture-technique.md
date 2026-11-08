@@ -2,7 +2,7 @@
 
 4 novembre 2026, complété le 6 novembre 2026 pour la V2 · s'appuie sur `01-PRD.md`, `04-architecture-contenu-ux.md` et `decisions.md`
 
-Ce document fixe comment la V1 (analytics) est construite, puis la V2 (contenu) dans la section « V2 : contenu ».
+Ce document fixe comment la V1 (analytics) est construite, puis la V2 (contenu) dans la section « V2 : contenu », et la publication programmée de la V3 dans « V3 : publication programmée ».
 
 ## Vue d'ensemble
 
@@ -383,6 +383,50 @@ Authorization: Bearer <clé API de l'espace>
 - **Objectif de moins de 5 minutes** (PRD) : environ 2 à 3 min de build, puis la tâche cron du serveur. Elle passe de 5 minutes à 1 minute pour le portfolio, sinon l'attente seule peut dépasser l'objectif.
 - Le contenu Markdown et TypeScript actuel est recopié dans les types du document UX, puis lu par l'API au build.
 
+## V3 : publication programmée
+
+S'appuie sur le document UX, section « V3 : publication programmée », et sur les décisions du 8 novembre 2026.
+
+### Données
+
+`entries` gagne trois colonnes :
+
+| Colonne | Rôle |
+| --- | --- |
+| `scheduled_at` (timestamptz, null) | Heure prévue de la publication ; null s'il n'y a pas de programmation |
+| `scheduled_version` (int, null) | Version de l'entrée programmée : c'est elle, et seulement elle, qui sera publiée |
+| `last_schedule` (jsonb, null) | Issue de la dernière programmation, pour le message de l'éditeur : `{ plannedAt, outcome, at, message? }`, avec `outcome` = `published`, `cancelled` ou `failed` |
+
+- **Une version figée sans copie** : comme toute modification annule la programmation, la version programmée est simplement la version actuelle de l'entrée. Pas de troisième exemplaire du contenu.
+- **Index partiel** sur `scheduled_at` (`where scheduled_at is not null`) : la tâche de chaque minute ne lit que les entrées programmées.
+- `last_schedule` est effacé à la prochaine écriture de l'entrée : le message « Publiée comme prévu » ne reste que jusqu'au prochain enregistrement (document UX).
+
+### Ce qui annule une programmation
+
+Toute écriture qui change la version de l'entrée annule sa programmation, dans la même requête SQL : `scheduled_at` et `scheduled_version` passent à null et `last_schedule` reçoit `{ outcome: 'cancelled' }`.
+
+- **« Modifier l'entrée »** : le dashboard appelle d'abord l'annulation (route ci-dessous), puis rend les champs modifiables. La sauvegarde automatique d'une entrée programmée est refusée par l'API (409, code `entry_scheduled`) : un éditeur ouvert avant la programmation ne peut donc rien écrire sans le savoir.
+- **Changement de structure** : `TypesService.update` change déjà la version de toutes les entrées du type (V2) ; il annule leurs programmations au passage.
+- **« Publier » maintenant, « Annuler les modifications », « Dépublier »** : ils changent la version, donc retirent la programmation. « Publier » ne laisse pas de message d'annulation, puisque c'est la publication voulue.
+
+### Programmer, annuler
+
+| Méthode et route | Accès | Rôle |
+| --- | --- | --- |
+| `PUT /spaces/:slug/types/:type/entries/:id/schedule` | Membre | `{ version, at }` : programme ou change la date. Mêmes contrôles que `publish` (`publicationIssues`, identifiant d'URL), `at` entre maintenant + 1 min et + 1 an. N'écrit que si `version` est la version actuelle, et ne la change pas |
+| `DELETE /spaces/:slug/types/:type/entries/:id/schedule` | Membre | Annule la programmation, sans message d'annulation (c'est un choix, pas un incident) |
+
+- L'entrée renvoyée par l'API gagne `scheduledAt` et `lastSchedule` ; la liste des entrées, `scheduledAt` ; les compteurs d'un type, `scheduled`.
+- `at` est un instant ISO en UTC. Le dashboard convertit la date et l'heure saisies **à l'heure de Paris**, quelle que soit l'heure de l'ordinateur ; le helper partagé `parisDateTime(date, time)` calcule le décalage avec `Intl` (heure d'été comprise). Une heure qui n'existe pas (le passage à l'heure d'été, 2:30 un dernier dimanche de mars) est avancée à l'heure suivante.
+
+### Exécution
+
+- **Une tâche chaque minute** (`@nestjs/schedule`, `@Cron('* * * * *')`) lit les entrées dont `scheduled_at <= now()`, avec `for update skip locked` : deux instances de l'API ne publieraient pas deux fois la même entrée.
+- **Pour chaque entrée** : si la version est toujours `scheduled_version`, la publication est faite comme `publish` (mêmes contrôles, même écriture : `published` reçoit `draft`, l'identifiant en attente passe en ligne, la version change) ; `last_schedule` reçoit `{ outcome: 'published', at }`. Si un contrôle échoue (une règle a changé), rien n'est publié et `last_schedule` reçoit `{ outcome: 'failed', message }`. Dans tous les cas, la programmation est retirée.
+- **Déploiement** : chaque espace touché reçoit `DeployService.schedule`, donc un seul build pour plusieurs publications de la même minute.
+- **Rattrapage** : une publication manquée pendant un arrêt de l'API part au premier passage de la tâche après le démarrage (au plus une minute). `last_schedule.at` garde l'heure réelle, que l'éditeur affiche à côté de l'heure prévue.
+- **Auteur** : la tâche ne change pas `updated_by`, qui reste l'auteur de la dernière modification du contenu publié.
+
 ## Environnements et déploiement
 
 | Environnement | Comment |
@@ -443,3 +487,9 @@ Même principe : une branche et une PR vers `dev` par étape, et chaque étape l
 7. `feat/dev/deploiement_publication` : URL de déploiement, regroupement, état dans l'éditeur et dans Réglages.
 
 Puis la release, et la migration du portfolio (dans son dépôt), à la demande du propriétaire.
+
+## Ordre de construction de la V3 (publication programmée)
+
+1. `feat/dev/programmation` : colonnes et migration, annulation dans les écritures, routes `schedule`, tâche de chaque minute, helper `parisDateTime`, puis l'éditeur (panneau « Programmer… », bandeau, lecture seule, messages d'issue), le badge, le filtre et le compteur. Une seule branche : l'API seule ne serait pas utilisable.
+
+Puis la release, à la demande du propriétaire. La prévisualisation et la mise en avant attendront que le portfolio soit branché sur Dashility.
