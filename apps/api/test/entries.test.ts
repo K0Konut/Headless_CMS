@@ -75,7 +75,7 @@ describe('entrées', () => {
       expect.objectContaining({ title: 'Ce portfolio', status: 'draft', enComplete: true }),
     ])
     const types = await api('get', '/spaces/portfolio/types', member).expect(200)
-    expect(types.body[0].counts).toEqual({ total: 1, published: 0, enIncomplete: 0 })
+    expect(types.body[0].counts).toEqual({ total: 1, published: 0, enIncomplete: 0, scheduled: 0 })
   })
 
   it('refuse une version périmée : rien n’est écrasé sans le savoir', async () => {
@@ -211,7 +211,7 @@ describe('publication', () => {
     const res = await act(entry.id, 'publish', entry.version).expect(200)
     expect(res.body.enComplete).toBe(false)
     const types = await api('get', '/spaces/portfolio/types', member).expect(200)
-    expect(types.body[0].counts).toEqual({ total: 1, published: 1, enIncomplete: 1 })
+    expect(types.body[0].counts).toEqual({ total: 1, published: 1, enIncomplete: 1, scheduled: 0 })
   })
 
   it('annule les modifications en revenant à la version en ligne', async () => {
