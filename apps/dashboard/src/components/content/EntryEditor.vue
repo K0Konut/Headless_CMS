@@ -9,6 +9,7 @@ import {
   publicationMessage,
 } from '@dashility/shared'
 import { ArrowLeft, CalendarClock, Ellipsis, Trash2, Undo2 } from '@lucide/vue'
+import { useMediaQuery } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
 import { RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate, useRouter } from 'vue-router'
 import FormError from '@/components/FormError.vue'
@@ -290,8 +291,15 @@ async function remove() {
   }
 }
 
-/** Langue affichée sous 768 px, où les deux colonnes ne tiennent pas. */
-const lang = ref<'fr' | 'en'>('fr')
+/** Langues affichées : les deux côte à côte, ou une seule pour avoir la place d'écrire.
+ *  Sous 768 px, les deux colonnes ne tiennent pas : « côte à côte » affiche le français. */
+const view = ref<'both' | 'fr' | 'en'>('both')
+const isMobile = useMediaQuery('(max-width: 767px)')
+const lang = computed(() => (isMobile.value && view.value === 'both' ? 'fr' : view.value))
+const views = computed(() =>
+  isMobile.value ? (['fr', 'en'] as const) : (['both', 'fr', 'en'] as const),
+)
+const VIEW_NAMES = { both: 'Côte à côte', fr: 'Français', en: 'English' }
 
 // On ne quitte pas l'éditeur avec une saisie non enregistrée : retour à la liste (même route,
 // autre paramètre) comme départ vers un autre écran.
@@ -549,20 +557,22 @@ onBeforeUnmount(() => {
     </fieldset>
 
     <section aria-label="Champs" class="grid gap-2">
-      <div class="flex gap-1 md:hidden" role="group" aria-label="Langue affichée">
+      <div class="flex gap-1" role="group" aria-label="Langue affichée">
         <Button
-          v-for="l in ['fr', 'en'] as const"
-          :key="l"
+          v-for="v in views"
+          :key="v"
           size="sm"
-          :variant="lang === l ? 'default' : 'outline'"
-          :aria-pressed="lang === l"
-          @click="lang = l"
+          :variant="lang === v ? 'default' : 'outline'"
+          :aria-pressed="lang === v"
+          :lang="v === 'en' ? 'en' : undefined"
+          @click="view = v"
         >
-          {{ l === 'fr' ? 'Français' : 'English' }}
+          {{ VIEW_NAMES[v] }}
         </Button>
       </div>
       <div
-        class="hidden border-b pb-2 text-sm text-muted-foreground md:grid md:grid-cols-[10rem_minmax(0,1fr)_minmax(0,1fr)] md:gap-4"
+        v-if="lang === 'both'"
+        class="grid grid-cols-[10rem_minmax(0,1fr)_minmax(0,1fr)] gap-4 border-b pb-2 text-sm text-muted-foreground"
         aria-hidden="true"
       >
         <span />
