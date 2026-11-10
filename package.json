@@ -1,5 +1,5 @@
 {
-  "name": "dashility",
+  "name": "dashility-monorepo",
   "private": true,
   "type": "module",
   "workspaces": [

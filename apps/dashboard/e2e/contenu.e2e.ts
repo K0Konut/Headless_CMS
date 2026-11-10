@@ -78,7 +78,15 @@ test('ajouter un projet : saisie FR/EN enregistrée toute seule, retrouvée apr�
   await expect(page.getByRole('heading', { name: 'Ce portfolio' })).toBeVisible()
   await expect(page.getByLabel('Titre (anglais)')).toHaveValue('This portfolio')
   await expect(page.getByRole('list', { name: 'Stack' })).toContainText('Vue')
+  // Les éléments d'un groupe sont repliés, leur titre dans l'en-tête.
+  await expect(page.getByLabel('Nom (français)')).toBeHidden()
+  await page.getByRole('button', { name: 'Contraintes 1 · Budget : 0 €' }).click()
   await expect(page.getByLabel('Nom (français)')).toHaveValue('Budget : 0 €')
+  // Une seule langue à la fois, sur toute la largeur.
+  await page.getByRole('button', { name: 'English' }).click()
+  await expect(page.getByLabel('Titre (français)')).toBeHidden()
+  await page.getByRole('button', { name: 'Côte à côte' }).click()
+  await expect(page.getByLabel('Titre (français)')).toBeVisible()
   // La contrainte n'a pas de nom anglais : l'entrée sera masquée sur le site en anglais.
   await expect(page.getByText('EN incomplet')).toBeVisible()
 
@@ -155,4 +163,26 @@ test('un identifiant d’URL déjà pris n’empêche pas d’enregistrer le con
   // Le bouton « Ajouter » ressert au retour à la liste.
   await page.getByRole('link', { name: 'Projets' }).click()
   await expect(page.getByRole('button', { name: 'Ajouter un projet' })).toBeEnabled()
+})
+
+test('publier ouvre l’élément replié et la langue masquée qui ont une erreur', async ({
+  browser,
+  page,
+}) => {
+  const admin = await setup(browser, 'atelier-repli')
+  await admin.close()
+
+  await page.goto('/espaces/atelier-repli/contenu/projets')
+  await page.getByRole('button', { name: 'Ajouter un projet' }).click()
+  await page.getByLabel('Titre (français)').fill('Ce portfolio')
+  await page.getByRole('combobox', { name: 'Type de projet' }).click()
+  await page.getByRole('option', { name: 'Projet perso' }).click()
+  await page.getByRole('button', { name: 'Ajouter un élément à « Contraintes »' }).click()
+  await page.getByRole('button', { name: 'Contraintes 1', exact: true }).click()
+  await expect(page.getByLabel('Nom (français)')).toBeHidden()
+  // L'erreur est en français alors que seul l'anglais est affiché : l'éditeur bascule.
+  await page.getByRole('button', { name: 'English' }).click()
+
+  await page.getByRole('button', { name: 'Publier', exact: true }).click()
+  await expect(page.getByLabel('Nom (français)')).toBeFocused()
 })

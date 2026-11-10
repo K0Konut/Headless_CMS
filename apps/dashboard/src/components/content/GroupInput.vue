@@ -1,17 +1,18 @@
 <script setup lang="ts">
-import type { EntryData, GroupField } from '@dashility/shared'
-import { Trash2 } from '@lucide/vue'
-import { computed } from 'vue'
+import { type EntryData, type GroupField, entryTitle } from '@dashility/shared'
+import { ChevronDown, ChevronRight, Trash2 } from '@lucide/vue'
+import { computed, ref, toRaw, watch } from 'vue'
 import MoveButtons from '@/components/MoveButtons.vue'
 import { Button } from '@/components/ui/button'
 import { moveItem, stableIds } from '@/lib/content'
 import FieldRows from './FieldRows.vue'
 
-/** Groupe répétable : des éléments communs aux deux langues, chacun avec ses sous-champs. */
+/** Groupe répétable : des éléments communs aux deux langues, chacun avec ses sous-champs.
+ *  Les éléments sont repliés ; un élément ajouté ou signalé par la publication s'ouvre. */
 const props = defineProps<{
   field: GroupField
   idPrefix: string
-  lang: 'fr' | 'en'
+  lang: 'both' | 'fr' | 'en'
   /** Erreurs de publication de toute l'entrée, et le chemin de ce groupe (`steps.`). */
   errors?: Record<string, string>
   path: string
@@ -20,12 +21,36 @@ const props = defineProps<{
 }>()
 const items = defineModel<EntryData[] | undefined>()
 
-// Identifiant stable par élément : l'ordre peut changer.
-const idOf = stableIds()
+// Identifiant stable par élément : l'ordre peut changer. Par l'objet brut, pour reconnaître
+// l'élément créé par `add` une fois relu à travers la réactivité.
+const stableId = stableIds()
+const idOf = (item: object) => stableId(toRaw(item))
 
 const list = computed(() => items.value ?? [])
+
+const opened = ref(new Set<number>())
+function toggle(item: object) {
+  const id = idOf(item)
+  if (!opened.value.delete(id)) opened.value.add(id)
+}
+// Un élément qui a une erreur de publication s'ouvre, pour qu'on la voie et que le focus l'atteigne.
+// On suit la liste des éléments fautifs, pas l'objet des erreurs, recalculé à chaque frappe :
+// un élément refermé ne se rouvre pas tant que ses erreurs ne changent pas.
+watch(
+  () =>
+    list.value
+      .filter((_, i) =>
+        Object.keys(props.errors ?? {}).some((p) => p.startsWith(`${props.path}${i}.`)),
+      )
+      .map(idOf)
+      .join(),
+  (ids) => ids && ids.split(',').forEach((id) => opened.value.add(Number(id))),
+  { immediate: true },
+)
 function add() {
-  items.value = [...list.value, {}]
+  const item = {}
+  items.value = [...list.value, item]
+  opened.value.add(idOf(item))
 }
 function remove(index: number) {
   items.value = list.value.filter((_, i) => i !== index)
@@ -36,6 +61,7 @@ function move(index: number, delta: -1 | 1) {
   items.value = next
 }
 const name = (index: number) => `${props.field.label} ${index + 1}`
+const summary = (item: EntryData) => entryTitle(props.field.fields, item)
 </script>
 
 <template>
@@ -55,8 +81,24 @@ const name = (index: number) => `${props.field.label} ${index + 1}`
         class="rounded-lg border bg-card px-3"
         :aria-label="name(i)"
       >
-        <div class="flex items-center gap-1 border-b py-2">
-          <span class="flex-1 text-sm font-medium">{{ name(i) }}</span>
+        <div :class="['flex items-center gap-1 py-2', opened.has(idOf(item)) && 'border-b']">
+          <button
+            type="button"
+            class="-ml-1 flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1.5 text-left text-sm font-medium outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            :aria-expanded="opened.has(idOf(item))"
+            :aria-controls="opened.has(idOf(item)) ? `${idPrefix}-${i}-fields` : undefined"
+            @click="toggle(item)"
+          >
+            <component
+              :is="opened.has(idOf(item)) ? ChevronDown : ChevronRight"
+              class="size-4 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <span class="shrink-0">{{ name(i) }}</span>
+            <span v-if="summary(item)" class="truncate font-normal text-muted-foreground">
+              · {{ summary(item) }}
+            </span>
+          </button>
           <MoveButtons :name="name(i)" :index="i" :length="list.length" @move="move(i, $event)" />
           <Button
             type="button"
@@ -69,6 +111,8 @@ const name = (index: number) => `${props.field.label} ${index + 1}`
           </Button>
         </div>
         <FieldRows
+          v-if="opened.has(idOf(item))"
+          :id="`${idPrefix}-${i}-fields`"
           v-model="items![i]!"
           :fields="field.fields"
           :id-prefix="`${idPrefix}-${i}`"

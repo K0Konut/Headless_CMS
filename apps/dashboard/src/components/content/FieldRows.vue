@@ -4,11 +4,11 @@ import FieldInput from './FieldInput.vue'
 import GroupInput from './GroupInput.vue'
 
 /** Les champs d'une entrée, une ligne par champ : français et anglais côte à côte pour un champ
- *  traduisible (document UX). Sous 768 px, seule la langue choisie (`lang`) est affichée. */
+ *  traduisible (document UX), ou seulement la langue choisie (`lang`), sur toute la largeur. */
 const props = defineProps<{
   fields: Field[]
   idPrefix: string
-  lang: 'fr' | 'en'
+  lang: 'both' | 'fr' | 'en'
   /** Erreurs de publication, par chemin (`title.fr`, `steps.0.name.fr`). */
   errors?: Record<string, string>
   /** Préfixe des chemins de ces champs (`steps.0.` dans un groupe). */
@@ -77,7 +77,7 @@ const id = (field: Field, lang?: string) =>
           :lang="l"
           :error="errorOf(field, l)"
           :model-value="translated(field, l)"
-          :class="{ 'hidden md:grid': l !== lang }"
+          :class="lang === 'both' ? '' : lang === l ? 'md:col-span-2' : 'hidden'"
           @update:model-value="setTranslated(field, l, $event)"
         />
       </template>

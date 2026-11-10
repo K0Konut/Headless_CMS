@@ -443,7 +443,7 @@ Toute écriture qui change la version de l'entrée annule sa programmation, dans
 - `backup` : un `pg_dump` quotidien vers le NAS (`/mnt/nas/media/backups/dashility`, monté en NFS sur le serveur), qui garde 7 sauvegardes.
 - Nginx Proxy Manager, déjà en place, redirige `dashility.costamask.dev` vers `app:3000`.
 
-**Publication du package** : `packages/client` est publié sur npm à la main (`npm publish`) quand une version change. Il est publié sous `@dashility/client`, ce qui suppose d'avoir créé l'organisation `dashility` sur npm.
+**Publication du package** : `packages/client` est publié sur npm à la main (`npm publish`) quand une version change. Il est publié sous `@dashility/client`, dans l'organisation npm `dashility` du propriétaire, en accès public (`publishConfig`) ; `prepublishOnly` le reconstruit avant chaque publication.
 `shortcut: publication manuelle, passer à un workflow sur tag si les versions deviennent fréquentes`
 
 ## Ordre de construction de la V1
