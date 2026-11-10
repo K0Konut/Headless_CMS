@@ -76,7 +76,7 @@ flowchart TD
 ★ visible par le super-admin uniquement
 ```
 
-- **Sélecteur d'espace** : liste des espaces du compte, recherche si plus de 5 espaces, et une entrée « + Nouvel espace » pour le super-admin. Si le compte n'a qu'un espace, le sélecteur devient un simple titre.
+- **Sélecteur d'espace** : liste des espaces du compte, recherche si plus de 5 espaces, et une entrée « + Nouvel espace » pour le super-admin. Si le compte n'a qu'un espace, le sélecteur devient un simple titre. Chaque espace est précédé du favicon de son site (`<site>/favicon.ico`), ou de l'initiale de son nom si le site n'en a pas.
 - Lien d'évitement « Aller au contenu » en premier élément focusable.
 - Titre de l'onglet du navigateur : `<Écran> · <Espace> · Dashility`.
 

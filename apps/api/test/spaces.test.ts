@@ -78,7 +78,7 @@ describe('espaces', () => {
     const res = await api('get', '/spaces/portfolio', member.cookie).expect(200)
     expect(res.body.publicKey).toBeUndefined()
     await api('get', '/spaces', member.cookie).expect(200, [
-      { slug: 'portfolio', name: 'Portfolio' },
+      { slug: 'portfolio', name: 'Portfolio', siteUrl: 'https://exemple.fr' },
     ])
 
     // Un espace inaccessible n'existe pas : 404, comme un espace inconnu.
@@ -126,7 +126,9 @@ describe('membres et invitations', () => {
     expect(pending.body.invitations).toHaveLength(1)
 
     const accepted = await api('post', `/tokens/${token}`).send({ password: PASSWORD }).expect(200)
-    expect(accepted.body.spaces).toEqual([{ slug: 'portfolio', name: 'Portfolio' }])
+    expect(accepted.body.spaces).toEqual([
+      { slug: 'portfolio', name: 'Portfolio', siteUrl: 'https://exemple.fr' },
+    ])
     await api('get', '/auth/me', sessionCookie(accepted)).expect(200)
 
     // Usage unique.
@@ -192,8 +194,8 @@ describe('membres et invitations', () => {
 
     const cookie = await login('a@b.fr')
     await api('get', '/spaces', cookie).expect(200, [
-      { slug: 'blog', name: 'Blog' },
-      { slug: 'portfolio', name: 'Portfolio' },
+      { slug: 'blog', name: 'Blog', siteUrl: 'https://exemple.fr' },
+      { slug: 'portfolio', name: 'Portfolio', siteUrl: 'https://exemple.fr' },
     ])
   })
 

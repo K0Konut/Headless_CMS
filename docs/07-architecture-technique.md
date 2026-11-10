@@ -181,7 +181,7 @@ Toutes les routes sont préfixées par `/api`. Le corps des requêtes et les ré
 - **CSRF** : on s'appuie sur `SameSite=Strict`, la même origine pour le dashboard et l'API, et le refus des requêtes qui modifient des données sans `Content-Type: application/json`.
 - **Limitation du débit** : `/auth/login` accepte 5 tentatives par minute par IP et par email, et `/e` 60 événements par minute par IP. Les IP ne restent qu'en mémoire, jamais en base.
 - **Liens à usage unique** : jeton de 32 octets, valable 72 h pour une invitation et 24 h pour une réinitialisation, et marqué `used_at` dès qu'il est consommé.
-- **En-têtes** : Helmet, avec une CSP stricte sur le dashboard.
+- **En-têtes** : Helmet, avec une CSP stricte sur le dashboard. Seule exception : `img-src` accepte les images https, pour le favicon des sites dans le sélecteur d'espace.
 - **Premier super-admin** : il est créé par une commande serveur (`docker compose exec app node dist/cli.js create-super-admin <email>`), qui demande le mot de passe dans le terminal. Aucun secret ne passe par les variables d'environnement.
 
 ## Collecte analytics
