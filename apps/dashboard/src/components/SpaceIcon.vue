@@ -31,6 +31,6 @@ watch(
       class="size-full object-contain"
       @error="failed = true"
     />
-    <template v-else>{{ name.charAt(0).toUpperCase() }}</template>
+    <template v-else>{{ [...name][0]?.toUpperCase() }}</template>
   </span>
 </template>

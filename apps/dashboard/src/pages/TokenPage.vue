@@ -18,7 +18,7 @@ const props = defineProps<{ token: string; kind: 'invitation' | 'reset' }>()
 interface Link {
   kind: 'invitation' | 'reset'
   email: string
-  space: SpaceSummary | null
+  space: Pick<SpaceSummary, 'slug' | 'name'> | null
 }
 
 const session = useSessionStore()
