@@ -197,7 +197,7 @@ La V2 ajoute le contenu. Le super-admin définit des **types** dans Structure ; 
 ### Principes de la V2
 
 - **Le site ne montre jamais un texte à moitié écrit.** La saisie est sauvegardée automatiquement, mais elle reste un brouillon tant qu'on n'a pas cliqué sur « Publier ». Sur une entrée déjà publiée, les modifications sont gardées à part et le site garde l'ancienne version jusqu'à « Publier les modifications ».
-- **FR et EN côte à côte, champ par champ.** Chaque champ traduisible a sa colonne FR et sa colonne EN sur la même ligne : on traduit en regardant l'original. Un champ non traduisible occupe toute la largeur, une seule fois.
+- **FR et EN côte à côte, champ par champ.** Chaque champ traduisible a sa colonne FR et sa colonne EN sur la même ligne : on traduit en regardant l'original. Un champ non traduisible occupe toute la largeur, une seule fois. Un sélecteur « Côte à côte · Français · English » en haut de l'éditeur permet aussi de n'afficher qu'une langue, sur toute la largeur, pour avoir la place d'écrire ; il bascule tous les champs à la fois.
 - **Le français est la langue de référence.** Publier exige les champs obligatoires en français. Une version anglaise incomplète n'empêche pas de publier : l'entrée est masquée sur le site en anglais (PRD, « Langues ») et le dashboard le signale partout où elle apparaît.
 - **Pas de médiathèque.** Une image s'envoie directement dans son champ, avec ses textes alternatifs.
 - **Les fichiers sont des champs.** Le CV n'a pas d'écran à lui : c'est une page unique « CV » avec un champ « Fichier PDF » traduisible, donc un fichier FR et un fichier EN. Un espace sans CV n'a pas d'écran inutile.
@@ -331,7 +331,7 @@ Publier, publier des modifications, dépublier ou supprimer une entrée publiée
 - Pré-rempli depuis le titre français tant que l'entrée n'a jamais été publiée, puis figé. Le modifier ensuite reste possible, avec un avertissement : les liens déjà partagés vers l'ancienne adresse ne marcheront plus.
 - Il est unique dans le type ; un doublon est signalé sur le champ.
 
-**Sur mobile** (moins de 768 px) : un sélecteur FR | EN en haut de l'éditeur remplace les deux colonnes ; il bascule tous les champs à la fois.
+**Sur mobile** (moins de 768 px) : les deux colonnes ne tiennent pas, le sélecteur se réduit à « Français · English ».
 
 **Accessibilité**
 
@@ -353,7 +353,7 @@ Publier, publier des modifications, dépublier ou supprimer une entrée publiée
 | Oui / non | Interrupteur | Valeur par défaut |
 | Image | Glisser-déposer ou « Parcourir », aperçu, textes alternatifs FR et EN obligatoires, « Remplacer » et « Retirer ». JPEG, PNG ou WebP, 10 Mo au plus | — |
 | Fichier PDF | « Parcourir », nom, taille et date du fichier, « Remplacer » (après confirmation, sans historique) et « Télécharger ». 10 Mo au plus | — |
-| Groupe répétable | Cartes numérotées avec leurs sous-champs, « Ajouter », ↑ ↓ et suppression | Les sous-champs (tous les types sauf un autre groupe) ; nombre minimal et maximal d'éléments (facultatifs) |
+| Groupe répétable | Cartes numérotées, repliées à l'ouverture de l'entrée ; l'en-tête montre le numéro et le premier texte court (« Contraintes 1 · Budget. ») et déplie la carte au clic. Un élément ajouté, ou qui a une erreur de publication, s'ouvre. « Ajouter », ↑ ↓ et suppression | Les sous-champs (tous les types sauf un autre groupe) ; nombre minimal et maximal d'éléments (facultatifs) |
 
 Tous les champs se règlent aussi en **obligatoire ou facultatif**, et en **traduisible ou non** (sauf le groupe : ce sont ses sous-champs qui sont traduisibles). Dans un groupe, les éléments sont les mêmes en FR et en EN : on ajoute une contrainte une fois, puis on remplit ses deux langues.
 
