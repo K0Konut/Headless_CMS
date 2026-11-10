@@ -1,6 +1,7 @@
 export interface SpaceSummary {
   slug: string
   name: string
+  siteUrl: string
 }
 
 /** Réponse de `/auth/me`, de la connexion et de la consommation d'un lien. */

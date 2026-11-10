@@ -71,7 +71,7 @@ export class AuthService {
 
   /** Espaces accessibles : tous pour le super-admin, ses adhésions sinon. */
   accessibleSpaces(user: User) {
-    const columns = { slug: spaces.slug, name: spaces.name }
+    const columns = { slug: spaces.slug, name: spaces.name, siteUrl: spaces.siteUrl }
     return user.isSuperAdmin
       ? this.db.select(columns).from(spaces).orderBy(asc(spaces.name))
       : this.db

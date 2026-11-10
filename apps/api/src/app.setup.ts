@@ -9,7 +9,10 @@ export function setupApp(app: NestExpressApplication) {
   app.setGlobalPrefix('api')
   // Derrière Nginx Proxy Manager : l'IP du client vient de X-Forwarded-For.
   app.set('trust proxy', 'loopback, uniquelocal')
-  app.use(helmet())
+  // Images https : le dashboard affiche le favicon de chaque site (`<site>/favicon.ico`).
+  app.use(
+    helmet({ contentSecurityPolicy: { directives: { 'img-src': ["'self'", 'data:', 'https:'] } } }),
+  )
   app.use(cookieParser())
   // Corps de la collecte : JSON envoyé en text/plain, quelques centaines d'octets au plus.
   app.useBodyParser('text', { limit: '2kb' })
