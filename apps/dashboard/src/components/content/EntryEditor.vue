@@ -171,6 +171,9 @@ let deleted = false
 /** Focus sur la saisie d'un chemin, sinon sur son parent (`duration.start` → `duration`,
  *  un groupe → son conteneur). */
 async function focusPath(path: string) {
+  // Le champ fautif peut être dans la langue masquée : on l'affiche.
+  const errorLang = path.split('.').find((part) => part === 'fr' || part === 'en')
+  if (errorLang && lang.value !== 'both' && lang.value !== errorLang) view.value = errorLang
   await nextTick()
   const parts = path.split('.')
   while (parts.length) {

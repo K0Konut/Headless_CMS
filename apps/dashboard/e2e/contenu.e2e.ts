@@ -165,7 +165,10 @@ test('un identifiant d’URL déjà pris n’empêche pas d’enregistrer le con
   await expect(page.getByRole('button', { name: 'Ajouter un projet' })).toBeEnabled()
 })
 
-test('publier ouvre l’élément replié qui a une erreur', async ({ browser, page }) => {
+test('publier ouvre l’élément replié et la langue masquée qui ont une erreur', async ({
+  browser,
+  page,
+}) => {
   const admin = await setup(browser, 'atelier-repli')
   await admin.close()
 
@@ -177,6 +180,8 @@ test('publier ouvre l’élément replié qui a une erreur', async ({ browser, p
   await page.getByRole('button', { name: 'Ajouter un élément à « Contraintes »' }).click()
   await page.getByRole('button', { name: 'Contraintes 1', exact: true }).click()
   await expect(page.getByLabel('Nom (français)')).toBeHidden()
+  // L'erreur est en français alors que seul l'anglais est affiché : l'éditeur bascule.
+  await page.getByRole('button', { name: 'English' }).click()
 
   await page.getByRole('button', { name: 'Publier', exact: true }).click()
   await expect(page.getByLabel('Nom (français)')).toBeFocused()

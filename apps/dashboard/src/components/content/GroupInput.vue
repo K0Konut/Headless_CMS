@@ -34,17 +34,19 @@ function toggle(item: object) {
   if (!opened.value.delete(id)) opened.value.add(id)
 }
 // Un élément qui a une erreur de publication s'ouvre, pour qu'on la voie et que le focus l'atteigne.
+// On suit la liste des éléments fautifs, pas l'objet des erreurs, recalculé à chaque frappe :
+// un élément refermé ne se rouvre pas tant que ses erreurs ne changent pas.
 watch(
-  () => props.errors,
-  (errors) =>
-    list.value.forEach((item, i) => {
-      const at = `${props.path}${i}.`
-      if (Object.keys(errors ?? {}).some((path) => path.startsWith(at)))
-        opened.value.add(idOf(item))
-    }),
+  () =>
+    list.value
+      .filter((_, i) =>
+        Object.keys(props.errors ?? {}).some((p) => p.startsWith(`${props.path}${i}.`)),
+      )
+      .map(idOf)
+      .join(),
+  (ids) => ids && ids.split(',').forEach((id) => opened.value.add(Number(id))),
   { immediate: true },
 )
-
 function add() {
   const item = {}
   items.value = [...list.value, item]
@@ -84,7 +86,7 @@ const summary = (item: EntryData) => entryTitle(props.field.fields, item)
             type="button"
             class="-ml-1 flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1.5 text-left text-sm font-medium outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
             :aria-expanded="opened.has(idOf(item))"
-            :aria-controls="`${idPrefix}-${i}-fields`"
+            :aria-controls="opened.has(idOf(item)) ? `${idPrefix}-${i}-fields` : undefined"
             @click="toggle(item)"
           >
             <component
