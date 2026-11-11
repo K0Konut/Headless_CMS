@@ -4,7 +4,12 @@ import type { Me } from './types'
 
 const me = (slugs: string[]): Me => ({
   user: { id: 'u', email: 'a@b.fr', isSuperAdmin: false },
-  spaces: slugs.map((slug) => ({ slug, name: slug, siteUrl: `https://${slug}.fr` })),
+  spaces: slugs.map((slug) => ({
+    slug,
+    name: slug,
+    siteUrl: `https://${slug}.fr`,
+    previewUrl: null,
+  })),
 })
 
 beforeEach(() => localStorage.clear())
