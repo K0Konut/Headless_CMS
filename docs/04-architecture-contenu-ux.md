@@ -1,8 +1,8 @@
 # Architecture de contenu et UX — dashboard de Dashility
 
-4 novembre 2026, complété le 6 novembre 2026 pour la V2 et le 11 novembre 2026 pour la refonte de Contenu et Structure · s'appuie sur `01-PRD.md` et `decisions.md`
+4 novembre 2026, complété le 6 novembre 2026 pour la V2 le 11 novembre 2026 pour la refonte de Contenu et Structure, puis pour la prévisualisation · s'appuie sur `01-PRD.md` et `decisions.md`
 
-Ce document organise les écrans et les parcours du dashboard. Les écrans V1 et V2 sont détaillés (wireframes et états), ainsi que la publication programmée de la V3 ; le reste de la V3 n'est décrit qu'en arborescence et en parcours.
+Ce document organise les écrans et les parcours du dashboard. Les écrans V1 et V2 sont détaillés (wireframes et états), ainsi que la publication programmée et la prévisualisation de la V3 ; le reste de la V3 n'est décrit qu'en arborescence et en parcours.
 
 Méthode allégée : pas de territoire de marque. Le dashboard est construit avec shadcn-vue (PRD, « Exigences de qualité ») ; sa direction visuelle, légère, est dans `03-direction-artistique.md` depuis le 11 novembre 2026.
 
@@ -589,6 +589,67 @@ Titre *        [Ce portfolio      ] (lecture seule)
 | Programmation annulée par une modification venue d'ailleurs | Bandeau « La publication programmée du 17 nov. à 9:00 a été annulée : l'entrée a été modifiée (par un membre ou par un changement de structure). » et le bouton « Programmer à nouveau » |
 | Publication refusée à l'heure prévue (cas rare : une règle a changé depuis) | Bandeau d'erreur « La publication programmée du 17 nov. à 9:00 a échoué : … », les champs fautifs signalés ; l'entrée reste dans son état |
 
+## V3 : prévisualisation
+
+On voit une entrée sur le vrai site avant de la publier : le brouillon d'un projet, avec la mise en page, les images et les textes du portfolio.
+
+### Principes
+
+- **Une page d'aperçu sur le site.** Un site statique ne contient que le contenu publié. Il ajoute donc une page d'aperçu (par exemple `https://www.costamask.dev/apercu`) qui lit l'entrée dans Dashility, depuis le navigateur, et l'affiche avec ses vrais composants. C'est le site qui décide où et comment l'afficher : une étude de cas dans sa page, une compétence sur l'accueil.
+- **L'entrée, pas tout le site.** L'aperçu montre une seule entrée, dans sa version en cours. Le reste de la page garde la version publiée.
+- **Un lien partageable, valable 24 h.** Toute personne qui a le lien voit l'entrée, même sans compte : on peut le montrer à un client ou à un proche. Il ne donne accès qu'à cette entrée, en lecture, et expire au bout de 24 h. Il ne se révoque pas.
+- **Toujours la dernière version enregistrée.** Le lien montre l'entrée telle qu'elle est enregistrée au moment où la page s'ouvre : on corrige dans l'éditeur, on recharge l'aperçu. Le lien partagé montre donc aussi les modifications faites après son envoi, pendant 24 h.
+- **Jamais compté, jamais indexé.** Une visite d'aperçu n'envoie aucun événement d'analytics (PRD), et la page d'aperçu n'est pas indexée par les moteurs de recherche.
+
+### Dans l'éditeur
+
+```
+Ce portfolio                                    Brouillon
+Enregistré à 14:02     [Prévisualiser ↗] [Publier] [Programmer…] [⋯]
+                                                   ⋯ Copier le lien d'aperçu
+                                                     Supprimer
+```
+
+- **« Prévisualiser »** est un bouton secondaire, avant « Publier ». Il enregistre d'abord la saisie en cours, puis ouvre l'aperçu en français dans un nouvel onglet. Son libellé accessible le dit : « Prévisualiser (nouvel onglet) ».
+- **« Copier le lien d'aperçu »**, dans le menu ⋯, copie un nouveau lien valable 24 h et le confirme : « Lien copié, valable jusqu'à demain 14:02 ».
+- **Disponible quel que soit le statut** : brouillon, publié avec des modifications, programmé (les champs en lecture seule n'empêchent pas de prévisualiser). Pour une entrée publiée sans modification, l'aperçu montre la version en ligne.
+- **Sans URL d'aperçu** dans l'espace, le bouton n'apparaît pas. Le super-admin voit à la place, dans le menu ⋯, « Configurer la prévisualisation », qui mène à Réglages › Intégration.
+- **Saisie non enregistrée** (sauvegarde en échec) : le bouton reste actif, mais une confirmation prévient que l'aperçu montrera la dernière version enregistrée.
+
+### Sur le site, la page d'aperçu
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│ Aperçu · version non publiée · lien valable jusqu'au 12 nov. 14:02  │
+│                                              [Français] [English]  │
+└────────────────────────────────────────────────────────────────────┘
+  (la page du site, avec l'entrée prévisualisée)
+```
+
+Dashility fournit la donnée ; le site fournit l'affichage. Ce que la page d'aperçu doit faire, pour tout site branché :
+
+- Un **bandeau fixe** dit que c'est un aperçu, que la version n'est pas publiée, et jusqu'à quand le lien est valable.
+- Un **sélecteur Français / English** dans le bandeau, puisque le lien couvre les deux langues.
+- Les **états** :
+
+| Situation | Affichage |
+| --- | --- |
+| Chargement | Le bandeau, et la page en squelette |
+| Lien expiré ou invalide | « Ce lien d'aperçu a expiré. Demandez-en un nouveau depuis Dashility. » |
+| Entrée supprimée depuis | « Cette entrée n'existe plus. » |
+| Version anglaise incomplète | L'aperçu s'affiche avec ce qui existe ; le bandeau ajoute « Version anglaise incomplète : masquée sur le site en anglais tant qu'elle n'est pas complète » |
+| Champ manquant que la page ne sait pas afficher | « Aperçu impossible : le champ « Titre » est vide. » plutôt qu'une page cassée |
+
+### Réglages › Intégration (ajout V3)
+
+```
+├─ URL d'aperçu   [https://www.costamask.dev/apercu ] [Enregistrer]  V3
+│    Le site doit avoir une page d'aperçu à cette adresse.  [Tester]
+```
+
+- **URL d'aperçu** : l'adresse de la page d'aperçu du site. Facultative : sans elle, la prévisualisation est simplement absente de l'éditeur.
+- **Tester** ouvre cette adresse avec un lien d'essai, pour vérifier que la page répond.
+
 ## Parcours utilisateurs
 
 ### 1. Toi, premier lancement : brancher le portfolio (V1)
@@ -650,11 +711,14 @@ Il ouvre le projet depuis Contenu › Projets et corrige une phrase : la correct
 
 Le vendredi, tu termines le projet, puis « Programmer… » : lundi, 9:00. Les contrôles passent, l'entrée affiche « Programmé le 17 nov. à 9:00 » et ses champs passent en lecture seule. Le lundi à 9:00, elle est publiée et le déploiement est demandé ; le site est à jour quelques minutes plus tard. Si tu avais voulu corriger une faute entre-temps, « Modifier l'entrée » aurait annulé la programmation : il aurait fallu la relancer après la correction.
 
+### 9. Toi : relire un projet sur le vrai site avant de le publier (V3)
+
+Le projet est en brouillon. Tu cliques sur « Prévisualiser » : un nouvel onglet ouvre la page d'aperçu du portfolio, avec le projet dans la mise en page de son étude de cas et un bandeau « Aperçu ». Une image est trop sombre : tu la remplaces dans l'éditeur, puis tu recharges l'aperçu. Tu passes en English pour vérifier la version anglaise. Avant de publier, tu copies le lien d'aperçu et tu l'envoies à un ami pour avoir son avis ; il l'ouvre sans compte, et le lien expire le lendemain.
+
 ## V3 et au-delà : ce qui s'ajoute
 
 | Écran | Rôle | Version |
 | --- | --- | --- |
-| Éditeur d'entrée | Bouton « Prévisualiser » (la publication programmée est détaillée plus haut) | V3 |
 | Analytics | Classement des projets par score et projets mis en avant | V3 |
 | Connexion et Mon compte | Double authentification TOTP : étape de code à la connexion, activation dans Mon compte, désactivation par le super-admin si un membre perd son téléphone | Après la V1 |
 
