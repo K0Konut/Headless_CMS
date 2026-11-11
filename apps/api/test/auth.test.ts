@@ -98,7 +98,7 @@ describe('session', () => {
       .expect(200)
     expect(memberMe.body).toEqual({
       user: { id: member!.id, email: 'membre@exemple.fr', isSuperAdmin: false },
-      spaces: [{ slug: 'b', name: 'B', siteUrl: 'https://b.fr' }],
+      spaces: [{ slug: 'b', name: 'B', siteUrl: 'https://b.fr', previewUrl: null }],
     })
   })
 
