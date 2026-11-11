@@ -6,24 +6,28 @@ import { adminApi } from './fixtures'
 // l'API, en CORS, comme le ferait le portfolio (directement, sans le proxy de Vite).
 const PREVIEW_URL = 'http://127.0.0.1:4999/apercu'
 
+// Une page servie par page.route est vue comme publique : Chromium lui interdirait d'appeler
+// l'API sur localhost (Local Network Access). Un vrai site public appelle une API publique.
+test.use({ launchOptions: { args: ['--disable-features=LocalNetworkAccessChecks'] } })
+
 test('régler l’URL d’aperçu, prévisualiser un brouillon sur le site et copier le lien', async ({
   browser,
   page,
 }) => {
   const admin = await adminApi(browser)
   await admin.call('post', '/spaces', {
-    name: 'Atelier',
-    slug: 'atelier',
-    siteUrl: 'https://atelier.fr',
+    name: 'Brouillard',
+    slug: 'brouillard',
+    siteUrl: 'https://brouillard.fr',
   })
-  await admin.call('post', '/spaces/atelier/types', {
+  await admin.call('post', '/spaces/brouillard/types', {
     slug: 'projets',
     kind: 'collection',
     name: 'Projets',
     entryLabel: 'un projet',
     fields: [{ key: 'titre', label: 'Titre', type: 'text', required: true, translatable: true }],
   })
-  const entry = await admin.call('post', '/spaces/atelier/types/projets/entries')
+  const entry = await admin.call('post', '/spaces/brouillard/types/projets/entries')
   await admin.close()
 
   await page.context().route(`${PREVIEW_URL}*`, (route) =>
@@ -39,12 +43,12 @@ test('régler l’URL d’aperçu, prévisualiser un brouillon sur le site et co
   )
 
   // Sans URL d'aperçu : pas de bouton, mais le super-admin est guidé vers les réglages.
-  await page.goto(`/espaces/atelier/contenu/projets/${entry.id}`)
+  await page.goto(`/espaces/brouillard/contenu/projets/${entry.id}`)
   await page.getByRole('textbox', { name: 'Titre (français)' }).fill('Mon brouillon')
   await expect(page.getByRole('button', { name: /Prévisualiser/ })).toHaveCount(0)
   await page.getByRole('button', { name: 'Autres actions' }).click()
   await page.getByRole('menuitem', { name: 'Configurer la prévisualisation' }).click()
-  await expect(page).toHaveURL('/espaces/atelier/reglages#integration')
+  await expect(page).toHaveURL('/espaces/brouillard/reglages#integration')
 
   await page.getByLabel('URL d’aperçu').fill('http://exemple.fr/apercu')
   await page.getByLabel('URL d’aperçu').press('Enter')
@@ -62,7 +66,7 @@ test('régler l’URL d’aperçu, prévisualiser un brouillon sur le site et co
   await test.close()
 
   // Le brouillon s'ouvre dans un nouvel onglet, sur la page d'aperçu du site.
-  await page.goto(`/espaces/atelier/contenu/projets/${entry.id}`)
+  await page.goto(`/espaces/brouillard/contenu/projets/${entry.id}`)
   const [preview] = await Promise.all([
     page.waitForEvent('popup'),
     page.getByRole('button', { name: /Prévisualiser/ }).click(),
