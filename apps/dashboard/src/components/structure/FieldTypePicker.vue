@@ -10,8 +10,8 @@ const props = defineProps<{ idPrefix: string; allowGroup: boolean }>()
 const emit = defineEmits<{ pick: [FieldType]; cancel: [] }>()
 
 const types = FIELD_TYPES.filter((t) => props.allowGroup || t !== 'group')
-const first = ref<HTMLButtonElement[]>([])
-onMounted(() => first.value[0]?.focus())
+const list = ref<HTMLUListElement>()
+onMounted(() => list.value?.querySelector('button')?.focus())
 </script>
 
 <template>
@@ -27,10 +27,9 @@ onMounted(() => first.value[0]?.focus())
       </p>
       <Button type="button" variant="ghost" size="sm" @click="emit('cancel')">Annuler</Button>
     </div>
-    <ul class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+    <ul ref="list" class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
       <li v-for="t in types" :key="t">
         <button
-          ref="first"
           type="button"
           class="grid h-full w-full grid-cols-[1.875rem_minmax(0,1fr)] items-center gap-x-3 rounded-md border bg-card px-3 py-2.5 text-left outline-none hover:border-primary focus-visible:ring-2 focus-visible:ring-ring"
           @click="emit('pick', t)"

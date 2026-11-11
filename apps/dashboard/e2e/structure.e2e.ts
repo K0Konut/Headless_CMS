@@ -39,6 +39,12 @@ test('créer un type avec un choix et un groupe, puis le retrouver figé après 
   await page.getByRole('button', { name: 'Ajouter un champ' }).click()
   await page.getByRole('button', { name: /^Liste de choix/ }).click()
   await page.locator('#field-1-label').fill('Type de projet')
+  // L'aperçu tient avec une structure incomplète (un choix encore vide), et se pilote au clavier.
+  await page.getByRole('tab', { name: 'Champs' }).focus()
+  await page.keyboard.press('ArrowRight')
+  await expect(page.getByRole('tab', { name: 'Aperçu' })).toBeFocused()
+  await expect(page.getByRole('combobox', { name: 'Type de projet' })).toBeVisible()
+  await page.getByRole('tab', { name: 'Champs' }).click()
   await page.getByLabel('Libellé français').fill('Projet perso')
   await page.getByLabel('Libellé anglais').fill('Personal project')
 

@@ -140,7 +140,7 @@ async function move(index: number, delta: -1 | 1) {
     <table class="w-full overflow-hidden rounded-lg border bg-card text-sm">
       <thead class="bg-muted/50 text-left text-xs font-medium text-muted-foreground">
         <tr>
-          <th scope="col" class="w-10 py-2 pl-4"><span class="sr-only">Nature</span></th>
+          <td class="w-10 py-2 pl-4" />
           <th scope="col" class="py-2 pr-4">Type</th>
           <th scope="col" class="hidden py-2 pr-4 md:table-cell">Nature</th>
           <th scope="col" class="hidden w-2/5 py-2 pr-4 sm:table-cell">Champs</th>

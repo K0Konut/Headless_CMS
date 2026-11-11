@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { createContentTypeSchema, updateContentTypeSchema } from '@dashility/shared'
-import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { ChevronLeft, Lock } from '@lucide/vue'
 import { RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import ConfirmDelete from '@/components/ConfirmDelete.vue'
@@ -26,6 +26,12 @@ const emit = defineEmits<{ saved: [ContentType]; deleted: [string] }>()
 const isNew = computed(() => !props.type)
 /** Onglet affiché : les champs, ou l'aperçu de l'éditeur d'entrée (document UX). */
 const tab = ref<'fields' | 'preview'>('fields')
+/** Flèches gauche et droite entre les deux onglets (motif ARIA des onglets). */
+async function switchTab() {
+  tab.value = tab.value === 'fields' ? 'preview' : 'fields'
+  await nextTick()
+  document.getElementById(`type-tab-${tab.value}`)?.focus()
+}
 
 /** Copie modifiable du type ; le nom d'entrée vide d'une page unique devient null à l'envoi. */
 const copyOf = (type: ContentType | null) => {
@@ -258,7 +264,12 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onUnload))
       </fieldset>
 
       <section class="grid gap-4">
-        <div role="tablist" aria-label="Champs du type" class="flex gap-1 border-b">
+        <div
+          role="tablist"
+          aria-label="Champs du type"
+          class="flex gap-1 border-b"
+          @keydown.left.right.prevent="switchTab"
+        >
           <button
             v-for="[value, label] in [
               ['fields', 'Champs'],
@@ -269,6 +280,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onUnload))
             type="button"
             role="tab"
             :aria-selected="tab === value"
+            :tabindex="tab === value ? 0 : -1"
             aria-controls="type-tab-panel"
             :class="[
               '-mb-px border-b-2 px-3 py-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring',

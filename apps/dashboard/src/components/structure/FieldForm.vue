@@ -171,7 +171,7 @@ function setChoiceLabel(choice: { key: string; fr: string; en: string }, fr: str
       </fieldset>
     </div>
 
-    <details class="group">
+    <details class="group" :open="!!field.label && !field.key">
       <summary
         class="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-md text-sm font-medium text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
       >

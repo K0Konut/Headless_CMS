@@ -24,6 +24,9 @@ import { slugify } from './slug'
 
 /** Fourni par l'éditeur d'entrée : vrai pendant une publication programmée (champs figés). Les
  *  saisies que le fieldset ne désactive pas (texte riche, glisser-déposer) le lisent. */
+/** Champs en lecture seule mais lisibles : pas l'opacité réduite d'un champ désactivé. */
+export const FROZEN = '[&_:disabled]:cursor-default [&_:disabled]:opacity-100'
+
 export const READONLY_KEY: InjectionKey<Ref<boolean>> = Symbol('entry-readonly')
 
 /** Un type tel que l'API le renvoie (liste, lecture, création, modification), avec ses compteurs. */
