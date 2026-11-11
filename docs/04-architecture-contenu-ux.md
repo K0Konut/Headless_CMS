@@ -255,7 +255,7 @@ Pages
 
 **Collections** : une ligne par collection, dans l'ordre de Structure.
 
-- Nom, compteurs (`4 publiés · 1 brouillon · 1 EN incomplet` ; un compteur à zéro n'est pas affiché, sauf « 0 entrée »), dernière modification d'une de ses entrées.
+- Nom, compteurs en pastilles de statut (publiés, brouillons, modifiés, programmés, EN incomplet ; un compteur à zéro n'est pas affiché, sauf « 0 entrée »), dernière modification d'une de ses entrées.
 - Bouton « Ajouter » (nom complet pour les lecteurs d'écran : « Ajouter un projet », avec le nom d'une entrée du type) : crée l'entrée et ouvre l'éditeur, sans passer par la liste.
 - Le reste de la ligne ouvre la liste des entrées.
 

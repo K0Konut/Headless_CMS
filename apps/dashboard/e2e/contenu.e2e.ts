@@ -58,8 +58,12 @@ test('ajouter un projet : saisie FR/EN enregistrée toute seule, retrouvée apr�
 
   await page.goto('/espaces/atelier-contenu/analytics')
   await page.getByRole('link', { name: 'Contenu', exact: true }).click()
-  await expect(page.getByRole('link', { name: /Projets.*Aucune entrée/ })).toBeVisible()
-  await page.getByRole('link', { name: /Projets/ }).click()
+  await expect(
+    page.getByRole('main').getByRole('listitem').filter({ hasText: 'Projets' }),
+  ).toContainText('0 entrée')
+  // Les types sont aussi dans la barre latérale.
+  await expect(page.getByRole('navigation').getByRole('link', { name: 'Projets' })).toBeVisible()
+  // On ajoute un projet depuis Contenu, sans passer par la liste.
   await page.getByRole('button', { name: 'Ajouter un projet' }).click()
   await expect(page).toHaveURL(/\/contenu\/projets\/[0-9a-f-]{36}$/)
 
@@ -90,7 +94,7 @@ test('ajouter un projet : saisie FR/EN enregistrée toute seule, retrouvée apr�
   // La contrainte n'a pas de nom anglais : l'entrée sera masquée sur le site en anglais.
   await expect(page.getByText('EN incomplet')).toBeVisible()
 
-  await page.getByRole('link', { name: 'Projets' }).click()
+  await page.getByRole('main').getByRole('link', { name: 'Projets' }).click()
   await expect(page.getByRole('row', { name: /Ce portfolio.*Brouillon/ })).toBeVisible()
 })
 
@@ -161,7 +165,7 @@ test('un identifiant d’URL déjà pris n’empêche pas d’enregistrer le con
   await expect(page.getByLabel('Titre (français)')).toHaveValue('Test')
 
   // Le bouton « Ajouter » ressert au retour à la liste.
-  await page.getByRole('link', { name: 'Projets' }).click()
+  await page.getByRole('main').getByRole('link', { name: 'Projets' }).click()
   await expect(page.getByRole('button', { name: 'Ajouter un projet' })).toBeEnabled()
 })
 

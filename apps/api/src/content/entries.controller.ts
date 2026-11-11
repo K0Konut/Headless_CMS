@@ -18,6 +18,18 @@ import { type SpaceRequest, SpaceAccessGuard } from '../spaces/guards.js'
 import { uuidOr404 } from '../uuid-or-404.pipe.js'
 import { EntriesService, type EntryRef } from './entries.service.js'
 
+/** Ce qui reste à faire dans le contenu d'un espace (écran Contenu). */
+@Controller('spaces/:slug/todo')
+@UseGuards(SpaceAccessGuard)
+export class TodoController {
+  constructor(private readonly entries: EntriesService) {}
+
+  @Get()
+  list(@Req() { space }: SpaceRequest) {
+    return this.entries.todo(space)
+  }
+}
+
 /** `single`, ou l'identifiant d'une entrée de collection (sinon 404). */
 const singleOrUuid: PipeTransform<string, Promise<EntryRef>> = {
   transform: async (value, meta) =>
