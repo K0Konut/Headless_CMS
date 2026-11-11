@@ -36,5 +36,5 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      - run: npx -w @dashility/dashboard playwright install --with-deps chromium
+      - run: npx -w @dashility/dashboard playwright install chromium
       - run: npm run test:e2e -w @dashility/dashboard
