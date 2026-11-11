@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { type EntryData, type GroupField, entryTitle } from '@dashility/shared'
 import { ChevronDown, ChevronRight, Trash2 } from '@lucide/vue'
-import { computed, ref, toRaw, watch } from 'vue'
+import { computed, inject, ref, toRaw, watch } from 'vue'
 import MoveButtons from '@/components/MoveButtons.vue'
 import { Button } from '@/components/ui/button'
-import { moveItem, stableIds } from '@/lib/content'
+import { READONLY_KEY, moveItem, stableIds } from '@/lib/content'
 import FieldRows from './FieldRows.vue'
 
 /** Groupe répétable : des éléments communs aux deux langues, chacun avec ses sous-champs.
@@ -29,6 +29,10 @@ const idOf = (item: object) => stableId(toRaw(item))
 const list = computed(() => items.value ?? [])
 
 const opened = ref(new Set<number>())
+// En lecture seule (publication programmée, aperçu de Structure), le bouton de repli est
+// désactivé avec le reste : tout est déplié pour qu'on puisse lire.
+const readonly = inject(READONLY_KEY, ref(false))
+const isOpen = (item: object) => readonly.value || opened.value.has(idOf(item))
 function toggle(item: object) {
   const id = idOf(item)
   if (!opened.value.delete(id)) opened.value.add(id)
@@ -81,16 +85,16 @@ const summary = (item: EntryData) => entryTitle(props.field.fields, item)
         class="rounded-lg border bg-card px-3"
         :aria-label="name(i)"
       >
-        <div :class="['flex items-center gap-1 py-2', opened.has(idOf(item)) && 'border-b']">
+        <div :class="['flex items-center gap-1 py-2', isOpen(item) && 'border-b']">
           <button
             type="button"
             class="-ml-1 flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1.5 text-left text-sm font-medium outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            :aria-expanded="opened.has(idOf(item))"
-            :aria-controls="opened.has(idOf(item)) ? `${idPrefix}-${i}-fields` : undefined"
+            :aria-expanded="isOpen(item)"
+            :aria-controls="isOpen(item) ? `${idPrefix}-${i}-fields` : undefined"
             @click="toggle(item)"
           >
             <component
-              :is="opened.has(idOf(item)) ? ChevronDown : ChevronRight"
+              :is="isOpen(item) ? ChevronDown : ChevronRight"
               class="size-4 shrink-0 text-muted-foreground"
               aria-hidden="true"
             />
@@ -111,7 +115,7 @@ const summary = (item: EntryData) => entryTitle(props.field.fields, item)
           </Button>
         </div>
         <FieldRows
-          v-if="opened.has(idOf(item))"
+          v-if="isOpen(item)"
           :id="`${idPrefix}-${i}-fields`"
           v-model="items![i]!"
           :fields="field.fields"

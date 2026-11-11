@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Blocks, ChartColumn, FileText, Settings } from '@lucide/vue'
-import { computed } from 'vue'
+import { Blocks, ChartColumn, ChevronRight, FileText, Settings } from '@lucide/vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import SpaceSwitcher from '@/components/SpaceSwitcher.vue'
 import UserMenu from '@/components/UserMenu.vue'
@@ -12,12 +12,17 @@ import {
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarProvider,
   SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { lastSpace } from '@/lib/navigation'
+import { useContentStore } from '@/stores/content'
 import { useSessionStore } from '@/stores/session'
 
 const session = useSessionStore()
@@ -30,6 +35,30 @@ const slug = computed(() =>
 const space = computed(() =>
   slug.value ? session.spaces.find((s) => s.slug === slug.value) : lastSpace(session.spaces),
 )
+
+// Types sous « Contenu » (document UX, « Mise en page commune ») : relus à chaque navigation
+// dans l'espace, pour suivre Structure et les publications.
+const content = useContentStore()
+watch(
+  () => route.path,
+  () => {
+    if (slug.value) void content.load(slug.value)
+  },
+  { immediate: true },
+)
+const inContent = computed(() => route.name === 'content' || route.name === 'entries')
+const contentTypes = computed(() => {
+  const ready = (content.space === slug.value ? content.types : null)?.filter(
+    (t) => t.fields.length,
+  )
+  // Collections puis pages, chacune dans l'ordre de Structure.
+  return ready
+    ? [...ready].sort((a, b) => Number(a.kind === 'single') - Number(b.kind === 'single'))
+    : []
+})
+// Dépliés dans Contenu, repliés ailleurs ; le chevron les déplie à la main.
+const contentOpen = ref(false)
+watch(inContent, (value) => (contentOpen.value = value), { immediate: true })
 </script>
 
 <template>
@@ -73,6 +102,34 @@ const space = computed(() =>
                     <FileText aria-hidden="true" />Contenu
                   </RouterLink>
                 </SidebarMenuButton>
+                <template v-if="contentTypes.length">
+                  <SidebarMenuAction
+                    :aria-expanded="contentOpen"
+                    aria-controls="types-contenu"
+                    :aria-label="
+                      contentOpen ? 'Masquer les types de contenu' : 'Afficher les types de contenu'
+                    "
+                    @click="contentOpen = !contentOpen"
+                  >
+                    <ChevronRight
+                      :class="['motion-safe:transition-transform', contentOpen && 'rotate-90']"
+                      aria-hidden="true"
+                    />
+                  </SidebarMenuAction>
+                  <SidebarMenuSub v-show="contentOpen" id="types-contenu">
+                    <SidebarMenuSubItem v-for="type in contentTypes" :key="type.slug">
+                      <SidebarMenuSubButton
+                        as-child
+                        :is-active="route.params.type === type.slug"
+                        class="data-[active=true]:bg-primary/10 data-[active=true]:font-medium data-[active=true]:text-primary"
+                      >
+                        <RouterLink :to="`/espaces/${space.slug}/contenu/${type.slug}`">
+                          <span>{{ type.name }}</span>
+                        </RouterLink>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  </SidebarMenuSub>
+                </template>
               </SidebarMenuItem>
               <!-- Structure : super-admin uniquement (document UX). -->
               <SidebarMenuItem v-if="session.me?.user.isSuperAdmin">

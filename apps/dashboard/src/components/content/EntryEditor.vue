@@ -25,7 +25,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError, api, errorMessage } from '@/lib/api'
-import { type ContentType, type Entry, READONLY_KEY } from '@/lib/content'
+import { type ContentType, type Entry, FROZEN, READONLY_KEY } from '@/lib/content'
 import { formatLongDateTime, formatTime } from '@/lib/format'
 import { slugify } from '@/lib/slug'
 import FieldRows from './FieldRows.vue'
@@ -320,7 +320,6 @@ onBeforeRouteUpdate(confirmLeave)
 // ── Publication programmée (V3, document UX « Publication programmée ») ───────────────────
 
 /** Classes d'un fieldset figé : ses contrôles désactivés restent lisibles (document UX). */
-const FROZEN = '[&_:disabled]:cursor-default [&_:disabled]:opacity-100'
 
 /** Programmée : la version est figée, les champs sont en lecture seule. */
 const scheduled = computed(() => !!entry.value?.scheduledAt)

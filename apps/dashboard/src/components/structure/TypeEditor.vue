@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { createContentTypeSchema, updateContentTypeSchema } from '@dashility/shared'
-import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
-import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { ChevronLeft, Lock } from '@lucide/vue'
+import { RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import ConfirmDelete from '@/components/ConfirmDelete.vue'
 import FormError from '@/components/FormError.vue'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -13,6 +14,7 @@ import { type ContentType, removedFields } from '@/lib/content'
 import { plural } from '@/lib/format'
 import { slugify } from '@/lib/slug'
 import FieldList from './FieldList.vue'
+import TypePreview from './TypePreview.vue'
 
 const props = defineProps<{
   space: string
@@ -22,6 +24,14 @@ const props = defineProps<{
 const emit = defineEmits<{ saved: [ContentType]; deleted: [string] }>()
 
 const isNew = computed(() => !props.type)
+/** Onglet affiché : les champs, ou l'aperçu de l'éditeur d'entrée (document UX). */
+const tab = ref<'fields' | 'preview'>('fields')
+/** Flèches gauche et droite entre les deux onglets (motif ARIA des onglets). */
+async function switchTab() {
+  tab.value = tab.value === 'fields' ? 'preview' : 'fields'
+  await nextTick()
+  document.getElementById(`type-tab-${tab.value}`)?.focus()
+}
 
 /** Copie modifiable du type ; le nom d'entrée vide d'une page unique devient null à l'envoi. */
 const copyOf = (type: ContentType | null) => {
@@ -150,14 +160,38 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onUnload))
 <template>
   <div class="grid gap-8">
     <form class="grid gap-6" novalidate @submit.prevent="save">
-      <h2 class="text-lg font-semibold">{{ type?.name ?? 'Nouveau type' }}</h2>
+      <div class="grid gap-2">
+        <RouterLink
+          :to="`/espaces/${space}/structure`"
+          class="inline-flex items-center gap-1 justify-self-start rounded-md text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ChevronLeft class="size-4" aria-hidden="true" />Structure
+        </RouterLink>
+        <div class="flex flex-wrap items-center gap-3">
+          <h1 class="flex-1 text-2xl font-semibold tracking-tight">
+            {{ type?.name ?? 'Nouveau type' }}
+          </h1>
+          <Button
+            v-if="!isNew"
+            type="button"
+            variant="ghost"
+            :disabled="!dirty || pending"
+            @click="reset"
+          >
+            Annuler les modifications
+          </Button>
+          <Button type="submit" :disabled="pending">
+            {{ pending ? 'Enregistrement…' : isNew ? 'Créer le type' : 'Enregistrer le type' }}
+          </Button>
+        </div>
+      </div>
       <FormError :message="error" />
       <Alert v-if="done && !dirty" role="status">
         <AlertDescription>Type enregistré.</AlertDescription>
       </Alert>
 
-      <div class="grid max-w-xl gap-4 sm:grid-cols-2">
-        <div class="grid gap-1.5">
+      <div class="flex flex-wrap items-start gap-x-4 gap-y-3">
+        <div class="grid w-full max-w-56 gap-1.5">
           <Label for="type-name">Nom au pluriel</Label>
           <Input
             id="type-name"
@@ -169,24 +203,41 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onUnload))
             Affiché dans Contenu : « Projets », « À propos ».
           </p>
         </div>
-        <div class="grid gap-1.5">
+        <div v-if="form.kind === 'collection'" class="grid w-full max-w-56 gap-1.5">
+          <Label for="type-entry">Une entrée</Label>
+          <Input
+            id="type-entry"
+            v-model="form.entryLabel"
+            maxlength="100"
+            aria-describedby="type-entry-hint"
+          />
+          <p id="type-entry-hint" class="text-sm text-muted-foreground">
+            Avec son article : « un projet » donne « Ajouter un projet ».
+          </p>
+        </div>
+        <div v-if="isNew" class="grid w-full max-w-56 gap-1.5">
           <Label for="type-slug">Identifiant</Label>
           <Input
             id="type-slug"
             v-model="form.slug"
-            :disabled="!isNew"
             maxlength="50"
             class="font-mono"
             aria-describedby="type-slug-hint"
           />
           <p id="type-slug-hint" class="text-sm text-muted-foreground">
-            {{
-              isNew
-                ? 'Utilisé par l’API. Figé après la création.'
-                : 'Figé : l’API et les sites l’utilisent.'
-            }}
+            Utilisé par l’API. Figé après la création.
           </p>
         </div>
+        <p
+          v-else
+          class="flex items-center gap-1.5 pt-7 text-sm text-muted-foreground"
+          title="Figés : les entrées, l’API et les sites en dépendent."
+        >
+          <Lock class="size-3.5" aria-hidden="true" />
+          {{ form.kind === 'collection' ? 'Collection' : 'Page unique' }}, identifiant
+          <code class="font-mono text-foreground">{{ form.slug }}</code>
+          <span class="sr-only">(figés : les entrées, l’API et les sites en dépendent)</span>
+        </p>
       </div>
 
       <fieldset v-if="isNew" class="grid gap-2">
@@ -211,53 +262,58 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onUnload))
         </label>
         <p class="text-sm text-muted-foreground">Figée après la création.</p>
       </fieldset>
-      <p v-else class="text-sm text-muted-foreground">
-        {{ form.kind === 'collection' ? 'Collection' : 'Page unique' }}, figée depuis la création.
-      </p>
 
-      <div v-if="form.kind === 'collection'" class="grid max-w-xs gap-1.5">
-        <Label for="type-entry">Une entrée</Label>
-        <Input
-          id="type-entry"
-          v-model="form.entryLabel"
-          maxlength="100"
-          aria-describedby="type-entry-hint"
-        />
-        <p id="type-entry-hint" class="text-sm text-muted-foreground">
-          Avec son article : « un projet » donne le bouton « Ajouter un projet ».
-        </p>
-      </div>
-
-      <section aria-labelledby="fields-title" class="grid gap-3">
-        <h3 id="fields-title" class="font-semibold">Champs</h3>
-        <!-- Recréée à chaque enregistrement : les champs ajoutés deviennent alors figés. -->
-        <FieldList
-          :key="type?.updatedAt ?? 'nouveau'"
-          v-model="form.fields"
-          id-prefix="field"
-          :saved="type?.fields ?? []"
-          allow-group
-        />
-      </section>
-
-      <div class="flex flex-wrap gap-2 border-t pt-6">
-        <Button type="submit" :disabled="pending">
-          {{ pending ? 'Enregistrement…' : isNew ? 'Créer le type' : 'Enregistrer le type' }}
-        </Button>
-        <Button
-          v-if="!isNew"
-          type="button"
-          variant="outline"
-          :disabled="!dirty || pending"
-          @click="reset"
+      <section class="grid gap-4">
+        <div
+          role="tablist"
+          aria-label="Champs du type"
+          class="flex gap-1 border-b"
+          @keydown.left.right.prevent="switchTab"
         >
-          Annuler les modifications
-        </Button>
-      </div>
+          <button
+            v-for="[value, label] in [
+              ['fields', 'Champs'],
+              ['preview', 'Aperçu'],
+            ] as const"
+            :id="`type-tab-${value}`"
+            :key="value"
+            type="button"
+            role="tab"
+            :aria-selected="tab === value"
+            :tabindex="tab === value ? 0 : -1"
+            aria-controls="type-tab-panel"
+            :class="[
+              '-mb-px border-b-2 px-3 py-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              tab === value
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground',
+            ]"
+            @click="tab = value"
+          >
+            {{ label }}
+          </button>
+        </div>
+        <div id="type-tab-panel" role="tabpanel" :aria-labelledby="`type-tab-${tab}`">
+          <!-- Recréée à chaque enregistrement : les champs ajoutés deviennent alors figés. -->
+          <FieldList
+            v-show="tab === 'fields'"
+            :key="type?.updatedAt ?? 'nouveau'"
+            v-model="form.fields"
+            id-prefix="field"
+            :saved="type?.fields ?? []"
+            allow-group
+          />
+          <TypePreview v-if="tab === 'preview'" :fields="form.fields" />
+        </div>
+      </section>
     </form>
 
-    <section v-if="type" aria-labelledby="type-delete-title" class="grid gap-4 border-t pt-8">
-      <h3 id="type-delete-title" class="font-semibold">Supprimer le type</h3>
+    <section
+      v-if="type"
+      aria-labelledby="type-delete-title"
+      class="grid gap-4 rounded-lg border bg-card p-4 sm:p-6"
+    >
+      <h2 id="type-delete-title" class="font-semibold">Supprimer le type</h2>
       <p class="text-sm text-muted-foreground">
         Le type et toutes ses entrées sont supprimés définitivement.
       </p>

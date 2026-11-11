@@ -20,7 +20,7 @@ import {
   type LastSchedule,
   type EntryData,
 } from '@dashility/shared'
-import { and, desc, eq, isNotNull, lte, ne, or } from 'drizzle-orm'
+import { and, desc, eq, isNotNull, lte, ne, or, sql } from 'drizzle-orm'
 import { Cron } from '@nestjs/schedule'
 import type { z } from 'zod'
 import { DB } from '../db/db.module.js'
@@ -102,6 +102,41 @@ export class EntriesService {
       enComplete,
       updatedAt,
       scheduledAt,
+    }))
+  }
+
+  /** Entrées qui demandent une action, tous types confondus, la dernière modifiée d'abord
+   *  (document UX, « Contenu ») : brouillon ou modifications non publiées, EN incomplet,
+   *  publication programmée. */
+  async todo(space: Space) {
+    const rows = await this.db
+      .select({ entry: entryColumns, type: contentTypes })
+      .from(entries)
+      .innerJoin(contentTypes, eq(contentTypes.id, entries.typeId))
+      .where(
+        and(
+          eq(contentTypes.spaceId, space.id),
+          // Un type sans champ est masqué dans Contenu (document UX, « Structure »).
+          sql`jsonb_array_length(${contentTypes.fields}) > 0`,
+          or(
+            isNotNull(entries.draft),
+            eq(entries.enComplete, false),
+            isNotNull(entries.scheduledAt),
+          ),
+        ),
+      )
+      .orderBy(desc(entries.updatedAt))
+    return rows.map(({ entry, type }) => ({
+      type: { slug: type.slug, name: type.name, kind: type.kind },
+      id: entry.id,
+      title:
+        type.kind === 'single'
+          ? type.name
+          : entryTitle(type.fields, entry.draft ?? entry.published ?? {}),
+      status: entryStatus(entry),
+      enComplete: entry.enComplete,
+      updatedAt: entry.updatedAt,
+      scheduledAt: entry.scheduledAt,
     }))
   }
 

@@ -179,7 +179,9 @@ export class TypesService {
             published: sql<number>`count(${entries.id}) filter (where ${entries.published} is not null)::int`,
             enIncomplete: sql<number>`count(${entries.id}) filter (where not ${entries.enComplete})::int`,
             scheduled: sql<number>`count(${entries.id}) filter (where ${entries.scheduledAt} is not null)::int`,
+            modified: sql<number>`count(${entries.id}) filter (where ${entries.published} is not null and ${entries.draft} is not null)::int`,
           },
+          lastEntryUpdatedAt: sql`max(${entries.updatedAt})`.mapWith(entries.updatedAt),
         })
         .from(contentTypes)
         .leftJoin(entries, eq(entries.typeId, contentTypes.id))

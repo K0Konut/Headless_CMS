@@ -1,10 +1,10 @@
 # Architecture de contenu et UX — dashboard de Dashility
 
-4 novembre 2026, complété le 6 novembre 2026 pour la V2 · s'appuie sur `01-PRD.md` et `decisions.md`
+4 novembre 2026, complété le 6 novembre 2026 pour la V2 et le 11 novembre 2026 pour la refonte de Contenu et Structure · s'appuie sur `01-PRD.md` et `decisions.md`
 
 Ce document organise les écrans et les parcours du dashboard. Les écrans V1 et V2 sont détaillés (wireframes et états), ainsi que la publication programmée de la V3 ; le reste de la V3 n'est décrit qu'en arborescence et en parcours.
 
-Méthode allégée : pas de territoire de marque ni de DA. Le dashboard est neutre et construit avec shadcn-vue (PRD, « Exigences de qualité »).
+Méthode allégée : pas de territoire de marque. Le dashboard est construit avec shadcn-vue (PRD, « Exigences de qualité ») ; sa direction visuelle, légère, est dans `03-direction-artistique.md` depuis le 11 novembre 2026.
 
 ## Principes
 
@@ -77,6 +77,9 @@ flowchart TD
 ```
 
 - **Sélecteur d'espace** : liste des espaces du compte, recherche si plus de 5 espaces, et une entrée « + Nouvel espace » pour le super-admin. Si le compte n'a qu'un espace, le sélecteur devient un simple titre. Chaque espace est précédé du favicon de son site (`<site>/favicon.ico`), ou de l'initiale de son nom si le site n'en a pas.
+- **Contenu dans la barre latérale** : sous « Contenu », la liste des types (collections puis pages, dans l'ordre de Structure), chacun ouvrant sa liste d'entrées ou son éditeur en un clic. Le type ouvert est mis en évidence. La liste est dépliée tant qu'on est dans Contenu, repliée ailleurs ; un chevron permet de la déplier à la main.
+- **Densité** : les listes d'éléments (types, entrées, champs) sont des lignes, pas des cartes ; une carte est réservée à un bloc qui regroupe plusieurs informations (indicateurs de l'analytics, éditeur). Le contenu des écrans garde sa largeur maximale actuelle (environ 1 000 px) : les lignes la remplissent, au lieu de cartes étirées.
+- **Une action principale par écran**, en haut à droite, à côté du titre (« Ajouter un projet », « Nouveau type », « Publier »).
 - Lien d'évitement « Aller au contenu » en premier élément focusable.
 - Titre de l'onglet du navigateur : `<Écran> · <Espace> · Dashility`.
 
@@ -214,25 +217,59 @@ Le badge « EN incomplet » s'ajoute quand un champ obligatoire traduisible n'a 
 
 ### Contenu
 
+L'écran répond à deux questions : « qu'est-ce qui reste à faire ? » et « où est tel contenu ? ». Il remplace les grandes cartes par type (une par ligne de grille, avec seulement le statut), qui prenaient beaucoup de place pour peu d'information.
+
 ```
 Contenu
-┌ Projets ─────────── collection ┐ ┌ Parcours ────────── collection ┐
-│ 4 publiés · 1 brouillon        │ │ 9 publiés                      │
-│ 1 EN incomplet                 │ │                                │
-└────────────────────────────────┘ └────────────────────────────────┘
-┌ Qui je suis ──── page unique ──┐ ┌ CV ──────────── page unique ───┐
-│ Publié                         │ │ Publié · EN incomplet          │
-└────────────────────────────────┘ └────────────────────────────────┘
+
+À traiter                                                              4
+┌──────────────────────────────────────────────────────────────────────┐
+│ Projets › Dashility          Brouillon · EN incomplet     il y a 2 h │
+│ Parcours › Alternance        Modifications non publiées   hier       │
+│ Projets › Ce portfolio       Programmé le 12 nov. à 09:00  hier      │
+│ Qui je suis                  EN incomplet                  9 nov.    │
+└──────────────────────────────────────────────────────────────────────┘
+
+Collections
+┌──────────────────────────────────────────────────────────────────────┐
+│ Projets   4 publiés · 1 brouillon · 1 EN incomplet  hier   [+ Ajouter] │
+│ Parcours  8 publiés                                 3 nov. [+ Ajouter] │
+└──────────────────────────────────────────────────────────────────────┘
+
+Pages
+┌──────────────────────────────────────────────────────────────────────┐
+│ Compétences        Publiée                              9 nov.       │
+│ Qui je suis        Publiée · EN incomplet               9 nov.       │
+│ Mon histoire       Publiée                              8 nov.       │
+│ …                                                                    │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
-- Une carte par type, dans l'ordre de Structure. Une collection ouvre la liste de ses entrées ; une page unique ouvre directement l'éditeur.
-- Les types apparaissent aussi sous « Contenu » dans la barre latérale, pour y aller en un clic.
+**À traiter** : les entrées qui demandent une action, toutes collections et pages confondues.
+
+- Y figurent : un brouillon jamais publié, une entrée publiée avec des modifications non publiées, une entrée « EN incomplet » (masquée sur le site en anglais), une publication programmée (pour mémoire, avec sa date).
+- Une ligne par entrée : `Type › Titre` (le titre d'une page unique est le nom de son type), ses badges, sa dernière modification. Toute la ligne ouvre l'éditeur.
+- Tri : dernière modification d'abord. Au-delà de 8 lignes, « Tout afficher (12) » déplie le reste sur place.
+- Le compteur à côté du titre donne le nombre total d'entrées à traiter.
+- Rien à traiter : « Tout est publié et traduit. » à la place de la liste, sur une ligne.
+
+**Collections** : une ligne par collection, dans l'ordre de Structure.
+
+- Nom, compteurs en pastilles de statut (publiés, brouillons, modifiés, programmés, EN incomplet ; un compteur à zéro n'est pas affiché, sauf « 0 entrée »), dernière modification d'une de ses entrées.
+- Bouton « Ajouter » (nom complet pour les lecteurs d'écran : « Ajouter un projet », avec le nom d'une entrée du type) : crée l'entrée et ouvre l'éditeur, sans passer par la liste.
+- Le reste de la ligne ouvre la liste des entrées.
+
+**Pages** : une ligne par page unique, dans l'ordre de Structure ; badges de statut et dernière modification. La ligne ouvre l'éditeur.
+
+- Sur mobile, chaque ligne passe sur deux lignes (nom et action, puis badges et date) .
+- Les types apparaissent aussi sous « Contenu » dans la barre latérale (voir « Mise en page commune »).
 
 | État | Affichage |
 | --- | --- |
 | Aucun type (super-admin) | « Cet espace n'a pas encore de type de contenu » et bouton « Créer un type » vers Structure |
 | Aucun type (membre) | « Le contenu de cet espace n'est pas encore prêt. Votre administrateur doit d'abord le configurer. » |
-| Chargement | Squelettes des cartes |
+| Aucune collection, ou aucune page | La section correspondante n'est pas affichée |
+| Chargement | Squelettes des lignes |
 | Erreur | Message et bouton « Réessayer » |
 
 ### Liste des entrées d'une collection
@@ -361,25 +398,70 @@ Tous les champs se règlent aussi en **obligatoire ou facultatif**, et en **trad
 
 ### Structure (super-admin)
 
+Trois difficultés à lever : on ne voit pas l'ensemble des types d'un coup d'œil, le formulaire d'un champ montre tous ses réglages à la fois, et on ne voit pas ce que donnera l'éditeur. Les groupes répétables cumulent les trois.
+
+**Vue d'ensemble** (`/structure`, aucun type ouvert)
+
 ```
 Structure                                                   [+ Nouveau type]
-┌ Types ─────────────┐ ┌ Projets ──────────────────────────────────────────┐
-│ ▸ Projets          │ │ Nom au pluriel  [Projets     ]                    │
-│   Parcours         │ │ Une entrée      [un projet   ]  → « Ajouter un projet »
-│   Compétences      │ │ Identifiant     projets (figé)   Nature : collection
-│   Qui je suis      │ │                                                   │
-│   CV               │ │ Champs                                            │
-└────────────────────┘ │ ┌ Titre ─── texte court · obligatoire · trad. ↑↓ ⋯┐
-                       │ ├ Accroche ─ texte court · obligatoire · trad. ↑↓ ⋯┤
-                       │ ├ Contraintes ─ groupe répétable (2 champs)   ↑↓ ⋯┤
-                       │ └──────────────────────────────────────────────────┘
-                       │ [+ Ajouter un champ]                               │
-                       │                         [Annuler] [Enregistrer le type]
-                       └───────────────────────────────────────────────────┘
+┌───────────────┬────────────────┬──────────────────────────────┬─────────┬──────────┐
+│ Type          │ Nature         │ Champs                       │ Entrées │ Modifié  │
+├───────────────┼────────────────┼──────────────────────────────┼─────────┼──────────┤
+│ Projets       │ Collection     │ 12 · Titre, Accroche, Type…  │ 5       │ 9 nov.   │
+│ Parcours      │ Collection     │ 7 · Titre, Période, Lieu…    │ 8       │ 3 nov.   │
+│ Compétences   │ Page unique    │ 1 · Catégories               │ —       │ 2 nov.   │
+└───────────────┴────────────────┴──────────────────────────────┴─────────┴──────────┘
 ```
 
+- Une ligne par type, dans l'ordre du site (↑ ↓ pour le changer, comme aujourd'hui). La colonne « Champs » donne le nombre de champs et les premiers libellés.
+- La ligne ouvre l'éditeur du type. Sur mobile, le tableau devient une liste de cartes.
+
+**Éditeur d'un type** (`/structure/:type`)
+
+```
+‹ Structure    Projets                                 [Annuler] [Enregistrer]
+  Nom au pluriel [Projets   ]   Une entrée [un projet ]   Collection · projets 🔒
+
+  [ Champs ]  [ Aperçu ]
+  ┌──────────────────────────────────────────────────────────────────┐
+  │ ▸ Aa  Titre          Texte court   obligatoire · traduit    ↑ ↓ 🗑 │
+  │ ▸ ¶   Accroche       Texte riche   traduit                  ↑ ↓ 🗑 │
+  │ ▾ ☰   Contraintes    Groupe · 2 sous-champs                 ↑ ↓ 🗑 │
+  │     ┌ Aa titre        Texte court   obligatoire · traduit   ↑ ↓ 🗑 ┐│
+  │     ├ ¶  description  Texte riche   traduit                 ↑ ↓ 🗑 ┤│
+  │     └ [+ Ajouter un sous-champ]                                   ┘│
+  │ [+ Ajouter un champ]                                              │
+  └──────────────────────────────────────────────────────────────────┘
+```
+
+- Le type ouvert remplace la vue d'ensemble ; « ‹ Structure » y revient. La liste des types n'occupe plus de colonne à gauche : toute la largeur va aux champs.
+- Les informations du type tiennent sur une ligne ; l'identifiant et la nature, figés, sont affichés avec un cadenas et une infobulle qui dit pourquoi.
+- **Un champ = une ligne** : icône du type de champ, libellé, type, badges (obligatoire, traduit), ↑ ↓ et suppression. La ligne se déplie sur place pour modifier le champ ; un seul champ déplié à la fois.
+- **Groupe répétable** : ses sous-champs sont listés dans sa ligne dépliée, avec les mêmes lignes et le même formulaire ; « Ajouter un sous-champ » propose tous les types sauf le groupe.
+
+**Ajouter un champ, en deux temps**
+
+1. **Choisir le type** : une grille de types, chacun avec son icône, son nom et un exemple d'usage (« Texte court : un titre, un nom »). Remplace la liste déroulante.
+2. **Le remplir** : seulement l'essentiel, puis « Plus de réglages ».
+
+| Toujours visible | Dans « Plus de réglages » (replié) |
+| --- | --- |
+| Libellé | Identifiant (généré depuis le libellé ; figé après l'enregistrement) |
+| Obligatoire | Longueur maximale (texte court) |
+| Traduisible, pour les types qui le permettent, avec la mention « ne pourra plus être changé » | Décimales (nombre), valeur par défaut (oui / non) |
+| Les choix d'une liste de choix, la saisie et la précision d'une date, les sous-champs d'un groupe : sans eux le champ ne sert à rien | Nombre minimal et maximal d'éléments (groupe) |
+
+- Un champ déjà enregistré se modifie avec le même formulaire ; ses réglages figés sont affichés en lecture seule avec un cadenas.
+
+**Aperçu**
+
+- L'onglet « Aperçu » montre l'éditeur d'une entrée tel que les membres le verront, avec la structure en cours (même non enregistrée) : mêmes composants, mêmes colonnes FR / EN, groupes repliables.
+- Les champs y sont désactivés : un envoi d'image ou de PDF y créerait un vrai fichier. Un bandeau le dit. Chaque groupe y montre un élément, déplié, pour en voir les sous-champs.
+- Onglets plutôt que deux colonnes : l'éditeur a besoin de la largeur pour ses colonnes FR et EN.
+
+**Règles inchangées**
+
 - **Nouveau type** : nom au pluriel, nom d'une entrée avec son article (« un projet », « une expérience », pour le bouton « Ajouter un projet »), identifiant (généré depuis le nom, modifiable à la création) et nature (collection ou page unique).
-- **Ajouter un champ** : choix du type de champ, libellé, identifiant (généré depuis le libellé), obligatoire, traduisible, puis les réglages propres au type.
 - **Ce qui est figé après la création**, parce que les entrées et les sites en dépendent : l'identifiant et la nature d'un type ; l'identifiant, le type et le caractère traduisible d'un champ. Pour les changer, on supprime et on recrée.
 - **Ce qui reste modifiable** : noms, libellés, ordre des champs, obligatoire ou facultatif (la règle s'applique à la prochaine publication), choix d'une liste. L'identifiant d'un choix enregistré est figé ; retirer un choix utilisé efface sa valeur des entrées, après la même confirmation qu'un champ supprimé.
 - **Supprimer un champ ou un type** utilisé par des entrées : la confirmation donne le nombre d'entrées touchées (« Les valeurs de ce champ seront supprimées dans 4 projets ») ; pour un type, il faut retaper son nom.
