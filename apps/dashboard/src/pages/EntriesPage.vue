@@ -132,37 +132,39 @@ async function add() {
         Aucune entrée ne correspond à ce filtre.
         <button type="button" class="underline" @click="filter = 'all'">Tout afficher</button>
       </p>
-      <Table v-else class="mt-4">
-        <TableHeader>
-          <TableRow>
-            <TableHead>Titre</TableHead>
-            <TableHead>Statut</TableHead>
-            <TableHead class="hidden sm:table-cell">Modifié</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          <TableRow v-for="entry in shown" :key="entry.id">
-            <TableCell class="max-w-64 truncate font-medium">
-              <RouterLink
-                :to="`/espaces/${space}/contenu/${type.slug}/${entry.id}`"
-                class="hover:underline"
-              >
-                {{ entry.title || 'Sans titre' }}
-              </RouterLink>
-            </TableCell>
-            <TableCell>
-              <StatusBadges
-                :status="entry.status"
-                :en-complete="entry.enComplete"
-                :scheduled-at="entry.scheduledAt"
-              />
-            </TableCell>
-            <TableCell class="hidden text-muted-foreground sm:table-cell">
-              {{ formatDate(entry.updatedAt) }}
-            </TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
+      <div v-else class="mt-4 overflow-hidden rounded-lg border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Titre</TableHead>
+              <TableHead>Statut</TableHead>
+              <TableHead class="hidden sm:table-cell">Modifié</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow v-for="entry in shown" :key="entry.id">
+              <TableCell class="max-w-64 truncate font-medium">
+                <RouterLink
+                  :to="`/espaces/${space}/contenu/${type.slug}/${entry.id}`"
+                  class="hover:underline"
+                >
+                  {{ entry.title || 'Sans titre' }}
+                </RouterLink>
+              </TableCell>
+              <TableCell>
+                <StatusBadges
+                  :status="entry.status"
+                  :en-complete="entry.enComplete"
+                  :scheduled-at="entry.scheduledAt"
+                />
+              </TableCell>
+              <TableCell class="hidden text-muted-foreground sm:table-cell">
+                {{ formatDate(entry.updatedAt) }}
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
     </template>
   </template>
 </template>

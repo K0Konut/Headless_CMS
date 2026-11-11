@@ -149,7 +149,7 @@ const tools = computed<Tool[]>(() => {
 
 <template>
   <div
-    class="rounded-md border border-input shadow-xs focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50"
+    class="rounded-md border border-input bg-card shadow-xs focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50"
     :class="{ 'border-destructive': invalid }"
   >
     <div
