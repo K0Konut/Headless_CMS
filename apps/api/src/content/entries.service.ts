@@ -19,6 +19,7 @@ import {
   scheduleIssue,
   type LastSchedule,
   type EntryData,
+  PREVIEW_PARAM,
 } from '@dashility/shared'
 import { and, desc, eq, isNotNull, lte, ne, or, sql } from 'drizzle-orm'
 import { Cron } from '@nestjs/schedule'
@@ -26,7 +27,8 @@ import type { z } from 'zod'
 import { DB } from '../db/db.module.js'
 import { isUniqueViolation } from '../db/errors.js'
 import type { Db, User } from '../db/index.js'
-import { contentTypes, entries } from '../db/schema.js'
+import { hashToken, newToken } from '../auth/tokens.js'
+import { contentTypes, entries, previewLinks } from '../db/schema.js'
 import type { Space } from '../spaces/guards.js'
 import { DeployService } from '../deploy/deploy.service.js'
 import { MediaService } from '../media/media.service.js'
@@ -71,6 +73,8 @@ function publication(
     },
   }
 }
+
+const PREVIEW_TTL_MS = 24 * 60 * 60 * 1000
 
 /** Une entrée d'une collection (identifiant validé par la route), ou celle d'une page unique. */
 export type EntryRef = string | 'single'
@@ -163,6 +167,31 @@ export class EntriesService {
     const [entry] = await this.db.select(entryColumns).from(entries).where(this.byId(type, id))
     if (!entry) throw new NotFoundException('Entrée introuvable')
     return entry
+  }
+
+  /** Lien d'aperçu (V3) : la page d'aperçu du site avec un nouveau jeton, valable 24 h. Le
+   *  jeton donne accès à cette seule entrée, en lecture ; seule son empreinte est gardée. */
+  async preview(space: Space, typeSlug: string, id: EntryRef) {
+    if (!space.previewUrl) {
+      throw new ConflictException({
+        code: 'preview_not_configured',
+        message: 'Aucune URL d’aperçu : configurez-la dans Réglages › Intégration',
+      })
+    }
+    const type = await this.types.row(space, typeSlug)
+    const [entry] = await this.db
+      .select({ id: entries.id })
+      .from(entries)
+      .where(this.byId(type, id))
+    if (!entry) throw new NotFoundException('Entrée introuvable')
+    const token = newToken()
+    const expiresAt = new Date(Date.now() + PREVIEW_TTL_MS)
+    await this.db
+      .insert(previewLinks)
+      .values({ id: hashToken(token), entryId: entry.id, expiresAt })
+    const url = new URL(space.previewUrl)
+    url.searchParams.set(PREVIEW_PARAM, token)
+    return { url: url.href, expiresAt }
   }
 
   /** Sauvegarde automatique : les valeurs vont toujours dans `draft`. La version envoyée doit

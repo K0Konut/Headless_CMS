@@ -49,7 +49,21 @@ export const createSpaceSchema = z.object({
   siteUrl: siteUrlSchema,
 })
 
-export const updateSpaceSchema = createSpaceSchema.partial()
+/** Page d'aperçu du site (V3) : le chemin est gardé. https, ou http en local pour tester un site
+ *  en développement. */
+export const previewUrlSchema = z
+  .url({ protocol: /^https?$/, error: 'URL invalide (http ou https)' })
+  .refine(
+    (url) => url.startsWith('https:') || /^(localhost|127\.0\.0\.1)$/.test(new URL(url).hostname),
+    'L’URL d’aperçu doit être en https (http seulement en local)',
+  )
+
+export const updateSpaceSchema = createSpaceSchema
+  .partial()
+  .extend({ previewUrl: previewUrlSchema.nullable().optional() })
+
+/** Paramètre d'URL qui porte le jeton d'aperçu ; le script de collecte ne compte pas ces pages. */
+export const PREVIEW_PARAM = 'dashility-preview'
 
 export const invitationSchema = z.object({ email: emailSchema })
 

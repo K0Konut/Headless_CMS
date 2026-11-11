@@ -95,6 +95,36 @@ export const openApiDocument: OpenAPIObject = {
         },
       },
     },
+    '/preview/{token}': {
+      servers: [{ url: '/api' }],
+      get: {
+        summary: 'Aperçu d’une entrée (page d’aperçu du site)',
+        description:
+          'Lu **depuis le navigateur** par la page d’aperçu du site, qui reçoit le jeton dans le paramètre `dashility-preview`. Sans clé : le jeton donne accès à une seule entrée, en lecture, pendant 24 h. CORS ouvert, sans cookie. Renvoie la **version en cours** (brouillon ou modifications non publiées), avec les valeurs au même format que `/content`. En anglais, l’entrée est renvoyée même incomplète (`enComplete: false`, valeurs manquantes à `null`). 60 requêtes par minute et par IP.',
+        security: [],
+        parameters: [
+          {
+            name: 'token',
+            in: 'path' as const,
+            required: true,
+            description: 'Valeur du paramètre `dashility-preview` de la page d’aperçu.',
+            schema: { type: 'string' },
+          },
+          { ...locale, description: 'Langue des valeurs.' },
+        ],
+        responses: {
+          200: {
+            description: 'L’entrée, version en cours',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Preview' } } },
+          },
+          404: error(
+            '`preview_not_found` : lien inconnu ; `preview_entry_deleted` : l’entrée a été supprimée',
+          ),
+          410: error('`preview_expired` : le lien a plus de 24 h'),
+          429: error('Plus de 60 requêtes dans la minute'),
+        },
+      },
+    },
   },
   components: {
     securitySchemes: {
@@ -120,6 +150,24 @@ export const openApiDocument: OpenAPIObject = {
             description: 'Valeurs, indexées par l’identifiant des champs du type',
             additionalProperties: true,
           },
+        },
+      },
+      Preview: {
+        type: 'object',
+        required: ['type', 'kind', 'fields', 'status', 'enComplete', 'expiresAt'],
+        properties: {
+          type: { type: 'string', description: 'Identifiant du type : le site choisit sa page' },
+          kind: { type: 'string', enum: ['collection', 'single'] },
+          slug: { type: 'string', description: 'Identifiant d’URL en cours (collections)' },
+          publishedAt: {
+            type: ['string', 'null'],
+            format: 'date-time',
+            description: 'Dernière publication ; `null` pour un brouillon jamais publié',
+          },
+          fields: { type: 'object', additionalProperties: true },
+          status: { type: 'string', enum: ['draft', 'modified', 'published'] },
+          enComplete: { type: 'boolean' },
+          expiresAt: { type: 'string', format: 'date-time' },
         },
       },
       Error: {

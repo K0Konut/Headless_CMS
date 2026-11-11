@@ -20,6 +20,7 @@ import {
   parisDateTime,
   scheduleIssue,
   passwordSchema,
+  previewUrlSchema,
   siteUrlSchema,
   slugSchema,
 } from './index'
@@ -87,6 +88,18 @@ describe('siteUrlSchema', () => {
   it('refuse un autre protocole', () => {
     expect(siteUrlSchema.safeParse('ftp://exemple.fr').success).toBe(false)
     expect(siteUrlSchema.safeParse('javascript:alert(1)').success).toBe(false)
+  })
+})
+
+describe('previewUrlSchema', () => {
+  it('garde le chemin, en https ou en http local', () => {
+    expect(previewUrlSchema.parse('https://exemple.fr/apercu')).toBe('https://exemple.fr/apercu')
+    expect(previewUrlSchema.safeParse('http://localhost:5173/apercu').success).toBe(true)
+  })
+
+  it('refuse http hors local et les autres protocoles', () => {
+    expect(previewUrlSchema.safeParse('http://exemple.fr/apercu').success).toBe(false)
+    expect(previewUrlSchema.safeParse('javascript:alert(1)').success).toBe(false)
   })
 })
 

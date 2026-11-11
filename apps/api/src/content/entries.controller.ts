@@ -103,6 +103,16 @@ export class EntriesController {
     return this.entries.unschedule(space, type, id)
   }
 
+  /** Lien d'aperçu (V3). Déclarée avant `:id/:action`, qui la prendrait sinon. */
+  @Post(':id/preview')
+  preview(
+    @Req() { space }: SpaceRequest,
+    @Param('type') type: string,
+    @Param('id', singleOrUuid) id: EntryRef,
+  ) {
+    return this.entries.preview(space, type, id)
+  }
+
   /** Publier, annuler les modifications, dépublier : `single` ou l'identifiant d'une entrée. */
   @Post(':id/:action')
   @HttpCode(200)

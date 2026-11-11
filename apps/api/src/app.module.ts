@@ -20,6 +20,7 @@ import { RetentionService } from './collect/retention.service.js'
 import { PublicMediaController, SpaceMediaController } from './media/media.controller.js'
 import { MediaService } from './media/media.service.js'
 import { ApiKeyGuard } from './public-api/public-api.guard.js'
+import { PreviewController } from './public-api/preview.controller.js'
 import { PublicApiController } from './public-api/public-api.controller.js'
 import { PublicApiService } from './public-api/public-api.service.js'
 import { DeployController } from './deploy/deploy.controller.js'
@@ -52,6 +53,7 @@ import { SpacesService } from './spaces/spaces.service.js'
     CollectController,
     DeployController,
     LinksController,
+    PreviewController,
     PublicApiController,
     PublicMediaController,
     SpaceMediaController,
