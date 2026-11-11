@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { type Field, TRANSLATABLE_FIELD_TYPES } from '@dashility/shared'
-import { Trash2 } from '@lucide/vue'
+import { ChevronRight, Trash2 } from '@lucide/vue'
 import { computed, watch } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -50,39 +50,18 @@ function setChoiceLabel(choice: { key: string; fr: string; en: string }, fr: str
 
 <template>
   <div class="grid gap-4">
-    <div class="grid gap-4 sm:grid-cols-2">
-      <div class="grid gap-1.5">
+    <div class="flex flex-wrap items-end gap-x-6 gap-y-3">
+      <div class="grid w-full max-w-xs gap-1.5">
         <Label :for="id('label')">Libellé</Label>
         <Input :id="id('label')" v-model="field.label" maxlength="100" />
       </div>
-      <div class="grid gap-1.5">
-        <Label :for="id('key')">Identifiant</Label>
-        <Input
-          :id="id('key')"
-          v-model="field.key"
-          :disabled="frozen"
-          :aria-describedby="id('key-hint')"
-          maxlength="50"
-          class="font-mono"
-        />
-        <p :id="id('key-hint')" class="text-sm text-muted-foreground">
-          {{
-            frozen
-              ? 'Figé : les entrées et les sites l’utilisent.'
-              : 'Nom du champ dans l’API. Figé après l’enregistrement.'
-          }}
-        </p>
-      </div>
-    </div>
-
-    <div class="flex flex-wrap gap-x-6 gap-y-2">
-      <label class="flex items-center gap-2 text-sm">
+      <label class="flex h-9 items-center gap-2 text-sm">
         <input v-model="field.required" type="checkbox" class="size-4 accent-primary" />
         Obligatoire
       </label>
       <label
         v-if="TRANSLATABLE_FIELD_TYPES.includes(field.type)"
-        class="flex items-center gap-2 text-sm"
+        class="flex h-9 items-center gap-2 text-sm"
       >
         <input
           v-model="field.translatable"
@@ -92,23 +71,14 @@ function setChoiceLabel(choice: { key: string; fr: string; en: string }, fr: str
           :aria-describedby="frozen ? id('translatable-hint') : undefined"
         />
         Une valeur en français et une en anglais
-        <span v-if="frozen" :id="id('translatable-hint')" class="sr-only">(figé)</span>
+        <span v-if="frozen" :id="id('translatable-hint')" class="text-muted-foreground">
+          (figé)
+        </span>
+        <span v-else class="text-muted-foreground">(ne pourra plus être changé)</span>
       </label>
     </div>
 
-    <div v-if="field.type === 'text'" class="grid max-w-48 gap-1.5">
-      <Label :for="id('max')">Longueur maximale (facultatif)</Label>
-      <Input
-        :id="id('max')"
-        type="number"
-        min="1"
-        max="10000"
-        :model-value="field.maxLength ?? ''"
-        @update:model-value="field.maxLength = optionalInt($event)"
-      />
-    </div>
-
-    <fieldset v-else-if="field.type === 'choice'" class="grid gap-2">
+    <fieldset v-if="field.type === 'choice'" class="grid gap-2">
       <legend class="mb-2 text-sm font-medium">Choix</legend>
       <div
         v-for="(choice, c) in field.choices"
@@ -188,42 +158,8 @@ function setChoiceLabel(choice: { key: string; fr: string; en: string }, fr: str
       </fieldset>
     </div>
 
-    <label v-else-if="field.type === 'number'" class="flex items-center gap-2 text-sm">
-      <input v-model="field.decimals" type="checkbox" class="size-4 accent-primary" />
-      Décimales autorisées
-    </label>
-
-    <label v-else-if="field.type === 'boolean'" class="flex items-center gap-2 text-sm">
-      <input v-model="field.defaultValue" type="checkbox" class="size-4 accent-primary" />
-      « Oui » par défaut
-    </label>
-
     <div v-else-if="field.type === 'group'" class="grid gap-4">
-      <div class="flex flex-wrap gap-4">
-        <div class="grid max-w-40 gap-1.5">
-          <Label :for="id('min')">Éléments au minimum</Label>
-          <Input
-            :id="id('min')"
-            type="number"
-            min="0"
-            max="100"
-            :model-value="field.min ?? ''"
-            @update:model-value="field.min = optionalInt($event)"
-          />
-        </div>
-        <div class="grid max-w-40 gap-1.5">
-          <Label :for="id('max')">Éléments au maximum</Label>
-          <Input
-            :id="id('max')"
-            type="number"
-            min="1"
-            max="100"
-            :model-value="field.max ?? ''"
-            @update:model-value="field.max = optionalInt($event)"
-          />
-        </div>
-      </div>
-      <fieldset class="grid gap-2 rounded-lg bg-muted/40 p-3">
+      <fieldset class="grid gap-2">
         <legend class="sr-only">Sous-champs de « {{ field.label || 'Sans libellé' }} »</legend>
         <p class="text-sm font-medium" aria-hidden="true">Sous-champs</p>
         <FieldList
@@ -234,5 +170,84 @@ function setChoiceLabel(choice: { key: string; fr: string; en: string }, fr: str
         />
       </fieldset>
     </div>
+
+    <details class="group">
+      <summary
+        class="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-md text-sm font-medium text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
+      >
+        <ChevronRight
+          class="size-4 motion-safe:transition-transform group-open:rotate-90"
+          aria-hidden="true"
+        />
+        Plus de réglages
+      </summary>
+      <div class="mt-3 flex flex-wrap items-start gap-x-6 gap-y-4">
+        <div class="grid w-full max-w-xs gap-1.5">
+          <Label :for="id('key')">Identifiant</Label>
+          <Input
+            :id="id('key')"
+            v-model="field.key"
+            :disabled="frozen"
+            :aria-describedby="id('key-hint')"
+            maxlength="50"
+            class="font-mono"
+          />
+          <p :id="id('key-hint')" class="text-sm text-muted-foreground">
+            {{
+              frozen
+                ? 'Figé : les entrées et les sites l’utilisent.'
+                : 'Nom du champ dans l’API, généré depuis le libellé. Figé après l’enregistrement.'
+            }}
+          </p>
+        </div>
+
+        <div v-if="field.type === 'text'" class="grid max-w-48 gap-1.5">
+          <Label :for="id('max')">Longueur maximale (facultatif)</Label>
+          <Input
+            :id="id('max')"
+            type="number"
+            min="1"
+            max="10000"
+            :model-value="field.maxLength ?? ''"
+            @update:model-value="field.maxLength = optionalInt($event)"
+          />
+        </div>
+
+        <label v-else-if="field.type === 'number'" class="flex h-9 items-center gap-2 text-sm">
+          <input v-model="field.decimals" type="checkbox" class="size-4 accent-primary" />
+          Décimales autorisées
+        </label>
+
+        <label v-else-if="field.type === 'boolean'" class="flex h-9 items-center gap-2 text-sm">
+          <input v-model="field.defaultValue" type="checkbox" class="size-4 accent-primary" />
+          « Oui » par défaut
+        </label>
+
+        <template v-else-if="field.type === 'group'">
+          <div class="grid max-w-40 gap-1.5">
+            <Label :for="id('min')">Éléments au minimum</Label>
+            <Input
+              :id="id('min')"
+              type="number"
+              min="0"
+              max="100"
+              :model-value="field.min ?? ''"
+              @update:model-value="field.min = optionalInt($event)"
+            />
+          </div>
+          <div class="grid max-w-40 gap-1.5">
+            <Label :for="id('max')">Éléments au maximum</Label>
+            <Input
+              :id="id('max')"
+              type="number"
+              min="1"
+              max="100"
+              :model-value="field.max ?? ''"
+              @update:model-value="field.max = optionalInt($event)"
+            />
+          </div>
+        </template>
+      </div>
+    </details>
   </div>
 </template>

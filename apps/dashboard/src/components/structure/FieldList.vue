@@ -1,22 +1,16 @@
 <script setup lang="ts">
-import { FIELD_TYPES, type Field, type FieldType } from '@dashility/shared'
-import { ChevronDown, Trash2 } from '@lucide/vue'
+import type { Field, FieldType } from '@dashility/shared'
+import { ChevronRight, Plus, Trash2 } from '@lucide/vue'
 import { nextTick, ref } from 'vue'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import MoveButtons from '@/components/MoveButtons.vue'
-import { FIELD_TYPE_LABELS, moveItem, newField, stableIds } from '@/lib/content'
+import { FIELD_TYPE_ICONS, FIELD_TYPE_LABELS, moveItem, newField, stableIds } from '@/lib/content'
 import { plural } from '@/lib/format'
 import FieldForm from './FieldForm.vue'
+import FieldTypePicker from './FieldTypePicker.vue'
 
+/** Champs d'un type (ou sous-champs d'un groupe) : une ligne par champ, dépliée sur place pour
+ *  le modifier, un seul à la fois (document UX, « Éditeur d'un type »). */
 const props = defineProps<{
   /** Préfixe des id HTML : une liste de sous-champs vit dans la page à côté de celle du type. */
   idPrefix: string
@@ -27,33 +21,41 @@ const props = defineProps<{
 }>()
 const fields = defineModel<Field[]>({ required: true })
 
-const types = FIELD_TYPES.filter((t) => props.allowGroup || t !== 'group')
-const newType = ref<FieldType>('text')
-// Identifiant stable par champ (clé de rendu, champs ouverts) : l'ordre peut changer.
+// Identifiant stable par champ (clé de rendu, champ ouvert) : l'ordre peut changer.
 const idOf = stableIds()
-const open = ref(new Set<number>())
-const isOpen = (field: Field) => open.value.has(idOf(field))
+const openId = ref<number | null>(null)
+const isOpen = (field: Field) => openId.value === idOf(field)
 
 // Champs ajoutés depuis l'ouverture : jamais figés, même si leur identifiant reprend celui
 // d'un champ enregistré (c'est alors un doublon, signalé à l'enregistrement).
 const added = new Set<number>()
 
 function toggle(field: Field) {
-  const id = idOf(field)
-  if (!open.value.delete(id)) open.value.add(id)
+  openId.value = isOpen(field) ? null : idOf(field)
 }
 
-async function add() {
-  const field = newField(newType.value)
-  fields.value.push(field)
+const picking = ref(false)
+async function add(type: FieldType) {
+  picking.value = false
+  fields.value.push(newField(type))
   // Lu dans la liste : c'est le proxy réactif, celui que verront idOf et le rendu.
-  added.add(idOf(fields.value.at(-1)!))
-  toggle(fields.value.at(-1)!)
+  const field = fields.value.at(-1)!
+  added.add(idOf(field))
+  openId.value = idOf(field)
   await nextTick()
   document.getElementById(`${props.idPrefix}-${fields.value.length - 1}-label`)?.focus()
 }
+async function cancelPick() {
+  picking.value = false
+  await nextTick()
+  document.getElementById(`${props.idPrefix}-add`)?.focus()
+}
 
 const title = (field: Field) => field.label || 'Sans libellé'
+const typeName = (field: Field) =>
+  field.type === 'group'
+    ? `Groupe, ${plural(field.fields.length, 'sous-champ')}`
+    : FIELD_TYPE_LABELS[field.type]
 
 const savedField = (field: Field) =>
   added.has(idOf(field)) ? undefined : props.saved.find((f) => f.key === field.key)
@@ -64,40 +66,50 @@ const savedField = (field: Field) =>
     <p v-if="!fields.length" class="text-sm text-muted-foreground">
       {{ allowGroup ? 'Aucun champ pour l’instant.' : 'Aucun sous-champ pour l’instant.' }}
     </p>
-    <ol v-else class="grid gap-2">
+    <ol v-else class="overflow-hidden rounded-lg border bg-card">
       <li
         v-for="(field, i) in fields"
         :key="idOf(field)"
-        class="rounded-lg border bg-card"
+        class="border-t first:border-t-0"
         :aria-labelledby="`${idPrefix}-${i}-title`"
       >
-        <div class="flex flex-wrap items-center gap-2 p-3">
+        <div
+          :class="[
+            'flex flex-wrap items-center gap-x-3 gap-y-1 py-2 pr-2 pl-3',
+            isOpen(field) && 'bg-accent/60',
+          ]"
+        >
           <button
             type="button"
-            class="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            class="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
             :aria-expanded="isOpen(field)"
-            :aria-controls="`${idPrefix}-${i}-form`"
+            :aria-controls="isOpen(field) ? `${idPrefix}-${i}-form` : undefined"
             @click="toggle(field)"
           >
-            <ChevronDown
+            <ChevronRight
               aria-hidden="true"
-              class="size-4 shrink-0 transition-transform motion-reduce:transition-none"
-              :class="{ '-rotate-90': !isOpen(field) }"
+              class="size-4 shrink-0 text-muted-foreground motion-safe:transition-transform"
+              :class="{ 'rotate-90': isOpen(field) }"
             />
+            <span
+              class="grid size-7.5 shrink-0 place-items-center rounded-md bg-muted text-foreground/80"
+              aria-hidden="true"
+            >
+              <component :is="FIELD_TYPE_ICONS[field.type]" class="size-4" />
+            </span>
             <span :id="`${idPrefix}-${i}-title`" class="truncate font-medium">
               {{ title(field) }}
             </span>
           </button>
-          <!-- Sur téléphone, les badges passent sous le nom pour lui laisser la largeur. -->
-          <div class="order-last flex w-full flex-wrap gap-1 pl-6 sm:order-none sm:w-auto sm:pl-0">
-            <Badge variant="secondary">{{ FIELD_TYPE_LABELS[field.type] }}</Badge>
-            <Badge v-if="field.required" variant="outline">Obligatoire</Badge>
-            <Badge v-if="field.translatable" variant="outline">FR et EN</Badge>
-            <Badge v-if="field.type === 'group'" variant="outline">
-              {{ plural(field.fields.length, 'sous-champ') }}
-            </Badge>
-          </div>
-          <div class="flex">
+          <!-- Sur téléphone, le type et les réglages passent sous le nom pour lui laisser la largeur. -->
+          <span
+            class="order-last flex w-full flex-wrap gap-x-3 pl-17 text-sm text-muted-foreground sm:order-none sm:w-auto sm:pl-0"
+          >
+            <span>{{ typeName(field) }}</span>
+            <span v-if="field.required" class="font-medium text-foreground/80">Obligatoire</span>
+            <span v-if="field.translatable" class="font-medium text-foreground/80">Traduit</span>
+          </span>
+          <span class="flex">
             <MoveButtons
               :name="title(field)"
               :index="i"
@@ -113,7 +125,7 @@ const savedField = (field: Field) =>
             >
               <Trash2 aria-hidden="true" />
             </Button>
-          </div>
+          </span>
         </div>
         <FieldForm
           v-if="isOpen(field)"
@@ -121,28 +133,27 @@ const savedField = (field: Field) =>
           v-model="fields[i]!"
           :id-prefix="`${idPrefix}-${i}`"
           :saved="savedField(field)"
-          class="border-t p-3"
+          class="border-t bg-muted/30 py-4 pr-4 pl-4 sm:pl-17"
         />
       </li>
     </ol>
 
-    <div class="flex flex-wrap items-end gap-2">
-      <div class="grid gap-1.5">
-        <Label :for="`${idPrefix}-new-type`">
-          {{ allowGroup ? 'Type du nouveau champ' : 'Type du nouveau sous-champ' }}
-        </Label>
-        <Select v-model="newType">
-          <SelectTrigger :id="`${idPrefix}-new-type`" class="w-52"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem v-for="t in types" :key="t" :value="t">{{
-              FIELD_TYPE_LABELS[t]
-            }}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <Button type="button" variant="outline" @click="add">
-        {{ allowGroup ? 'Ajouter un champ' : 'Ajouter un sous-champ' }}
-      </Button>
-    </div>
+    <FieldTypePicker
+      v-if="picking"
+      :id-prefix="idPrefix"
+      :allow-group="allowGroup"
+      @pick="add"
+      @cancel="cancelPick"
+    />
+    <Button
+      v-else
+      :id="`${idPrefix}-add`"
+      type="button"
+      variant="outline"
+      class="justify-self-start"
+      @click="picking = true"
+    >
+      <Plus aria-hidden="true" />{{ allowGroup ? 'Ajouter un champ' : 'Ajouter un sous-champ' }}
+    </Button>
   </div>
 </template>
