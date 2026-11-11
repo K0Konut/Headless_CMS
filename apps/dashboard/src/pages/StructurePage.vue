@@ -9,9 +9,13 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api, errorMessage } from '@/lib/api'
 import { type ContentType, moveItem } from '@/lib/content'
+import { useContentStore } from '@/stores/content'
 
 const route = useRoute()
 const router = useRouter()
+// Types listés sous « Contenu » dans la barre latérale : relus quand la structure change sans
+// changer d'URL (champs d'un type, ordre).
+const content = useContentStore()
 
 const space = computed(() => String(route.params.espace))
 const selected = computed(() =>
@@ -51,6 +55,7 @@ function onSaved(saved: ContentType) {
     void router.replace(`${base.value}/${saved.slug}`)
   } else {
     list[index] = saved
+    void content.load(space.value)
   }
 }
 
@@ -73,6 +78,7 @@ async function move(index: number, delta: -1 | 1) {
       method: 'PUT',
       body: { slugs: list.map((t) => t.slug) },
     })
+    void content.load(space.value)
   } catch (err) {
     types.value = previous
     orderError.value = errorMessage(err)

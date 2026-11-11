@@ -15,7 +15,7 @@ export const useContentStore = defineStore('content', () => {
 
   async function load(slug: string) {
     const request = ++latest
-    if (space.value !== slug) types.value = null
+    if (space.value !== slug) [types.value, error.value] = [null, '']
     space.value = slug
     try {
       const loaded = await api<ContentType[]>(`/spaces/${encodeURIComponent(slug)}/types`)

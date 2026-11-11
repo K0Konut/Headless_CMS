@@ -22,6 +22,7 @@ const content = useContentStore()
 const space = computed(() => String(route.params.espace))
 
 const todo = ref<TodoEntry[] | null>(null)
+const showAllTodo = ref(false)
 const todoError = ref('')
 let latest = 0
 watch(
@@ -30,6 +31,7 @@ watch(
     const request = ++latest
     todo.value = null
     todoError.value = ''
+    showAllTodo.value = false
     try {
       const loaded = await api<TodoEntry[]>(`/spaces/${encodeURIComponent(space.value)}/todo`)
       if (request === latest) todo.value = loaded
@@ -42,7 +44,6 @@ watch(
 
 /** Au-delà, « Tout afficher » déplie le reste (document UX). */
 const TODO_SHOWN = 8
-const showAllTodo = ref(false)
 const shownTodo = computed(() =>
   showAllTodo.value ? todo.value : todo.value?.slice(0, TODO_SHOWN),
 )
@@ -72,7 +73,7 @@ async function add(type: ContentType) {
   adding.value = type.slug
   addError.value = ''
   try {
-    const base = `/spaces/${encodeURIComponent(space.value)}/types/${type.slug}/entries`
+    const base = `/spaces/${encodeURIComponent(space.value)}/types/${encodeURIComponent(type.slug)}/entries`
     const created = await api<Entry>(base, { method: 'POST' })
     await router.push(`/espaces/${space.value}/contenu/${type.slug}/${created.id}`)
   } catch (err) {
@@ -121,7 +122,8 @@ const STRETCHED =
           v-if="todo?.length"
           class="rounded-full bg-foreground px-2 text-xs leading-5 text-background"
         >
-          {{ todo.length }}<span class="sr-only"> entrées</span>
+          {{ todo.length
+          }}<span class="sr-only">{{ todo.length > 1 ? ' entrées' : ' entrée' }}</span>
         </span>
       </h2>
       <FormError v-if="todoError" :message="todoError" />
@@ -202,9 +204,7 @@ const STRETCHED =
                 {{ plural(type.counts.scheduled, 'programmé') }}
               </StatusPill>
               <StatusPill v-if="type.counts.enIncomplete" tone="en">
-                {{ type.counts.enIncomplete }} EN incomplet{{
-                  type.counts.enIncomplete > 1 ? 's' : ''
-                }}
+                {{ plural(type.counts.enIncomplete, 'EN incomplet') }}
               </StatusPill>
             </template>
             <span v-else class="text-sm text-muted-foreground">0 entrée</span>

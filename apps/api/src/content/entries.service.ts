@@ -20,7 +20,7 @@ import {
   type LastSchedule,
   type EntryData,
 } from '@dashility/shared'
-import { and, desc, eq, isNotNull, lte, ne, or } from 'drizzle-orm'
+import { and, desc, eq, isNotNull, lte, ne, or, sql } from 'drizzle-orm'
 import { Cron } from '@nestjs/schedule'
 import type { z } from 'zod'
 import { DB } from '../db/db.module.js'
@@ -116,6 +116,8 @@ export class EntriesService {
       .where(
         and(
           eq(contentTypes.spaceId, space.id),
+          // Un type sans champ est masqué dans Contenu (document UX, « Structure »).
+          sql`jsonb_array_length(${contentTypes.fields}) > 0`,
           or(
             isNotNull(entries.draft),
             eq(entries.enComplete, false),
