@@ -4,7 +4,7 @@
 
 Ce document organise les écrans et les parcours du dashboard. Les écrans V1 et V2 sont détaillés (wireframes et états), ainsi que la publication programmée de la V3 ; le reste de la V3 n'est décrit qu'en arborescence et en parcours.
 
-Méthode allégée : pas de territoire de marque ni de DA. Le dashboard est neutre et construit avec shadcn-vue (PRD, « Exigences de qualité »).
+Méthode allégée : pas de territoire de marque. Le dashboard est construit avec shadcn-vue (PRD, « Exigences de qualité ») ; sa direction visuelle, légère, est dans `03-direction-artistique.md` depuis le 11 novembre 2026.
 
 ## Principes
 
