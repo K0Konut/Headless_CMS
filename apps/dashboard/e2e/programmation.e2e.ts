@@ -49,7 +49,7 @@ test('programmer une publication fige l’entrée ; « Modifier l’entrée » a
   await expect(page.getByLabel('Titre (français)')).toBeDisabled()
   await expect(page.getByLabel('Identifiant d’URL')).toBeDisabled()
 
-  await page.getByRole('link', { name: 'Projets' }).click()
+  await page.getByRole('main').getByRole('link', { name: 'Projets' }).click()
   await expect(page.getByRole('row', { name: /Ce portfolio.*Programmé le/ })).toBeVisible()
   await page.getByRole('link', { name: 'Ce portfolio' }).click()
 

@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { ApiError, api } from '@/lib/api'
 import type { Me } from '@/lib/types'
 
-/** Seul état global du dashboard : l'utilisateur connecté et ses espaces. */
+/** État global : l’utilisateur connecté et ses espaces. */
 export const useSessionStore = defineStore('session', () => {
   const me = ref<Me | null>(null)
   const loaded = ref(false)

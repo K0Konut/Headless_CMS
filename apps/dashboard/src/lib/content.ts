@@ -18,6 +18,8 @@ export type ContentType = ContentTypeInput & {
   position: number
   updatedAt: string
   counts: TypeCounts
+  /** Dernière modification d'une de ses entrées, null sans entrée. */
+  lastEntryUpdatedAt: string | null
 }
 
 /** Libellés des champs et des choix enregistrés absents de la nouvelle définition : leurs
@@ -100,6 +102,19 @@ export interface TypeCounts {
   published: number
   enIncomplete: number
   scheduled: number
+  /** Publiées avec des modifications non publiées. */
+  modified: number
+}
+
+/** Ligne de `GET /spaces/:slug/todo` : une entrée qui demande une action. */
+export interface TodoEntry {
+  type: { slug: string; name: string; kind: 'collection' | 'single' }
+  id: string
+  title: string
+  status: EntryStatus
+  enComplete: boolean
+  updatedAt: string
+  scheduledAt: string | null
 }
 
 /** Ligne de `GET …/entries`. */
