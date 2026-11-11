@@ -308,7 +308,11 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onUnload))
       </section>
     </form>
 
-    <section v-if="type" aria-labelledby="type-delete-title" class="grid gap-4 border-t pt-8">
+    <section
+      v-if="type"
+      aria-labelledby="type-delete-title"
+      class="grid gap-4 rounded-lg border bg-card p-4 sm:p-6"
+    >
       <h2 id="type-delete-title" class="font-semibold">Supprimer le type</h2>
       <p class="text-sm text-muted-foreground">
         Le type et toutes ses entrées sont supprimés définitivement.

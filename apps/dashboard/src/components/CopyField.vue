@@ -30,7 +30,7 @@ async function copy() {
       <pre
         v-if="multiline"
         ref="field"
-        class="min-w-0 flex-1 overflow-x-auto rounded-md border bg-muted/50 px-3 py-2 text-sm"
+        class="min-w-0 flex-1 overflow-x-auto rounded-md border bg-muted px-3 py-2 text-sm"
         :aria-label="label"
       ><code>{{ value }}</code></pre>
       <input
@@ -39,7 +39,7 @@ async function copy() {
         :value="value"
         :aria-label="label"
         readonly
-        class="h-9 min-w-0 flex-1 rounded-md border bg-muted/50 px-3 font-mono text-sm leading-9"
+        class="h-9 min-w-0 flex-1 rounded-md border bg-muted px-3 font-mono text-sm leading-9"
         @focus="($event.target as HTMLInputElement).select()"
       />
       <!-- Nom complet : plusieurs boutons « Copier » se côtoient sur une même page. -->

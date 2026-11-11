@@ -74,8 +74,8 @@ const altError = computed(() => !!props.error && !!image.value && !image.value.a
 
     <div
       v-if="!image"
-      class="grid justify-items-start gap-2 rounded-md border border-dashed bg-card p-4 text-sm"
-      :class="{ 'border-ring bg-accent': dragging, 'border-destructive': !!message }"
+      class="grid justify-items-start gap-2 rounded-md border border-dashed p-4 text-sm"
+      :class="[dragging ? 'border-ring bg-accent' : 'bg-card', { 'border-destructive': !!message }]"
       @dragover.prevent="dragging = true"
       @dragleave="dragging = false"
       @drop.prevent="onDrop"
