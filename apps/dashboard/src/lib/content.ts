@@ -6,11 +6,27 @@ import type {
   FieldType,
   LastSchedule,
 } from '@dashility/shared'
-import type { InjectionKey, Ref } from 'vue'
+import {
+  CalendarRange,
+  CircleDot,
+  FileType,
+  Hash,
+  Image,
+  Link,
+  Pilcrow,
+  Rows3,
+  Tags,
+  ToggleRight,
+  Type,
+} from '@lucide/vue'
+import type { Component, InjectionKey, Ref } from 'vue'
 import { slugify } from './slug'
 
 /** Fourni par l'éditeur d'entrée : vrai pendant une publication programmée (champs figés). Les
  *  saisies que le fieldset ne désactive pas (texte riche, glisser-déposer) le lisent. */
+/** Champs en lecture seule mais lisibles : pas l'opacité réduite d'un champ désactivé. */
+export const FROZEN = '[&_:disabled]:cursor-default [&_:disabled]:opacity-100'
+
 export const READONLY_KEY: InjectionKey<Ref<boolean>> = Symbol('entry-readonly')
 
 /** Un type tel que l'API le renvoie (liste, lecture, création, modification), avec ses compteurs. */
@@ -52,6 +68,36 @@ export function stableIds() {
 export function moveItem<T>(list: T[], index: number, delta: -1 | 1) {
   const [item] = list.splice(index, 1)
   list.splice(index + delta, 0, item!)
+}
+
+/** Icône de chaque type de champ (direction visuelle, « Icônes »). */
+export const FIELD_TYPE_ICONS: Record<FieldType, Component> = {
+  text: Type,
+  richtext: Pilcrow,
+  choice: CircleDot,
+  date: CalendarRange,
+  link: Link,
+  list: Tags,
+  number: Hash,
+  boolean: ToggleRight,
+  image: Image,
+  pdf: FileType,
+  group: Rows3,
+}
+
+/** Exemple d'usage de chaque type de champ, dans la grille d'ajout (document UX, « Structure »). */
+export const FIELD_TYPE_HINTS: Record<FieldType, string> = {
+  text: 'Un titre, un nom, une accroche',
+  richtext: 'Des paragraphes avec gras, liens, listes',
+  choice: 'Une valeur parmi celles que vous définissez',
+  date: 'Une date, ou un début et une fin',
+  link: 'Une adresse web : démo, code, profil',
+  list: 'Plusieurs mots-clés : une stack, des outils',
+  number: 'Une quantité, un score, un pourcentage',
+  boolean: 'Une option à cocher : à la une, en ligne',
+  image: 'Une image avec son texte alternatif',
+  pdf: 'Un document à télécharger : un CV',
+  group: 'Des blocs de sous-champs : des étapes, des contraintes',
 }
 
 /** Noms des types de champs, dans l'ordre du document UX. */

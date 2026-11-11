@@ -448,16 +448,15 @@ Structure                                                   [+ Nouveau type]
 | --- | --- |
 | Libellé | Identifiant (généré depuis le libellé ; figé après l'enregistrement) |
 | Obligatoire | Longueur maximale (texte court) |
-| Traduisible, pour les types qui le permettent, avec la mention « ne pourra plus être changé » | Saisie et précision (nombre), valeur par défaut (case à cocher) |
-| Les choix d'une liste de choix, sans lesquels le champ ne sert à rien | Nombre minimal et maximal d'éléments (groupe) |
+| Traduisible, pour les types qui le permettent, avec la mention « ne pourra plus être changé » | Décimales (nombre), valeur par défaut (oui / non) |
+| Les choix d'une liste de choix, la saisie et la précision d'une date, les sous-champs d'un groupe : sans eux le champ ne sert à rien | Nombre minimal et maximal d'éléments (groupe) |
 
-- Un réglage avancé en erreur déplie « Plus de réglages ».
 - Un champ déjà enregistré se modifie avec le même formulaire ; ses réglages figés sont affichés en lecture seule avec un cadenas.
 
 **Aperçu**
 
 - L'onglet « Aperçu » montre l'éditeur d'une entrée tel que les membres le verront, avec la structure en cours (même non enregistrée) : mêmes composants, mêmes colonnes FR / EN, groupes repliables.
-- On peut y taper pour essayer ; rien n'est enregistré. Un bandeau le rappelle : « Aperçu : la saisie n'est pas enregistrée ».
+- Les champs y sont désactivés : un envoi d'image ou de PDF y créerait un vrai fichier. Un bandeau le dit. Chaque groupe y montre un élément, déplié, pour en voir les sous-champs.
 - Onglets plutôt que deux colonnes : l'éditeur a besoin de la largeur pour ses colonnes FR et EN.
 
 **Règles inchangées**
