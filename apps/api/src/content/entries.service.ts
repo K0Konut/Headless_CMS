@@ -105,6 +105,39 @@ export class EntriesService {
     }))
   }
 
+  /** Entrées qui demandent une action, tous types confondus, la dernière modifiée d'abord
+   *  (document UX, « Contenu ») : brouillon ou modifications non publiées, EN incomplet,
+   *  publication programmée. */
+  async todo(space: Space) {
+    const rows = await this.db
+      .select({ entry: entryColumns, type: contentTypes })
+      .from(entries)
+      .innerJoin(contentTypes, eq(contentTypes.id, entries.typeId))
+      .where(
+        and(
+          eq(contentTypes.spaceId, space.id),
+          or(
+            isNotNull(entries.draft),
+            eq(entries.enComplete, false),
+            isNotNull(entries.scheduledAt),
+          ),
+        ),
+      )
+      .orderBy(desc(entries.updatedAt))
+    return rows.map(({ entry, type }) => ({
+      type: { slug: type.slug, name: type.name, kind: type.kind },
+      id: entry.id,
+      title:
+        type.kind === 'single'
+          ? type.name
+          : entryTitle(type.fields, entry.draft ?? entry.published ?? {}),
+      status: entryStatus(entry),
+      enComplete: entry.enComplete,
+      updatedAt: entry.updatedAt,
+      scheduledAt: entry.scheduledAt,
+    }))
+  }
+
   /** Nouvelle entrée d'une collection, en brouillon vide. */
   async create(space: Space, typeSlug: string, user: User) {
     const type = await this.types.row(space, typeSlug)

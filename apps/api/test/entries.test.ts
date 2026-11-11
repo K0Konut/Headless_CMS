@@ -75,7 +75,14 @@ describe('entrées', () => {
       expect.objectContaining({ title: 'Ce portfolio', status: 'draft', enComplete: true }),
     ])
     const types = await api('get', '/spaces/portfolio/types', member).expect(200)
-    expect(types.body[0].counts).toEqual({ total: 1, published: 0, enIncomplete: 0, scheduled: 0 })
+    expect(types.body[0].counts).toEqual({
+      total: 1,
+      published: 0,
+      enIncomplete: 0,
+      scheduled: 0,
+      modified: 0,
+    })
+    expect(types.body[0].lastEntryUpdatedAt).toBe(saved.body.updatedAt)
   })
 
   it('refuse une version périmée : rien n’est écrasé sans le savoir', async () => {
@@ -206,12 +213,38 @@ describe('publication', () => {
     expect(unchanged.body.published).toBeNull()
   })
 
+  it('liste ce qui reste à traiter : brouillons, modifications, EN incomplet', async () => {
+    const done = await entryWith(READY, 'en-ligne')
+    await act(done.id, 'publish', done.version).expect(200)
+    const draft = await entryWith(READY, 'brouillon')
+    const partial = await entryWith({ title: { fr: 'Seulement en français' } }, 'partiel')
+    await act(partial.id, 'publish', partial.version).expect(200)
+
+    const todo = await api('get', '/spaces/portfolio/todo', member).expect(200)
+    expect(todo.body).toEqual([
+      expect.objectContaining({
+        id: partial.id,
+        type: { slug: 'projets', name: 'Projets', kind: 'collection' },
+        title: 'Seulement en français',
+        status: 'published',
+        enComplete: false,
+      }),
+      expect.objectContaining({ id: draft.id, status: 'draft', enComplete: true }),
+    ])
+  })
+
   it('publie une version anglaise incomplète, signalée par « EN incomplet »', async () => {
     const entry = await entryWith({ title: { fr: 'Seulement en français' } })
     const res = await act(entry.id, 'publish', entry.version).expect(200)
     expect(res.body.enComplete).toBe(false)
     const types = await api('get', '/spaces/portfolio/types', member).expect(200)
-    expect(types.body[0].counts).toEqual({ total: 1, published: 1, enIncomplete: 1, scheduled: 0 })
+    expect(types.body[0].counts).toEqual({
+      total: 1,
+      published: 1,
+      enIncomplete: 1,
+      scheduled: 0,
+      modified: 0,
+    })
   })
 
   it('annule les modifications en revenant à la version en ligne', async () => {
