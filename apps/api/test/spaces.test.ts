@@ -78,7 +78,7 @@ describe('espaces', () => {
     const res = await api('get', '/spaces/portfolio', member.cookie).expect(200)
     expect(res.body.publicKey).toBeUndefined()
     await api('get', '/spaces', member.cookie).expect(200, [
-      { slug: 'portfolio', name: 'Portfolio', siteUrl: 'https://exemple.fr' },
+      { slug: 'portfolio', name: 'Portfolio', siteUrl: 'https://exemple.fr', previewUrl: null },
     ])
 
     // Un espace inaccessible n'existe pas : 404, comme un espace inconnu.
@@ -127,7 +127,7 @@ describe('membres et invitations', () => {
 
     const accepted = await api('post', `/tokens/${token}`).send({ password: PASSWORD }).expect(200)
     expect(accepted.body.spaces).toEqual([
-      { slug: 'portfolio', name: 'Portfolio', siteUrl: 'https://exemple.fr' },
+      { slug: 'portfolio', name: 'Portfolio', siteUrl: 'https://exemple.fr', previewUrl: null },
     ])
     await api('get', '/auth/me', sessionCookie(accepted)).expect(200)
 
@@ -194,8 +194,8 @@ describe('membres et invitations', () => {
 
     const cookie = await login('a@b.fr')
     await api('get', '/spaces', cookie).expect(200, [
-      { slug: 'blog', name: 'Blog', siteUrl: 'https://exemple.fr' },
-      { slug: 'portfolio', name: 'Portfolio', siteUrl: 'https://exemple.fr' },
+      { slug: 'blog', name: 'Blog', siteUrl: 'https://exemple.fr', previewUrl: null },
+      { slug: 'portfolio', name: 'Portfolio', siteUrl: 'https://exemple.fr', previewUrl: null },
     ])
   })
 

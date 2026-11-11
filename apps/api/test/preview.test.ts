@@ -21,7 +21,14 @@ const PROJECTS = {
   entryLabel: 'un projet',
   fields: [
     { key: 'title', label: 'Titre', type: 'text', required: true, translatable: true },
-    { key: 'year', label: 'Année', type: 'number', required: false, translatable: false },
+    {
+      key: 'year',
+      label: 'Année',
+      type: 'number',
+      required: false,
+      translatable: false,
+      decimals: false,
+    },
   ],
 }
 const BASE = '/spaces/portfolio/types/projets/entries'
