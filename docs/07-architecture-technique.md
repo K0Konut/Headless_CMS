@@ -511,7 +511,7 @@ Une table `preview_links`, sur le modèle des sessions et des liens à usage uni
 
 ### Script de collecte
 
-`send` n'envoie rien si l'URL courante contient `dashility-preview`. La suite de la visite (une navigation vers une autre page du site) est comptée normalement. Nouvelle version mineure du paquet npm `dashility`, publiée à la main comme les précédentes ; le budget de 2 Ko ne bouge pas.
+`send` n'envoie rien si l'URL courante contient `dashility-preview`. La suite de la visite (une navigation vers une autre page du site) est comptée normalement. Nouvelle version mineure du paquet npm `@dashility/client` (0.2.0), publiée à la main comme les précédentes ; le budget de 2 Ko ne bouge pas.
 
 ## Environnements et déploiement
 
@@ -583,6 +583,6 @@ Puis la release, à la demande du propriétaire.
 ## Ordre de construction de la V3 (prévisualisation)
 
 1. `feat/dev/previsualisation` : table `preview_links` et colonne `preview_url` (migration), routes de création et de lecture avec CORS, lecture partagée avec l'API publique, purge, puis l'éditeur (« Prévisualiser », « Copier le lien d'aperçu »), Réglages › Intégration et les extraits d'installation. Une seule branche, comme la programmation.
-2. `feat/dev/collecte_apercu` : le script ne compte pas les visites d'aperçu, nouvelle version du paquet `dashility`.
+2. `feat/dev/collecte_apercu` : le script ne compte pas les visites d'aperçu, nouvelle version du paquet `@dashility/client`.
 
 Puis la release, à la demande du propriétaire, et la page d'aperçu du portfolio dans son dépôt (avec la nouvelle version du paquet). La mise en avant viendra ensuite.
