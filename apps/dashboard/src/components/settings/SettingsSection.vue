@@ -3,7 +3,11 @@ defineProps<{ id: string; title: string; description?: string }>()
 </script>
 
 <template>
-  <section :id="id" :aria-labelledby="`${id}-title`" class="min-w-0 scroll-mt-8 border-t pt-8">
+  <section
+    :id="id"
+    :aria-labelledby="`${id}-title`"
+    class="min-w-0 scroll-mt-8 rounded-lg border bg-card p-4 sm:p-6"
+  >
     <h2 :id="`${id}-title`" class="text-lg font-semibold">{{ title }}</h2>
     <p v-if="description" class="mt-1 max-w-prose text-sm text-muted-foreground">
       {{ description }}

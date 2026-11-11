@@ -55,7 +55,7 @@ watch(
   <!-- Un membre ne voit que « Ne pas me compter » (document UX). -->
   <!-- Clé : la date de création, qui identifie l'espace sans changer au renommage. Changer
        d'espace recrée les sections (membres, confirmation) ; renommer les garde. -->
-  <div v-else :key="space.createdAt" class="mt-8 grid gap-10">
+  <div v-else :key="space.createdAt" class="mt-8 grid gap-6">
     <GeneralSection v-if="isSuperAdmin" :space="space" @updated="space = $event" />
     <MembersSection v-if="isSuperAdmin" :slug="space.slug" />
     <IntegrationSection v-if="isSuperAdmin" :space="space" />
