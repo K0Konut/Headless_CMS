@@ -448,9 +448,8 @@ Une table `preview_links`, sur le modèle des sessions et des liens à usage uni
 
 | Colonne | Rôle |
 | --- | --- |
-| `token_hash` (text, PK) | Empreinte SHA-256 du jeton (`newToken`, `hashToken`) ; le jeton lui-même n'est jamais stocké |
+| `id` (text, PK) | Empreinte SHA-256 du jeton (`newToken`, `hashToken`) ; le jeton lui-même n'est jamais stocké |
 | `entry_id` (uuid, null, FK `entries` `on delete set null`) | L'entrée prévisualisée ; null quand elle a été supprimée, pour répondre « Cette entrée n'existe plus » plutôt que « lien invalide » |
-| `space_id` (uuid, FK `spaces` `on delete cascade`) | L'espace, pour l'origine CORS sans passer par l'entrée |
 | `expires_at` (timestamptz) | Création + 24 h |
 
 - **Un lien par clic** : chaque « Prévisualiser » ou « Copier le lien d'aperçu » crée une ligne. Pas de réutilisation ni de révocation (décision du 11 novembre 2026).
@@ -467,7 +466,8 @@ Une table `preview_links`, sur le modèle des sessions et des liens à usage uni
 | `GET /api/preview/:token?locale=fr\|en` | Public, avec le jeton | L'entrée, version en cours |
 
 - **`url`** est construite par l'API : `preview_url` avec le paramètre `dashility-preview=<jeton>` ajouté par `URL.searchParams` (une adresse qui a déjà des paramètres reste valable).
-- **`preview_url`** : même règle que `site_url` (https, ou http sur `localhost` pour tester un site en local), mais le chemin est gardé. `GET /spaces/:slug` la renvoie à tous les membres : l'éditeur en a besoin pour afficher le bouton.
+- **`/auth/me`** renvoie `previewUrl` avec chaque espace : l'éditeur sait s'il doit afficher « Prévisualiser » sans requête de plus.
+- **`preview_url`** : même règle que `site_url` (https, ou http sur `localhost` pour tester un site en local), mais le chemin est gardé. `GET /spaces/:slug` la renvoie à tous les membres.
 
 ### Lecture d'un aperçu (`GET /api/preview/:token`)
 
@@ -480,7 +480,7 @@ Une table `preview_links`, sur le modèle des sessions et des liens à usage uni
   kind: 'collection' | 'single'
   slug?: string
   fields: …                       // résolus pour `locale`, comme /api/v1
-  status: 'draft' | 'published' | 'changes'
+  status: 'draft' | 'published' | 'modified'   // entryStatus, comme l'éditeur
   enComplete: boolean             // le bandeau prévient si l'anglais est incomplet
   expiresAt: string
 }
@@ -488,9 +488,10 @@ Une table `preview_links`, sur le modèle des sessions et des liens à usage uni
 
 - **En anglais, l'entrée est renvoyée même incomplète** (contrairement à `/api/v1`) : un champ sans valeur anglaise vaut `null`, et `enComplete` vaut `false`.
 - **Erreurs** : 404 `preview_not_found` (jeton inconnu), 410 `preview_expired`, 404 `preview_entry_deleted`. Le site affiche le message du document UX selon le code.
-- **CORS** : `Access-Control-Allow-Origin` vaut l'origine de `preview_url`, seulement sur cette route. La requête est simple (`GET` sans en-tête particulier) : pas de requête préalable. Pas de cookies (`credentials` absent).
+- **CORS** : `Access-Control-Allow-Origin: *`, seulement sur cette route, posé aussi sur les réponses d'erreur. Le jeton est le seul secret (un `curl` le lit de toute façon) ; restreindre l'origine n'apporterait rien et empêcherait le site de lire l'erreur d'un jeton inconnu, dont on ignore l'espace (« Tester » en dépend). La requête est simple (`GET` sans en-tête particulier) : pas de requête préalable. Pas de cookies.
 - **En-têtes** : `Cache-Control: no-store` (un brouillon change), `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex`.
 - **Débit** : 60 requêtes par minute par IP, avec le `ThrottlerModule` déjà en place. Le jeton fait 32 octets aléatoires : il ne se devine pas.
+- **Documentation** : la route figure dans le document OpenAPI de `/api/docs`, avec ses codes d'erreur.
 - **Médias** : les images d'un brouillon sont déjà servies par `/api/media/<id>/…` (adresse non devinable, `Cross-Origin-Resource-Policy: cross-origin`). Rien ne change côté médias.
 
 ### Dashboard
