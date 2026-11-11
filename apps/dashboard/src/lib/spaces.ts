@@ -4,6 +4,7 @@ export interface SpaceDetail {
   slug: string
   name: string
   siteUrl: string
+  previewUrl: string | null
   createdAt: string
   publicKey?: string
   /** null : aucune clé API générée. */

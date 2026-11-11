@@ -56,6 +56,8 @@ export const spaces = pgTable('spaces', {
   /** Dernier appel : heure et statut HTTP (null : site injoignable). */
   deployCalledAt: timestamp('deploy_called_at', { withTimezone: true }),
   deployStatus: integer('deploy_status'),
+  /** Page d'aperçu du site (V3), qui reçoit `?dashility-preview=<jeton>` ; null : pas d'aperçu. */
+  previewUrl: text('preview_url'),
   createdAt: createdAt(),
 })
 
@@ -196,3 +198,12 @@ export const media = pgTable(
     ),
   ],
 )
+
+/** Liens d'aperçu (V3) : un par clic sur « Prévisualiser », valables 24 h, non révocables.
+ *  `id` = empreinte SHA-256 du jeton. `entry_id` passe à null quand l'entrée est supprimée, pour
+ *  répondre « entrée supprimée » plutôt que « lien invalide ». */
+export const previewLinks = pgTable('preview_links', {
+  id: text('id').primaryKey(),
+  entryId: uuid('entry_id').references(() => entries.id, { onDelete: 'set null' }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+})

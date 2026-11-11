@@ -26,11 +26,11 @@ test('régler le déploiement, publier, voir l’échec et relancer', async ({ b
 
   // Une adresse en http est refusée ; un site qui ne répond pas sert à voir l'échec.
   await page.getByLabel('URL de déploiement').fill('http://exemple.fr/hook')
-  await page.getByRole('button', { name: 'Enregistrer', exact: true }).last().click()
+  await page.getByLabel('URL de déploiement').press('Enter')
   await expect(page.getByText('Adresse invalide : elle doit commencer par https://')).toBeVisible()
   await page.getByLabel('URL de déploiement').fill('https://127.0.0.1:9/hook')
   await page.getByLabel('Jeton (facultatif)').fill('ghp_secret')
-  await page.getByRole('button', { name: 'Enregistrer', exact: true }).last().click()
+  await page.getByLabel('URL de déploiement').press('Enter')
   await expect(page.getByText('Réglages du déploiement enregistrés.')).toBeVisible()
   await expect(page.getByLabel('Jeton (facultatif)')).toHaveValue('')
   await expect(page.getByLabel('Jeton (facultatif)')).toHaveAttribute(

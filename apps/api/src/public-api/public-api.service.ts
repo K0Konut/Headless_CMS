@@ -1,16 +1,27 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common'
-import { type EntryData, type Field, type Locale, isEnComplete, mediaRefs } from '@dashility/shared'
+import { GoneException, Inject, Injectable, NotFoundException } from '@nestjs/common'
+import {
+  type EntryData,
+  type Field,
+  type Locale,
+  entryStatus,
+  isEnComplete,
+  mediaRefs,
+} from '@dashility/shared'
 import { and, desc, eq, inArray, isNotNull } from 'drizzle-orm'
 import { DB } from '../db/db.module.js'
 import type { Db } from '../db/index.js'
-import { contentTypes, entries, media } from '../db/schema.js'
+import { hashToken } from '../auth/tokens.js'
+import { contentTypes, entries, media, previewLinks } from '../db/schema.js'
 import type { Space } from '../spaces/guards.js'
 import { type MediaInfo, resolveData } from './resolve.js'
 
-type PublishedRow = { slug: string | null; published: EntryData | null; publishedAt: Date | null }
+/** Une entrée à résoudre : sa version en ligne pour l'API publique, sa version en cours pour un
+ *  aperçu. */
+type Row = { slug: string | null; data: EntryData; publishedAt: Date | null }
 
 /** Lecture du contenu publié par les sites (architecture, « API publique de lecture ») : seule
- *  la version en ligne (`published`) est lue, jamais un brouillon. */
+ *  la version en ligne (`published`) est lue, jamais un brouillon. Seule exception, l'aperçu
+ *  (V3), qui lit la version en cours d'une entrée avec un jeton. */
 @Injectable()
 export class PublicApiService {
   constructor(@Inject(DB) private readonly db: Db) {}
@@ -18,21 +29,21 @@ export class PublicApiService {
   /** Collection : ses entrées publiées, la dernière publiée d'abord. Page unique : son entrée. */
   async content(space: Space, typeSlug: string, locale: Locale, origin: string) {
     const type = await this.type(space, typeSlug)
-    const rows = await this.published(type.id)
+    const rows = await this.published(type.fields, type.id, locale)
     if (type.kind === 'single') {
-      const [entry] = await this.resolve(type.fields, rows, locale, origin, space)
+      const [entry] = await this.resolve(type.fields, rows, locale, origin, space.id)
       if (!entry) throw new NotFoundException('Contenu introuvable')
       return entry
     }
-    return this.resolve(type.fields, rows, locale, origin, space)
+    return this.resolve(type.fields, rows, locale, origin, space.id)
   }
 
   /** Une entrée d'une collection, par son identifiant d'URL. */
   async entry(space: Space, typeSlug: string, slug: string, locale: Locale, origin: string) {
     const type = await this.type(space, typeSlug)
     if (type.kind !== 'collection') throw new NotFoundException('Contenu introuvable')
-    const rows = await this.published(type.id, slug)
-    const [entry] = await this.resolve(type.fields, rows, locale, origin, space)
+    const rows = await this.published(type.fields, type.id, locale, slug)
+    const [entry] = await this.resolve(type.fields, rows, locale, origin, space.id)
     if (!entry) throw new NotFoundException('Contenu introuvable')
     return entry
   }
@@ -46,8 +57,57 @@ export class PublicApiService {
     return type
   }
 
-  private published(typeId: string, slug?: string): Promise<PublishedRow[]> {
-    return this.db
+  /** Aperçu (V3) : la version en cours de l'entrée du jeton (`draft ?? published`), comme
+   *  l'éditeur la montre. En anglais, elle est renvoyée même incomplète : l'aperçu montre ce
+   *  qui manque. */
+  async preview(token: string, locale: Locale, origin: string) {
+    const [link] = await this.db
+      .select({
+        expiresAt: previewLinks.expiresAt,
+        entry: {
+          slug: entries.slug,
+          draftSlug: entries.draftSlug,
+          published: entries.published,
+          draft: entries.draft,
+          publishedAt: entries.publishedAt,
+        },
+        type: { slug: contentTypes.slug, kind: contentTypes.kind, fields: contentTypes.fields },
+        spaceId: contentTypes.spaceId,
+      })
+      .from(previewLinks)
+      .leftJoin(entries, eq(entries.id, previewLinks.entryId))
+      .leftJoin(contentTypes, eq(contentTypes.id, entries.typeId))
+      .where(eq(previewLinks.id, hashToken(token)))
+    if (!link) {
+      throw new NotFoundException({ code: 'preview_not_found', message: 'Lien d’aperçu invalide' })
+    }
+    if (link.expiresAt <= new Date()) {
+      throw new GoneException({ code: 'preview_expired', message: 'Ce lien d’aperçu a expiré' })
+    }
+    const { entry, type, spaceId } = link
+    if (!entry || !type || !spaceId) {
+      throw new NotFoundException({
+        code: 'preview_entry_deleted',
+        message: 'Cette entrée n’existe plus',
+      })
+    }
+    const data = entry.draft ?? entry.published!
+    const row = { slug: entry.draftSlug ?? entry.slug, data, publishedAt: entry.publishedAt }
+    const [resolved] = await this.resolve(type.fields, [row], locale, origin, spaceId)
+    return {
+      type: type.slug,
+      kind: type.kind,
+      ...resolved!,
+      status: entryStatus(entry),
+      enComplete: isEnComplete(type.fields, data),
+      expiresAt: link.expiresAt,
+    }
+  }
+
+  /** Entrées publiées d'un type ; en anglais, seulement celles dont la version publiée est
+   *  complète en anglais (PRD, « Langues »). */
+  private async published(fields: Field[], typeId: string, locale: Locale, slug?: string) {
+    const rows = await this.db
       .select({
         slug: entries.slug,
         published: entries.published,
@@ -62,19 +122,20 @@ export class PublicApiService {
         ),
       )
       .orderBy(desc(entries.publishedAt))
+    return rows
+      .map((r): Row => ({ slug: r.slug, data: r.published!, publishedAt: r.publishedAt }))
+      .filter((r) => locale === 'fr' || isEnComplete(fields, r.data))
   }
 
-  /** En anglais, seulement les entrées dont la version publiée est complète en anglais (PRD,
-   *  « Langues ») ; les médias cités sont lus en une requête. */
+  /** Valeurs résolues pour la langue ; les médias cités sont lus en une requête. */
   private async resolve(
     fields: Field[],
-    rows: PublishedRow[],
+    rows: Row[],
     locale: Locale,
     origin: string,
-    space: Space,
+    spaceId: string,
   ) {
-    const shown = rows.filter((r) => locale === 'fr' || isEnComplete(fields, r.published!))
-    const ids = [...new Set(shown.flatMap((r) => mediaRefs(fields, r.published!).map((m) => m.id)))]
+    const ids = [...new Set(rows.flatMap((r) => mediaRefs(fields, r.data).map((m) => m.id)))]
     const found = ids.length
       ? await this.db
           .select({
@@ -85,13 +146,13 @@ export class PublicApiService {
             bytes: media.bytes,
           })
           .from(media)
-          .where(and(eq(media.spaceId, space.id), inArray(media.id, ids)))
+          .where(and(eq(media.spaceId, spaceId), inArray(media.id, ids)))
       : []
     const mediaInfo = new Map<string, MediaInfo>(found.map(({ id, ...info }) => [id, info]))
-    return shown.map((row) => ({
+    return rows.map((row) => ({
       ...(row.slug !== null && { slug: row.slug }),
       publishedAt: row.publishedAt,
-      fields: resolveData(fields, row.published!, { locale, origin, media: mediaInfo }),
+      fields: resolveData(fields, row.data, { locale, origin, media: mediaInfo }),
     }))
   }
 }

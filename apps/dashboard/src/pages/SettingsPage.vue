@@ -58,7 +58,7 @@ watch(
   <div v-else :key="space.createdAt" class="mt-8 grid gap-6">
     <GeneralSection v-if="isSuperAdmin" :space="space" @updated="space = $event" />
     <MembersSection v-if="isSuperAdmin" :slug="space.slug" />
-    <IntegrationSection v-if="isSuperAdmin" :space="space" />
+    <IntegrationSection v-if="isSuperAdmin" :space="space" @updated="space = $event" />
     <IgnoreSection :site-url="space.siteUrl" />
     <DangerSection v-if="isSuperAdmin" :space="space" />
   </div>

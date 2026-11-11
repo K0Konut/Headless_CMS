@@ -8,11 +8,22 @@ import {
   publicationIssues,
   publicationMessage,
 } from '@dashility/shared'
-import { ArrowLeft, CalendarClock, Ellipsis, Trash2, Undo2 } from '@lucide/vue'
+import {
+  ArrowLeft,
+  CalendarClock,
+  Ellipsis,
+  ExternalLink,
+  Link,
+  Settings,
+  Trash2,
+  Undo2,
+} from '@lucide/vue'
 import { useMediaQuery } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
 import { RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate, useRouter } from 'vue-router'
+import CopyField from '@/components/CopyField.vue'
 import FormError from '@/components/FormError.vue'
+import { usePreview } from '@/composables/usePreview'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -28,6 +39,7 @@ import { ApiError, api, errorMessage } from '@/lib/api'
 import { type ContentType, type Entry, FROZEN, READONLY_KEY } from '@/lib/content'
 import { formatLongDateTime, formatTime } from '@/lib/format'
 import { slugify } from '@/lib/slug'
+import { useSessionStore } from '@/stores/session'
 import FieldRows from './FieldRows.vue'
 import DeployStatus from './DeployStatus.vue'
 import SchedulePanel from './SchedulePanel.vue'
@@ -338,6 +350,37 @@ async function scheduleAt(at: string) {
   }
 }
 
+// ── Prévisualisation (V3, document UX « Prévisualisation ») ────────────────────────────────
+
+const session = useSessionStore()
+const isSuperAdmin = computed(() => !!session.me?.user.isSuperAdmin)
+const previewUrl = computed(() => session.spaces.find((s) => s.slug === props.space)?.previewUrl)
+
+/** Avant un aperçu, la saisie est enregistrée, y compris ce qui a été tapé pendant un envoi en
+ *  cours. Si elle ne peut pas l'être, l'aperçu montre la dernière version enregistrée et
+ *  l'éditeur le dit. */
+async function saveForPreview() {
+  await save()
+  if (state.value === 'saved' && pending.value) await save()
+  if (state.value !== 'saved' || pending.value) {
+    actionError.value =
+      'La saisie n’est pas enregistrée : l’aperçu montre la dernière version enregistrée.'
+  }
+}
+const preview = usePreview(base, saveForPreview, busy, actionError)
+
+/** Saisie déjà en échec : on prévient avant d'ouvrir l'aperçu (document UX). */
+const confirmUnsaved = () =>
+  !['error', 'conflict'].includes(state.value) ||
+  window.confirm(
+    'La saisie n’est pas enregistrée : l’aperçu montrera la dernière version enregistrée. Continuer ?',
+  )
+const openPreview = () => confirmUnsaved() && preview.open()
+const copyPreview = () => confirmUnsaved() && preview.copy()
+const hasMenu = computed(
+  () => status.value !== 'draft' || isCollection.value || !!previewUrl.value || isSuperAdmin.value,
+)
+
 const unschedule = (done = 'Programmation annulée.') => act('schedule', done, { method: 'DELETE' })
 
 async function editEntry() {
@@ -432,6 +475,11 @@ onBeforeUnmount(() => {
       </p>
       <DeployStatus :space="space" :refresh-key="deployRefresh" />
       <div class="flex flex-wrap items-center gap-2">
+        <Button v-if="previewUrl" variant="outline" :disabled="busy" @click="openPreview">
+          <ExternalLink aria-hidden="true" />Prévisualiser<span class="sr-only">
+            (nouvel onglet)</span
+          >
+        </Button>
         <template v-if="status === 'modified'">
           <Button v-if="!scheduled" variant="outline" :disabled="busy" @click="discard">
             <Undo2 aria-hidden="true" />Annuler les modifications
@@ -448,13 +496,21 @@ onBeforeUnmount(() => {
         >
           <CalendarClock aria-hidden="true" />Programmer…
         </Button>
-        <DropdownMenu v-if="status !== 'draft' || isCollection">
+        <DropdownMenu v-if="hasMenu">
           <DropdownMenuTrigger as-child>
             <Button variant="outline" size="icon" :disabled="busy" aria-label="Autres actions">
               <Ellipsis aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
+            <DropdownMenuItem v-if="previewUrl" @select="copyPreview">
+              <Link aria-hidden="true" />Copier le lien d’aperçu
+            </DropdownMenuItem>
+            <DropdownMenuItem v-else-if="isSuperAdmin" as-child>
+              <RouterLink :to="`/espaces/${space}/reglages#integration`">
+                <Settings aria-hidden="true" />Configurer la prévisualisation
+              </RouterLink>
+            </DropdownMenuItem>
             <DropdownMenuItem v-if="status !== 'draft' && !scheduled" @select="unpublish">
               <Undo2 aria-hidden="true" />Dépublier
             </DropdownMenuItem>
@@ -513,6 +569,14 @@ onBeforeUnmount(() => {
       </div>
       <p role="status" class="sr-only">{{ announcement }}</p>
       <FormError :message="actionError" />
+      <div v-if="preview.message.value || preview.fallback.value" class="grid max-w-xl gap-2">
+        <p role="status" class="text-sm text-muted-foreground">{{ preview.message.value }}</p>
+        <CopyField
+          v-if="preview.fallback.value"
+          :value="preview.fallback.value"
+          label="Lien d’aperçu"
+        />
+      </div>
       <!-- Seuls les échecs sont annoncés (Alert porte role="alert") : une annonce à chaque frappe
          saturerait les lecteurs d'écran. -->
       <Alert v-if="state === 'error'" variant="destructive">

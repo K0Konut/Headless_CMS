@@ -255,7 +255,11 @@ describe('documentation', () => {
   it('décrit l’API de lecture en OpenAPI, sans l’API du dashboard', async () => {
     const res = await request(server()).get('/api/docs-json').expect(200)
     expect(res.body.openapi).toBe('3.1.0')
-    expect(Object.keys(res.body.paths)).toEqual(['/content/{type}', '/content/{type}/{slug}'])
+    expect(Object.keys(res.body.paths)).toEqual([
+      '/content/{type}',
+      '/content/{type}/{slug}',
+      '/preview/{token}',
+    ])
     const page = await request(server()).get('/api/docs').redirects(1).expect(200)
     expect(page.text).toContain('swagger')
   })
