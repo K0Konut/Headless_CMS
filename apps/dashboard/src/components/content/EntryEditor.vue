@@ -355,9 +355,21 @@ async function scheduleAt(at: string) {
 const session = useSessionStore()
 const isSuperAdmin = computed(() => !!session.me?.user.isSuperAdmin)
 const previewUrl = computed(() => session.spaces.find((s) => s.slug === props.space)?.previewUrl)
-const preview = usePreview(base, save)
 
-/** La saisie n'a pas pu être enregistrée : l'aperçu montrera la dernière version enregistrée. */
+/** Avant un aperçu, la saisie est enregistrée, y compris ce qui a été tapé pendant un envoi en
+ *  cours. Si elle ne peut pas l'être, l'aperçu montre la dernière version enregistrée et
+ *  l'éditeur le dit. */
+async function saveForPreview() {
+  await save()
+  if (state.value === 'saved' && pending.value) await save()
+  if (state.value !== 'saved' || pending.value) {
+    actionError.value =
+      'La saisie n’est pas enregistrée : l’aperçu montre la dernière version enregistrée.'
+  }
+}
+const preview = usePreview(base, saveForPreview, busy, actionError)
+
+/** Saisie déjà en échec : on prévient avant d'ouvrir l'aperçu (document UX). */
 const confirmUnsaved = () =>
   !['error', 'conflict'].includes(state.value) ||
   window.confirm(
@@ -556,7 +568,7 @@ onBeforeUnmount(() => {
         </Button>
       </div>
       <p role="status" class="sr-only">{{ announcement }}</p>
-      <FormError :message="actionError || preview.error.value" />
+      <FormError :message="actionError" />
       <div v-if="preview.message.value || preview.fallback.value" class="grid max-w-xl gap-2">
         <p role="status" class="text-sm text-muted-foreground">{{ preview.message.value }}</p>
         <CopyField

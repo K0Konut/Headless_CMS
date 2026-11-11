@@ -19,7 +19,7 @@ import {
   scheduleIssue,
   type LastSchedule,
   type EntryData,
-  PREVIEW_PARAM,
+  previewLink,
 } from '@dashility/shared'
 import { and, desc, eq, isNotNull, lte, ne, or, sql } from 'drizzle-orm'
 import { Cron } from '@nestjs/schedule'
@@ -189,9 +189,7 @@ export class EntriesService {
     await this.db
       .insert(previewLinks)
       .values({ id: hashToken(token), entryId: entry.id, expiresAt })
-    const url = new URL(space.previewUrl)
-    url.searchParams.set(PREVIEW_PARAM, token)
-    return { url: url.href, expiresAt }
+    return { url: previewLink(space.previewUrl, token), expiresAt }
   }
 
   /** Sauvegarde automatique : les valeurs vont toujours dans `draft`. La version envoyée doit

@@ -13,9 +13,13 @@ export class RetentionService {
 
   @Cron('0 3 * * *', { timeZone: 'Europe/Paris' })
   async purge() {
-    await this.db.delete(events).where(lt(events.createdAt, sql`now() - interval '6 months'`))
-    await this.db
-      .delete(previewLinks)
-      .where(lt(previewLinks.expiresAt, sql`now() - interval '7 days'`))
+    // Indépendantes : l'échec de l'une ne doit pas empêcher l'autre.
+    const results = await Promise.allSettled([
+      this.db.delete(events).where(lt(events.createdAt, sql`now() - interval '6 months'`)),
+      this.db
+        .delete(previewLinks)
+        .where(lt(previewLinks.expiresAt, sql`now() - interval '7 days'`)),
+    ])
+    for (const result of results) if (result.status === 'rejected') throw result.reason
   }
 }

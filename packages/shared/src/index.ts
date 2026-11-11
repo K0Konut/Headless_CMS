@@ -62,8 +62,16 @@ export const updateSpaceSchema = createSpaceSchema
   .partial()
   .extend({ previewUrl: previewUrlSchema.nullable().optional() })
 
-/** Paramètre d'URL qui porte le jeton d'aperçu ; le script de collecte ne compte pas ces pages. */
+/** Paramètre d'URL qui porte le jeton d'aperçu. */
 export const PREVIEW_PARAM = 'dashility-preview'
+
+/** Adresse de la page d'aperçu avec un jeton (un vrai, ou `essai` pour « Tester ») ; une adresse
+ *  qui a déjà des paramètres les garde. */
+export function previewLink(previewUrl: string, token: string) {
+  const url = new URL(previewUrl)
+  url.searchParams.set(PREVIEW_PARAM, token)
+  return url.href
+}
 
 export const invitationSchema = z.object({ email: emailSchema })
 

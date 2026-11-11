@@ -1,27 +1,39 @@
 import { type Ref, ref } from 'vue'
-import { api, errorMessage } from '@/lib/api'
+import { ApiError, api, errorMessage } from '@/lib/api'
 import { formatLongDateTime } from '@/lib/format'
+import { useSessionStore } from '@/stores/session'
 
 /** Prévisualisation d'une entrée (document UX, « V3 : prévisualisation ») : chaque appel crée un
- *  lien valable 24 h. `beforeOpen` enregistre la saisie, pour que l'aperçu la montre. */
-export function usePreview(entryPath: Ref<string>, beforeOpen: () => Promise<unknown>) {
-  const error = ref('')
+ *  lien valable 24 h. `beforeOpen` enregistre la saisie, pour que l'aperçu la montre. `busy` et
+ *  `error` sont ceux de l'éditeur : pas d'autre action pendant l'aperçu, une seule erreur. */
+export function usePreview(
+  entryPath: Ref<string>,
+  beforeOpen: () => Promise<unknown>,
+  busy: Ref<boolean>,
+  error: Ref<string>,
+) {
+  const session = useSessionStore()
   const message = ref('')
   /** Lien que le navigateur n'a pas pu copier ou ouvrir : affiché pour être copié à la main. */
   const fallback = ref('')
 
   async function create() {
+    busy.value = true
     error.value = ''
     message.value = ''
     fallback.value = ''
-    await beforeOpen()
     try {
+      await beforeOpen()
       return await api<{ url: string; expiresAt: string }>(`${entryPath.value}/preview`, {
         method: 'POST',
       })
     } catch (err) {
       error.value = errorMessage(err)
+      // URL d'aperçu retirée depuis la connexion : la session relue masque le bouton.
+      if (err instanceof ApiError && err.code === 'preview_not_configured') void session.load()
       return null
+    } finally {
+      busy.value = false
     }
   }
 
@@ -51,5 +63,5 @@ export function usePreview(entryPath: Ref<string>, beforeOpen: () => Promise<unk
     }
   }
 
-  return { open, copy, error, message, fallback }
+  return { open, copy, message, fallback }
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { previewUrlSchema } from '@dashility/shared'
+import { previewLink, previewUrlSchema } from '@dashility/shared'
 import { ExternalLink } from '@lucide/vue'
 import { ref, watch } from 'vue'
 import FormError from '@/components/FormError.vue'
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { api, errorMessage } from '@/lib/api'
-import { type SpaceDetail, previewLink } from '@/lib/spaces'
+import type { SpaceDetail } from '@/lib/spaces'
 import { useSessionStore } from '@/stores/session'
 
 /** URL d'aperçu (document UX, « Réglages › Intégration (ajout V3) ») : la page du site qui
@@ -40,9 +40,10 @@ async function save() {
       body: { previewUrl: parsed.data },
     })
     emit('updated', updated)
-    // L'éditeur lit l'URL d'aperçu dans la session pour afficher « Prévisualiser ».
-    await session.load()
     saved.value = true
+    // L'éditeur lit l'URL d'aperçu dans la session pour afficher « Prévisualiser ». Un échec ici
+    // ne change rien à l'enregistrement : la session sera relue à la prochaine navigation.
+    await session.load().catch(() => {})
   } catch (err) {
     error.value = errorMessage(err)
   } finally {
