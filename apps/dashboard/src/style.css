@@ -9,6 +9,16 @@
 @theme inline {
   --font-sans: 'Public Sans Variable', ui-sans-serif, system-ui, sans-serif;
   --font-heading: var(--font-sans);
+  --color-status-published: var(--status-published);
+  --color-status-published-tint: var(--status-published-tint);
+  --color-status-draft: var(--status-draft);
+  --color-status-draft-tint: var(--status-draft-tint);
+  --color-status-modified: var(--status-modified);
+  --color-status-modified-tint: var(--status-modified-tint);
+  --color-status-en: var(--status-en);
+  --color-status-en-tint: var(--status-en-tint);
+  --color-status-scheduled: var(--status-scheduled);
+  --color-status-scheduled-tint: var(--status-scheduled-tint);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -57,8 +67,20 @@
   --card-foreground: oklch(0.141 0.005 285.823);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.141 0.005 285.823);
-  --primary: oklch(0.21 0.006 285.885);
-  --primary-foreground: oklch(0.985 0 0);
+  /* Bleu encre : actions principales, navigation active, focus (direction visuelle). */
+  --primary: #2741b8;
+  --primary-foreground: #ffffff;
+  /* Statuts du contenu : la couleur est le texte, la teinte le fond (contrastes AA). */
+  --status-published: #17663f;
+  --status-published-tint: #e3f3ea;
+  --status-draft: #4b4b55;
+  --status-draft-tint: #ededf0;
+  --status-modified: #8a4b00;
+  --status-modified-tint: #fcefd8;
+  --status-en: #5b32a8;
+  --status-en-tint: #eee8fa;
+  --status-scheduled: #2741b8;
+  --status-scheduled-tint: #e6ecfc;
   --secondary: oklch(0.967 0.001 286.375);
   --secondary-foreground: oklch(0.21 0.006 285.885);
   --muted: oklch(0.967 0.001 286.375);
