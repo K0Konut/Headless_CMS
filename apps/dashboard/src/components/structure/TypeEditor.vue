@@ -49,8 +49,9 @@ const copyOf = (type: ContentType | null) => {
   )
 }
 const form = reactive(copyOf(props.type))
-let initial = JSON.stringify(form)
-const dirty = computed(() => JSON.stringify(form) !== initial)
+// Réactif : après un enregistrement, la saisie redevient « à jour » sans avoir changé.
+const initial = ref(JSON.stringify(form))
+const dirty = computed(() => JSON.stringify(form) !== initial.value)
 
 const error = ref('')
 const deleteError = ref('')
@@ -68,7 +69,7 @@ watch(
     if (previous === undefined && slug === createdSlug) return
     createdSlug = ''
     Object.assign(form, copyOf(props.type))
-    initial = JSON.stringify(form)
+    initial.value = JSON.stringify(form)
     error.value = ''
     deleteError.value = ''
     done.value = false
@@ -126,7 +127,7 @@ async function save() {
       { method: isNew.value ? 'POST' : 'PUT', body: parsed.data },
     )
     // Avant d'avertir la page : elle change d'URL après une création, sans confirmation à demander.
-    initial = JSON.stringify(form)
+    initial.value = JSON.stringify(form)
     done.value = true
     if (isNew.value) createdSlug = saved.slug
     emit('saved', saved)
@@ -138,7 +139,7 @@ async function save() {
 }
 
 function reset() {
-  Object.assign(form, JSON.parse(initial))
+  Object.assign(form, JSON.parse(initial.value))
   error.value = ''
 }
 
