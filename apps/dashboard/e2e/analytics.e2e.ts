@@ -27,18 +27,21 @@ test('le premier événement remplace l’état vide, sans recharger la page', a
   await expect(page.getByText('Aucune donnée pour l’instant')).toBeVisible()
   await expect(page.getByText('vue sur les 30 dernières minutes')).toBeVisible()
 
+  const live = page.getByRole('region', { name: 'Temps réel' })
+  await live.getByRole('button', { name: 'Voir le flux' }).click()
+
   await beacon(publicKey, 'view', '/projets/cms')
   await beacon(publicKey, 'cv', '/projets/cms')
 
-  const live = page.getByRole('region', { name: 'Temps réel' })
-  await expect(live.getByText('/projets/cms')).toHaveCount(2)
+  await expect(live.getByRole('listitem').filter({ hasText: '/projets/cms' })).toHaveCount(2)
+  await expect(live).toContainText('Dernier événement')
   await expect(live).toContainText('1 vue sur les 30 dernières minutes')
 
   await expect(page.getByText('Aucune donnée pour l’instant')).toHaveCount(0)
   const tiles = page.locator('dl')
   await expect(tiles).toContainText('Vues1')
   await expect(tiles).toContainText('CV téléchargés1')
-  await expect(tiles).toContainText('Taux100 %')
+  await expect(tiles).toContainText('Taux de conversion100 %')
   await expect(page.getByRole('region', { name: 'Provenances' })).toContainText('LinkedIn')
 })
 

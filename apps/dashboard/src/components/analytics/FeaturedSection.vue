@@ -43,12 +43,10 @@ watch(() => props.slug, load, { immediate: true })
 
 const ordinal = (n: number) => (n === 1 ? '1er' : `${n}e`)
 
-function status(row: FeaturedSummary['rows'][number]) {
-  if (row.featured)
-    return row.forced ? 'Mis en avant (forcé)' : `Mis en avant · ${ordinal(row.rank!)}`
-  if (row.rank) return ordinal(row.rank)
-  if (row.forced) return 'Forcé, sans place'
-  return `Pas assez de vues (${row.views}/${FEATURED_MIN_VIEWS})`
+/** Libellé d'une entrée mise en avant ; `null` pour les autres. */
+function featuredLabel(row: FeaturedSummary['rows'][number]) {
+  if (!row.featured) return null
+  return row.forced ? 'Mis en avant (forcé)' : `Mis en avant · ${ordinal(row.rank!)}`
 }
 </script>
 
@@ -69,51 +67,73 @@ function status(row: FeaturedSummary['rows'][number]) {
     v-else
     :key="summary.type.slug"
     :aria-labelledby="`featured-${summary.type.slug}`"
-    class="min-w-0"
+    class="min-w-0 overflow-hidden rounded-lg border bg-card"
   >
-    <h2 :id="`featured-${summary.type.slug}`" class="text-lg font-semibold">
-      Mise en avant · {{ summary.type.name }}
-      <span class="text-sm font-normal text-muted-foreground">sur les 6 derniers mois</span>
-    </h2>
-    <p v-if="!summary.rows.length" class="mt-2 text-sm text-muted-foreground">
+    <div class="flex flex-wrap items-baseline gap-x-2 border-b px-4 py-3">
+      <h2 :id="`featured-${summary.type.slug}`" class="font-semibold">
+        Mise en avant · {{ summary.type.name }}
+      </h2>
+      <p class="text-sm text-muted-foreground">
+        sur les 6 derniers mois, quelle que soit la période
+      </p>
+    </div>
+    <p v-if="!summary.rows.length" class="px-4 py-3 text-sm text-muted-foreground">
       Aucune entrée publiée.
     </p>
     <template v-else>
-      <Table class="mt-2">
-        <TableHeader>
+      <Table>
+        <TableHeader class="bg-canvas">
           <TableRow>
-            <TableHead>Entrée</TableHead>
-            <TableHead class="text-right">Vues</TableHead>
-            <TableHead class="text-right">CV</TableHead>
+            <TableHead class="pl-4">Entrée</TableHead>
+            <TableHead class="hidden text-right sm:table-cell">Vues</TableHead>
+            <TableHead class="hidden text-right sm:table-cell">CV</TableHead>
             <TableHead class="text-right">Score</TableHead>
-            <TableHead>Statut</TableHead>
+            <TableHead class="pr-4">Statut</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           <TableRow v-for="row in summary.rows" :key="row.id">
-            <TableCell class="max-w-56 truncate font-medium">
+            <TableCell class="max-w-56 truncate pl-4 font-medium">
               <RouterLink
                 :to="`/espaces/${slug}/contenu/${summary.type.slug}/${row.id}`"
                 class="hover:underline"
                 >{{ row.title || 'Sans titre' }}</RouterLink
               >
             </TableCell>
-            <TableCell class="text-right tabular-nums">{{ formatNumber(row.views) }}</TableCell>
-            <TableCell class="text-right tabular-nums">{{ formatNumber(row.cv) }}</TableCell>
+            <TableCell class="hidden text-right tabular-nums sm:table-cell">{{
+              formatNumber(row.views)
+            }}</TableCell>
+            <TableCell class="hidden text-right tabular-nums sm:table-cell">{{
+              formatNumber(row.cv)
+            }}</TableCell>
             <TableCell class="text-right tabular-nums">
               {{ row.score === null ? '—' : formatShare(row.cv, row.views) }}
             </TableCell>
-            <TableCell :class="row.featured ? 'font-medium' : 'text-muted-foreground'">
-              <Star
-                v-if="row.featured"
-                aria-hidden="true"
-                class="mr-1 inline size-3.5 fill-current align-[-2px] text-primary"
-              />{{ status(row) }}
+            <TableCell class="w-52 pr-4">
+              <span
+                v-if="featuredLabel(row)"
+                class="inline-flex items-center gap-1 rounded-md bg-status-scheduled-tint px-2 py-0.5 text-[12.5px] font-medium text-status-scheduled"
+              >
+                <Star aria-hidden="true" class="size-3.5 fill-current" />{{ featuredLabel(row) }}
+              </span>
+              <span v-else-if="row.rank" class="text-muted-foreground">{{
+                ordinal(row.rank)
+              }}</span>
+              <span v-else-if="row.forced" class="text-muted-foreground">Forcé, sans place</span>
+              <span v-else class="grid gap-1 text-[12.5px] text-muted-foreground tabular-nums">
+                Pas assez de vues : {{ row.views }} sur {{ FEATURED_MIN_VIEWS }}
+                <span class="block h-1 overflow-hidden rounded-full bg-muted">
+                  <span
+                    class="block h-full bg-muted-foreground/50"
+                    :style="{ width: `${Math.min(100, (row.views / FEATURED_MIN_VIEWS) * 100)}%` }"
+                  />
+                </span>
+              </span>
             </TableCell>
           </TableRow>
         </TableBody>
       </Table>
-      <p v-if="summary.drawnPlaces" class="mt-2 text-sm text-muted-foreground">
+      <p v-if="summary.drawnPlaces" class="border-t px-4 py-2.5 text-sm text-muted-foreground">
         {{
           summary.drawnPlaces === 1
             ? 'La place restante est tirée'

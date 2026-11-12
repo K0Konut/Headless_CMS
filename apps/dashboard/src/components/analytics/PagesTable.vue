@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { Button } from '@/components/ui/button'
 import {
   Table,
   TableBody,
@@ -31,6 +32,12 @@ const rows = computed(() =>
   }),
 )
 
+/** 10 lignes, toutes à la demande. */
+const LIMIT = 10
+const showAll = ref(false)
+const shown = computed(() => (showAll.value ? rows.value : rows.value.slice(0, LIMIT)))
+const maxViews = computed(() => Math.max(1, ...props.pages.map((p) => p.views)))
+
 function sortBy(key: Key) {
   descending.value = sortKey.value === key ? !descending.value : true
   sortKey.value = key
@@ -38,37 +45,54 @@ function sortBy(key: Key) {
 </script>
 
 <template>
-  <section aria-labelledby="pages-title" class="min-w-0">
-    <h2 id="pages-title" class="text-lg font-semibold">Pages</h2>
-    <p v-if="pages.length >= 100" class="mt-1 text-sm text-muted-foreground">
-      Les 100 pages les plus vues de la période.
-    </p>
-    <Table class="mt-2">
-      <TableHeader>
+  <section aria-labelledby="pages-title" class="min-w-0 overflow-hidden rounded-lg border bg-card">
+    <div class="flex items-baseline gap-2 border-b px-4 py-3">
+      <h2 id="pages-title" class="font-semibold">Pages</h2>
+      <p class="text-sm text-muted-foreground">
+        {{
+          pages.length >= 100
+            ? 'les 100 pages les plus vues'
+            : `${pages.length} ${pages.length > 1 ? 'pages vues' : 'page vue'}`
+        }}
+      </p>
+    </div>
+    <Table>
+      <TableHeader class="bg-canvas">
         <TableRow>
-          <TableHead>Page</TableHead>
+          <TableHead class="pl-4">Page</TableHead>
           <SortableHead
             v-for="column in COLUMNS"
             :key="column.key"
             :label="column.label"
             :active="sortKey === column.key"
             :direction="descending ? 'descending' : 'ascending'"
+            :class="column.key === 'rate' && 'pr-4'"
             @sort="sortBy(column.key)"
           />
         </TableRow>
       </TableHeader>
       <TableBody>
-        <TableRow v-for="page in rows" :key="page.path">
-          <TableCell class="max-w-64 truncate font-medium" :title="page.path">{{
-            page.path
-          }}</TableCell>
+        <TableRow v-for="page in shown" :key="page.path">
+          <TableCell class="max-w-64 pl-4">
+            <span class="block truncate font-medium" :title="page.path">{{ page.path }}</span>
+            <!-- Ordre de grandeur des vues, en plus du nombre. -->
+            <span
+              class="mt-1 block h-1 rounded-full bg-series-views/80"
+              :style="{ width: `${(page.views / maxViews) * 100}%` }"
+            />
+          </TableCell>
           <TableCell class="text-right tabular-nums">{{ formatNumber(page.views) }}</TableCell>
           <TableCell class="text-right tabular-nums">{{ formatNumber(page.cvs) }}</TableCell>
-          <TableCell class="text-right tabular-nums">{{
+          <TableCell class="pr-4 text-right text-muted-foreground tabular-nums">{{
             formatShare(page.cvs, page.views)
           }}</TableCell>
         </TableRow>
       </TableBody>
     </Table>
+    <div v-if="pages.length > LIMIT" class="flex justify-center p-1.5">
+      <Button variant="ghost" size="sm" class="text-primary" @click="showAll = !showAll">
+        {{ showAll ? 'Afficher moins' : `Afficher les ${pages.length} pages` }}
+      </Button>
+    </div>
   </section>
 </template>

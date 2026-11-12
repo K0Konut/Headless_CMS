@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Pause, Play } from '@lucide/vue'
+import { ChevronDown, Pause, Play } from '@lucide/vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,9 @@ const viewTimes = ref(new Set<string>())
 const recent = ref<LiveEvent[]>([])
 const status = ref<'connecting' | 'open' | 'reconnecting' | 'closed' | 'paused'>('connecting')
 const views = computed(() => viewTimes.value.size)
+const last = computed(() => recent.value[0])
+const showFeed = ref(false)
+const kindLabel = (e: LiveEvent) => (e.kind === 'cv' ? 'CV' : 'Vue')
 let source: EventSource | undefined
 
 /** Retire les vues sorties de la fenêtre : elle glisse aussi sans nouvel événement. */
@@ -77,11 +80,48 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section aria-labelledby="live-title" class="rounded-lg border bg-card p-4">
-    <div class="flex items-center justify-between gap-2">
-      <h2 id="live-title" class="font-semibold">Temps réel</h2>
+  <!-- Une ligne ; le flux se déplie à la demande. -->
+  <section aria-labelledby="live-title" class="rounded-lg border bg-card">
+    <h2 id="live-title" class="sr-only">Temps réel</h2>
+    <div class="flex items-center gap-3 py-1.5 pr-1.5 pl-4">
+      <span
+        class="size-2 shrink-0 rounded-full"
+        :class="
+          status === 'open'
+            ? 'bg-status-published ring-3 ring-status-published-tint'
+            : 'bg-muted-foreground'
+        "
+        aria-hidden="true"
+      />
+      <p class="text-sm">
+        <strong class="tabular-nums">{{ formatNumber(views) }}</strong>
+        {{ views > 1 ? 'vues' : 'vue' }} sur les 30 dernières minutes
+      </p>
+      <!-- Flux non annoncé par les lecteurs d'écran : il les saturerait. -->
+      <p
+        v-if="last"
+        class="hidden min-w-0 truncate text-sm text-muted-foreground tabular-nums md:block"
+        :title="last.path"
+      >
+        Dernier événement à {{ formatTime(last.at) }} · {{ kindLabel(last) }} · {{ last.path }}
+      </p>
       <Badge v-if="status === 'reconnecting'" variant="secondary">Reconnexion…</Badge>
       <Badge v-else-if="status === 'closed'" variant="secondary">Interrompu</Badge>
+      <Button
+        variant="ghost"
+        size="sm"
+        class="ml-auto text-primary"
+        :aria-expanded="showFeed"
+        aria-controls="live-feed"
+        @click="showFeed = !showFeed"
+      >
+        <span class="max-sm:sr-only">Voir le flux</span>
+        <ChevronDown
+          class="transition-transform duration-150 ease-out motion-reduce:transition-none"
+          :class="showFeed && 'rotate-180'"
+          aria-hidden="true"
+        />
+      </Button>
       <Button
         variant="ghost"
         size="icon"
@@ -99,19 +139,25 @@ onBeforeUnmount(() => {
         />
       </Button>
     </div>
-    <p class="mt-1 text-sm">
-      <strong class="tabular-nums">{{ formatNumber(views) }}</strong>
-      {{ views > 1 ? 'vues' : 'vue' }} sur les 30 dernières minutes
-    </p>
-    <!-- Flux non annoncé par les lecteurs d'écran : il les saturerait. -->
-    <ol v-if="recent.length" class="mt-3 grid max-h-72 gap-2 overflow-y-auto text-sm">
-      <li v-for="event in recent" :key="keyOf(event)" class="grid">
-        <span class="text-muted-foreground tabular-nums">
-          {{ formatTime(event.at) }} {{ event.kind === 'cv' ? 'CV' : 'Vue' }}
-        </span>
-        <span class="truncate" :title="event.path">{{ event.path }}</span>
-      </li>
-    </ol>
-    <p v-else class="mt-3 text-sm text-muted-foreground">Aucun événement récent.</p>
+    <div v-if="showFeed" id="live-feed" class="border-t">
+      <ol v-if="recent.length" class="max-h-64 overflow-y-auto text-sm">
+        <li
+          v-for="event in recent"
+          :key="keyOf(event)"
+          class="grid grid-cols-[3rem_2.5rem_minmax(0,1fr)] gap-3 border-t px-4 py-2 first:border-t-0"
+        >
+          <span class="text-muted-foreground tabular-nums">{{ formatTime(event.at) }}</span>
+          <span class="inline-flex items-center gap-1.5 font-medium">
+            <span
+              class="size-1.5 rounded-[2px]"
+              :class="event.kind === 'cv' ? 'bg-series-cvs' : 'bg-series-views'"
+              aria-hidden="true"
+            />{{ kindLabel(event) }}
+          </span>
+          <span class="truncate" :title="event.path">{{ event.path }}</span>
+        </li>
+      </ol>
+      <p v-else class="px-4 py-3 text-sm text-muted-foreground">Aucun événement récent.</p>
+    </div>
   </section>
 </template>
