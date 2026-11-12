@@ -51,6 +51,9 @@
   --color-foreground: var(--foreground);
   --color-background: var(--background);
   --color-canvas: var(--canvas);
+  --color-trend-down: var(--trend-down);
+  --color-series-views: var(--series-views);
+  --color-series-cvs: var(--series-cvs);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -156,6 +159,8 @@
 :root {
   --series-views: #2a78d6;
   --series-cvs: #eb6834;
+  /* Baisse d'un indicateur (la hausse prend --status-published) : 6,7 sur blanc. */
+  --trend-down: #a8321f;
 }
 
 /* Texte riche (éditeur Tiptap) : la remise à zéro de Tailwind retire titres et puces. */

@@ -107,6 +107,24 @@ describe('GET /spaces/:slug/analytics', () => {
     expect(quiet.body).toMatchObject({ totals: { views: 0, cvs: 0 }, hasEvents: true })
   })
 
+  it('compare à la période précédente de même durée, si elle est encore conservée', async () => {
+    const day = (offset: number) =>
+      new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10)
+    await db.insert(events).values([
+      event(`${day(-12)}T10:00:00Z`, 'view', '/'), // période précédente
+      event(`${day(-11)}T10:00:00Z`, 'cv', '/'),
+      event(`${day(-16)}T10:00:00Z`, 'view', '/'), // avant la période précédente
+      event(`${day(-5)}T10:00:00Z`, 'view', '/'),
+    ])
+
+    const { body } = await get(`/analytics?from=${day(-10)}&to=${day(-6)}`).expect(200)
+    expect(body.previous).toEqual({ from: day(-15), to: day(-11), views: 1, cvs: 1 })
+
+    // Une période précédente au-delà des 6 mois conservés ne se compare pas.
+    const old = await get('/analytics?from=2020-01-08&to=2020-01-14').expect(200)
+    expect(old.body.previous).toBeNull()
+  })
+
   it('refuse une période invalide', async () => {
     await get('/analytics?from=2026-10-31&to=2026-10-01').expect(400)
     await get('/analytics').expect(400)

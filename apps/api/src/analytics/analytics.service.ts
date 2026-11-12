@@ -1,3 +1,4 @@
+import { addDays, oldestDate } from '@dashility/shared'
 import { Inject, Injectable } from '@nestjs/common'
 import { and, desc, eq, gte, sql } from 'drizzle-orm'
 import { DB } from '../db/db.module.js'
@@ -34,8 +35,12 @@ export class AnalyticsService {
     const where = inPeriod(spaceId, from, to)
     const day = sql<string>`to_char(${events.createdAt} at time zone 'Europe/Paris', 'YYYY-MM-DD')`
 
-    const [[totals], perDay, pages, referrers, [any]] = await Promise.all([
-      this.db.select({ views, cvs }).from(events).where(where),
+    // Période précédente, de même durée, juste avant `from`.
+    const length = (Date.parse(to) - Date.parse(from)) / 86_400_000 + 1
+    const prevTo = addDays(from, -1)
+    const prevFrom = addDays(from, -length)
+
+    const [perDay, pages, referrers, [any], prev] = await Promise.all([
       this.db.select({ date: day, views, cvs }).from(events).where(where).groupBy(day),
       this.db
         .select({ path: events.path, views, cvs })
@@ -51,18 +56,30 @@ export class AnalyticsService {
         .groupBy(source)
         .orderBy(desc(sql`count(*)`)),
       this.db.select({ id: events.id }).from(events).where(eq(events.spaceId, spaceId)).limit(1),
+      // Seulement si elle est encore entièrement conservée : sinon l'écart serait faux.
+      prevFrom >= oldestDate()
+        ? this.db
+            .select({ views, cvs })
+            .from(events)
+            .where(inPeriod(spaceId, prevFrom, prevTo))
+            .then(([counts]) => counts!)
+        : null,
     ])
 
     // Tous les jours de la période, à 0 quand il ne s'est rien passé.
     const byDate = new Map(perDay.map((d) => [d.date, d]))
     const daily = []
-    for (let d = new Date(`${from}T00:00:00Z`); d <= new Date(`${to}T00:00:00Z`);) {
-      const date = d.toISOString().slice(0, 10)
+    for (let date = from; date <= to; date = addDays(date, 1)) {
       daily.push(byDate.get(date) ?? { date, views: 0, cvs: 0 })
-      d.setUTCDate(d.getUTCDate() + 1)
+    }
+    const totals = { views: 0, cvs: 0 }
+    for (const d of perDay) {
+      totals.views += d.views
+      totals.cvs += d.cvs
     }
 
-    return { totals: totals!, daily, pages, referrers, hasEvents: !!any }
+    const previous = prev && { from: prevFrom, to: prevTo, ...prev }
+    return { totals, previous, daily, pages, referrers, hasEvents: !!any }
   }
 
   /** Événements bruts de la période, du plus ancien au plus récent. */

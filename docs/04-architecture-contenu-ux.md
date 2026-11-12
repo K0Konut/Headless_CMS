@@ -116,29 +116,40 @@ Les deux écrans ont la même forme : l'email est affiché en lecture seule, ave
 
 ### Analytics (page d'accueil d'un espace)
 
+Maquette : `06-maquettes/refonte-analytics.html` (captures `analytics.png`, `analytics-mobile.png`, `analytics-survol.png`).
+
 ```
-┌ Période [30 derniers jours ▾]                  [Exporter en CSV] ┐
-│ ┌── Vues ──┐ ┌─ CV téléchargés ┐ ┌─ Taux ─┐  ┌ Temps réel ───⏸┐ │
-│ │  1 240   │ │       38        │ │ 3,1 %  │  │ 12 vues / 30 min│ │
-│ └──────────┘ └─────────────────┘ └────────┘  │ 14:02 Vue       │ │
-│ ┌ Vues et CV par jour ─────────────────────┐ │   /projets/cms  │ │
-│ │  ╱╲__╱╲___╱╲          [Voir en tableau]  │ │ 14:01 CV        │ │
-│ └──────────────────────────────────────────┘ │   /projets/api  │ │
-│                                              └─────────────────┘ │
-│ ┌ Pages ──────────── Vues  CV  Taux ┐ ┌ Provenances ─── Vues ┐   │
-│ │ /projets/cms        320   14  4,4% │ │ LinkedIn     508 41% │   │
-│ │ /                   610    9  1,5% │ │ Accès direct 372 30% │   │
-│ │ …                                  │ │ …                    │   │
-│ └────────────────────────────────────┘ └──────────────────────┘   │
-└──────────────────────────────────────────────────────────────────┘
+Analytics                              [30 derniers jours ▾] [Exporter en CSV]
+Comparé aux 30 jours précédents (14 sept. – 13 oct.)
+┌ ■ Vues ─────────┐ ┌ ■ CV téléchargés ┐ ┌ Taux de conversion ┐
+│ 1 163           │ │ 36               │ │ 3,1 %              │
+│ ↑ +15 % 1 012 avant │ ↑ +33 % 27 avant │ │ ↑ +0,4 pt 2,7 % avant │
+└─────────────────┘ └──────────────────┘ └────────────────────┘
+┌ ● 12 vues ces 30 dernières minutes · Dernier événement à 14:02 … [Voir le flux ▾] ⏸ ┐
+┌ Par jour ─────────────────────────────────────────── [Voir en tableau] ┐
+│ Vues            ╱╲  96 · 29 oct.                                       │
+│ 100 ┼──────────╱──╲──────────────────────────────                      │
+│   0 ┼─╱╲_╱╲___╱    ╲__╱╲___╱╲_                                         │
+│ CV téléchargés  ▮ ▮  ▮▮▮    ▮ ▮▮                                       │
+│        19 oct.      26 oct.      2 nov.      9 nov.                    │
+└────────────────────────────────────────────────────────────────────────┘
+┌ Pages · 34 pages vues ── Vues↓ CV  Taux ┐ ┌ Provenances ──── Vues Part ┐
+│ /fr                       412   4   1 % │ │ LinkedIn          486  41 % │
+│ ━━━━━━━━━━━━━━━━━━━━━                   │ │ ━━━━━━━━━━━━━              │
+│ … 10 lignes                             │ │ … 5 sources                 │
+│        [Afficher les 34 pages]          │ │ 4 autres sources   29   2 % │
+└─────────────────────────────────────────┘ └─────────────────────────────┘
+┌ Mise en avant · Projets ─ sur les 6 derniers mois (voir plus bas) ┐
 ```
 
 - **Période** : 7 derniers jours, 30 derniers jours (valeur par défaut), 6 mois, ou personnalisée. Le calendrier ne propose que les 6 derniers mois, puisque rien n'est conservé au-delà.
-- **Tuiles** : vues, CV téléchargés, taux de conversion (CV ÷ vues) sur la période.
-- **Courbe** : vues et téléchargements par jour. Le bouton « Voir en tableau » affiche les mêmes données en tableau, comme alternative accessible.
-- **Pages** : vues, téléchargements du CV et taux par page, triables, avec les vues décroissantes par défaut.
-- **Provenances** : site d'origine regroupé (LinkedIn, GitHub, Google, Accès direct, sinon le nom de domaine), avec les vues et leur part.
-- **Temps réel** : nombre de vues des 30 dernières minutes et flux des 20 derniers événements. Comme il n'existe pas d'identifiant de visiteur, on affiche des **événements**, jamais des « visiteurs actifs ». Un bouton pause arrête la mise à jour automatique (WCAG 2.2.2), et le flux n'est pas annoncé par les lecteurs d'écran pour ne pas les saturer.
+- **Comparaison** : la période est comparée à celle qui la précède, de même durée (« Comparé aux 30 jours précédents (14 sept. – 13 oct.) »). Si cette période précédente commence avant les 6 mois conservés (par exemple pour « 6 mois »), il n'y a ni phrase ni évolution.
+- **Tuiles** : vues, CV téléchargés, taux de conversion (CV ÷ vues) sur la période, chacune avec son évolution : flèche, signe et pourcentage (en points pour le taux), puis la valeur d'avant (« 1 012 avant »). La hausse est en vert, la baisse en rouge ; la flèche et le signe portent le sens sans la couleur. Sans valeur d'avant (0), pas de pourcentage, seulement « 0 avant ».
+- **Temps réel** : une ligne sous les tuiles, avec le nombre de vues des 30 dernières minutes et le dernier événement. « Voir le flux » déplie les 20 derniers événements. Comme il n'existe pas d'identifiant de visiteur, on affiche des **événements**, jamais des « visiteurs actifs ». Un bouton pause arrête la mise à jour automatique (WCAG 2.2.2), et le flux n'est pas annoncé par les lecteurs d'écran pour ne pas les saturer. Sous 768 px, le dernier événement est masqué.
+- **Par jour** : les vues en courbe (axe gradué, pic indiqué), les CV en barres juste en dessous, sur les mêmes dates. Deux graphiques et non un seul à deux axes : les échelles sont trop différentes. Un curseur commun, à la souris ou aux flèches du clavier, donne le jour, les vues, les CV et le taux. Le bouton « Voir en tableau » affiche les mêmes données en tableau, comme alternative accessible.
+- **Pages** : les 10 pages les plus vues, puis « Afficher les N pages ». Vues, téléchargements du CV et taux par page, triables, avec les vues décroissantes par défaut ; une barre fine sous le chemin donne l'ordre de grandeur des vues.
+- **Provenances** : site d'origine regroupé (LinkedIn, GitHub, Google, Accès direct, sinon le nom de domaine), avec les vues, leur part et une barre fine. Les 5 premières, puis une ligne « N autres sources ».
+- **Panneaux** : chaque bloc vit dans un panneau blanc, sur le fond gris (`03-direction-artistique.md`).
 - **Export CSV** : les événements bruts de la période, une ligne par événement (`date, type, page, provenance`).
 
 **États**
@@ -149,7 +160,7 @@ Les deux écrans ont la même forme : l'email est affiché en lecture seule, ave
 | Aucun événement jamais reçu | Message « Aucune donnée pour l'instant » et lien vers Réglages › Intégration pour installer le script |
 | Période sans données | Tuiles à 0, et message « Aucune visite sur cette période » à la place de la courbe et des tableaux |
 | Erreur de chargement | Message et bouton « Réessayer » ; les autres blocs restent affichés |
-| Temps réel interrompu | Pastille « Reconnexion… » dans l'encart ; reconnexion automatique |
+| Temps réel interrompu | Pastille « Reconnexion… » dans la ligne du temps réel ; reconnexion automatique |
 | Premier événement reçu | L'état vide est remplacé sans recharger la page |
 
 ### Réglages d'un espace
