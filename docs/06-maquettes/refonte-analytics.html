@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Refonte de l'analytics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+<style>
+/* Maquette statique : jetons de docs/03-direction-artistique.md, couleurs des séries de style.css. */
+:root {
+  --ink: #18181b;
+  --muted: #62626c;
+  --line: #e4e4e7;
+  --canvas: #f4f5f7;
+  --surface: #ffffff;
+  --hover: #f7f7f9;
+  --accent: #2741b8;
+  --accent-tint: #e6ecfc;
+  --published: #17663f;   --published-tint: #e3f3ea;
+  --down: #a8321f;
+  --views: #2a78d6;
+  --cvs: #eb6834;
+  --grid: #ececef;
+  --r-panel: 10px;
+  --r-control: 8px;
+  --r-pill: 6px;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: #d4d4d8; font: 14px/1.45 'Public Sans', system-ui, sans-serif; color: var(--ink); font-variant-numeric: tabular-nums; }
+.screen-title { max-width: 1280px; margin: 32px auto 8px; padding: 0 16px; font-size: 13px; color: #3f3f46; }
+.app { display: grid; grid-template-columns: 232px 1fr; max-width: 1280px; margin: 0 auto 48px; background: var(--canvas); border-radius: 12px; overflow: hidden; border: 1px solid #c4c4c8; }
+
+.side { background: var(--surface); border-right: 1px solid var(--line); padding: 12px 10px; display: flex; flex-direction: column; gap: 2px; }
+.space { display: flex; align-items: center; gap: 10px; padding: 8px; font-weight: 600; margin-bottom: 10px; }
+.space .fav { width: 24px; height: 24px; border-radius: 6px; background: var(--ink); color: #fff; display: grid; place-items: center; font-size: 12px; }
+.space svg { margin-left: auto; width: 16px; color: var(--muted); }
+.nav { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: var(--r-control); color: #3f3f46; text-decoration: none; }
+.nav svg { width: 16px; height: 16px; }
+.nav.active { color: var(--accent); font-weight: 600; }
+
+main { padding: 36px 40px 56px; min-width: 0; }
+.page { max-width: 1000px; display: grid; gap: 20px; }
+.head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+h1 { font-size: 24px; line-height: 1.2; font-weight: 650; letter-spacing: -0.01em; margin: 0; }
+h2 { font-size: 15px; font-weight: 650; margin: 0; }
+.head .actions { margin-left: auto; display: flex; gap: 8px; }
+.compare { margin: -12px 0 0; color: var(--muted); font-size: 13px; }
+
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: var(--r-control); border: 1px solid var(--line); background: var(--surface); font: inherit; font-weight: 500; color: var(--ink); cursor: pointer; white-space: nowrap; }
+.btn svg { width: 15px; height: 15px; }
+.btn.ghost { border-color: transparent; background: none; color: var(--accent); height: 28px; padding: 0 8px; font-size: 13px; }
+.icon-btn { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 6px; color: var(--muted); border: 0; background: none; cursor: pointer; }
+.icon-btn svg { width: 15px; height: 15px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-panel); overflow: hidden; min-width: 0; }
+.panel-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.panel-head .note { color: var(--muted); font-size: 13px; }
+.panel-head .end { margin-left: auto; }
+
+/* Indicateurs : le chiffre, puis son évolution. La flèche et le signe portent le sens, la couleur le confirme. */
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 0; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-panel); padding: 14px 16px; display: grid; gap: 4px; }
+.tile dt { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 7px; }
+.tile dt i { width: 8px; height: 8px; border-radius: 2px; }
+.tile dd { margin: 0; }
+.tile .value { font-size: 32px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.15; }
+.tile .delta { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.trend { display: inline-flex; align-items: center; gap: 2px; font-weight: 600; }
+.trend svg { width: 14px; height: 14px; }
+.trend.up { color: var(--published); }
+.trend.down { color: var(--down); }
+
+/* Temps réel : une ligne, le flux se déplie à la demande. */
+.live summary { list-style: none; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 16px; cursor: pointer; }
+.live summary::-webkit-details-marker { display: none; }
+.live .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--published); box-shadow: 0 0 0 3px var(--published-tint); flex: none; }
+.live .last { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.live .toggle { margin-left: auto; color: var(--accent); font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.live .toggle svg { width: 14px; height: 14px; transition: transform 150ms ease-out; }
+.live[open] .toggle svg { transform: rotate(180deg); }
+.live ol { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); max-height: 260px; overflow-y: auto; }
+.live li { display: grid; grid-template-columns: 48px 44px minmax(0, 1fr); gap: 12px; padding: 8px 16px; border-top: 1px solid var(--line); font-size: 13px; }
+.live li:first-child { border-top: 0; }
+.live li .t { color: var(--muted); }
+.kind { display: inline-flex; align-items: center; gap: 5px; font-weight: 550; }
+.kind::before { content: ''; width: 6px; height: 6px; border-radius: 2px; background: var(--c); }
+
+/* Par jour : deux graphiques empilés, même axe des dates, un seul curseur. */
+.chart { position: relative; padding: 14px 16px 8px; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.chart .tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-control); padding: 8px 10px; font-size: 13px; min-width: 150px; display: none; z-index: 2; }
+.chart .tip b { display: block; margin-bottom: 4px; font-weight: 600; }
+.chart .tip div { display: flex; justify-content: space-between; gap: 16px; }
+.chart .tip span { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.chart .tip span::before { content: ''; width: 8px; height: 8px; border-radius: 2px; background: var(--c); }
+.chart .tip span.none::before { display: none; }
+.axis { fill: var(--muted); font-size: 11.5px; }
+.series-title { fill: var(--ink); font-size: 13px; font-weight: 600; }
+.peak { fill: var(--ink); font-size: 12px; font-weight: 600; }
+
+table.daily { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.daily th, table.daily td { padding: 7px 16px; border-top: 1px solid var(--line); text-align: right; }
+table.daily th:first-child, table.daily td:first-child { text-align: left; }
+table.daily thead th { color: var(--muted); font-weight: 600; background: var(--canvas); border-top: 0; }
+
+/* Pages et Provenances : 10 lignes, une barre fine donne l'ordre de grandeur. */
+.split { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 20px; align-items: start; }
+.rows { display: grid; }
+.r { display: grid; align-items: center; gap: 12px; padding: 9px 16px; border-top: 1px solid var(--line); }
+.r:hover { background: var(--hover); }
+.r.th { border-top: 0; background: var(--canvas); color: var(--muted); font-size: 12.5px; font-weight: 600; padding-top: 7px; padding-bottom: 7px; }
+.r.th:hover { background: var(--canvas); }
+.r .num { text-align: right; }
+.r .muted { color: var(--muted); }
+.sort { display: inline-flex; align-items: center; gap: 3px; justify-content: flex-end; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; padding: 0; }
+.sort.on { color: var(--ink); }
+.sort svg { width: 13px; height: 13px; }
+.pages .r { grid-template-columns: minmax(0, 1fr) 56px 36px 52px; }
+.refs .r { grid-template-columns: minmax(0, 1fr) 56px 44px; }
+.label { min-width: 0; display: grid; gap: 5px; }
+.label .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.bar { height: 4px; border-radius: 2px; background: var(--views); opacity: .8; }
+.more { display: flex; justify-content: center; padding: 6px; border-top: 1px solid var(--line); }
+.other .txt { color: var(--muted); font-weight: 400; }
+
+/* Mise en avant */
+.feat .r { grid-template-columns: minmax(0, 1fr) 56px 36px 56px 196px; }
+.feat a { color: var(--ink); font-weight: 500; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feat a:hover { text-decoration: underline; }
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 550; padding: 2px 8px; border-radius: var(--r-pill); white-space: nowrap; justify-self: start; }
+.pill svg { width: 13px; height: 13px; }
+.pill.on { color: var(--accent); background: var(--accent-tint); }
+.pill.on svg { fill: currentColor; }
+.pill.rank { color: var(--muted); padding-left: 0; }
+.progress { display: grid; gap: 4px; font-size: 12.5px; color: var(--muted); }
+.progress i { display: block; height: 4px; border-radius: 2px; background: var(--grid); overflow: hidden; }
+.progress i::after { content: ''; display: block; height: 100%; width: var(--p); background: #a1a1aa; }
+.foot { padding: 10px 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+
+@media (max-width: 1100px) {
+  .split { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 768px) {
+  .app { grid-template-columns: 1fr; border-radius: 0; border: 0; margin-bottom: 0; }
+  .side { display: none; }
+  main { padding: 20px 16px 40px; }
+  .head .actions { margin-left: 0; width: 100%; }
+  .head .actions .btn:first-child { flex: 1; }
+  .tiles { grid-template-columns: 1fr 1fr; }
+  .tiles .tile:last-child { grid-column: span 2; }
+  .tile .value { font-size: 26px; }
+  .live .last { display: none; }
+  /* Le statut passe sous le titre du projet. */
+  .feat .r { grid-template-columns: minmax(0, 1fr) 56px; row-gap: 6px; }
+  .feat .r > :nth-child(2), .feat .r > :nth-child(3), .feat .r.th > :last-child { display: none; }
+  .feat .r > :last-child { grid-column: 1 / -1; }
+  .pages .r { grid-template-columns: minmax(0, 1fr) 48px 32px 48px; gap: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live .toggle svg { transition: none; }
+}
+</style>
+</head>
+<body>
+<p class="screen-title">Analytics · 30 derniers jours · 12 nov. 2026, 14 h 05</p>
+
+<div class="app">
+  <aside class="side">
+    <div class="space"><span class="fav">P</span>Portfolio<i data-lucide="chevrons-up-down"></i></div>
+    <a class="nav active" href="#"><i data-lucide="chart-column"></i>Analytics</a>
+    <a class="nav" href="#"><i data-lucide="file-text"></i>Contenu</a>
+    <a class="nav" href="#"><i data-lucide="blocks"></i>Structure</a>
+    <a class="nav" href="#"><i data-lucide="settings"></i>Réglages</a>
+  </aside>
+
+  <main>
+    <div class="page">
+      <div class="head">
+        <h1>Analytics</h1>
+        <div class="actions">
+          <button class="btn">30 derniers jours<i data-lucide="chevron-down"></i></button>
+          <button class="btn"><i data-lucide="download"></i>Exporter en CSV</button>
+        </div>
+      </div>
+      <p class="compare">Comparé aux 30 jours précédents (14 sept. – 13 oct.)</p>
+
+      <dl class="tiles" id="tiles"></dl>
+
+      <details class="panel live">
+        <summary>
+          <span class="dot" aria-hidden="true"></span>
+          <span><strong>12 vues</strong> ces 30 dernières minutes</span>
+          <span class="last">Dernier événement à 14:02 · Vue · /fr/projets/ce-portfolio</span>
+          <span class="toggle">Voir le flux<i data-lucide="chevron-down"></i></span>
+          <button class="icon-btn" aria-label="Mettre le temps réel en pause" aria-pressed="false" onclick="event.preventDefault()"><i data-lucide="pause"></i></button>
+        </summary>
+        <ol id="feed"></ol>
+      </details>
+
+      <section class="panel" aria-labelledby="daily-title">
+        <div class="panel-head">
+          <h2 id="daily-title">Par jour</h2>
+          <button class="btn ghost end" id="table-toggle" aria-expanded="false">Voir en tableau</button>
+        </div>
+        <div class="chart" id="chart" tabindex="0" role="img" aria-label="Vues et CV téléchargés par jour. Flèches gauche et droite pour parcourir les jours.">
+          <svg id="svg"></svg>
+          <div class="tip" id="tip"></div>
+        </div>
+        <table class="daily" id="daily-table" hidden></table>
+      </section>
+
+      <div class="split">
+        <section class="panel pages" aria-labelledby="pages-title">
+          <div class="panel-head"><h2 id="pages-title">Pages</h2><span class="note">34 pages vues</span></div>
+          <div class="rows" id="pages"></div>
+          <div class="more"><button class="btn ghost">Afficher les 34 pages</button></div>
+        </section>
+        <section class="panel refs" aria-labelledby="refs-title">
+          <div class="panel-head"><h2 id="refs-title">Provenances</h2></div>
+          <div class="rows" id="refs"></div>
+        </section>
+      </div>
+
+      <section class="panel feat" aria-labelledby="feat-title">
+        <div class="panel-head">
+          <h2 id="feat-title">Mise en avant · Projets</h2>
+          <span class="note">sur les 6 derniers mois, quelle que soit la période</span>
+        </div>
+        <div class="rows" id="feat"></div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script>
+const fmt = new Intl.NumberFormat('fr-FR')
+const pct = (a, b) => (b ? (a / b * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' %' : '—')
+const day = (d, opts = { weekday: 'short', day: 'numeric', month: 'short' }) => d.toLocaleDateString('fr-FR', opts)
+const ico = (name) => `<i data-lucide="${name}"></i>`
+
+// 30 jours jusqu'au 12 nov. 2026 ; pic le 29 oct. (post LinkedIn).
+const VIEWS = [31,28,35,40,38,22,19,33,36,41,44,39,24,21,37,96,88,52,45,26,23,40,43,47,42,38,25,27,49,34]
+const CVS   = [ 1, 0, 1, 2, 1, 0, 0, 1, 1, 2, 1, 1, 0, 0, 1, 6, 4, 2, 1, 0, 0, 1, 2, 2, 1, 1, 0, 1, 2, 1]
+const days = VIEWS.map((v, i) => ({ date: new Date(2026, 9, 14 + i), views: v, cvs: CVS[i] }))
+const total = { views: VIEWS.reduce((a, b) => a + b), cvs: CVS.reduce((a, b) => a + b) }
+const prev = { views: 1012, cvs: 27 }
+
+// Indicateurs
+function trend(now, before, unit) {
+  const diff = unit === 'pt' ? (now - before) : (now - before) / before * 100
+  const up = diff >= 0
+  const n = Math.abs(diff).toLocaleString('fr-FR', { maximumFractionDigits: unit === 'pt' ? 1 : 0 })
+  return `<span class="trend ${up ? 'up' : 'down'}">${ico(up ? 'arrow-up' : 'arrow-down')}${up ? '+' : '−'}${n} ${unit === 'pt' ? 'pt' : '%'}</span>`
+}
+const rate = (c) => c.cvs / c.views * 100
+document.getElementById('tiles').innerHTML = [
+  ['Vues', fmt.format(total.views), trend(total.views, prev.views), `${fmt.format(prev.views)} avant`, 'var(--views)'],
+  ['CV téléchargés', fmt.format(total.cvs), trend(total.cvs, prev.cvs), `${prev.cvs} avant`, 'var(--cvs)'],
+  ['Taux de conversion', pct(total.cvs, total.views), trend(rate(total), rate(prev), 'pt'), `${pct(prev.cvs, prev.views)} avant`, null],
+].map(([label, value, t, before, color]) => `
+  <div class="tile">
+    <dt>${color ? `<i style="background:${color}"></i>` : ''}${label}</dt>
+    <dd class="value">${value}</dd>
+    <dd class="delta">${t}<span>${before}</span></dd>
+  </div>`).join('')
+
+// Flux temps réel
+const FEED = [['14:02','Vue','/fr/projets/ce-portfolio'],['14:01','CV','/fr/projets/api-reservation'],['13:58','Vue','/fr/projets/api-reservation'],['13:55','Vue','/fr'],['13:51','Vue','/en/projects/mobile-app'],['13:47','Vue','/fr/a-propos'],['13:44','Vue','/fr']]
+document.getElementById('feed').innerHTML = FEED.map(([t, k, p]) =>
+  `<li><span class="t">${t}</span><span class="kind" style="--c:var(${k === 'CV' ? '--cvs' : '--views'})">${k}</span><span>${p}</span></li>`).join('')
+
+// Graphique : vues en aire, CV en barres, mêmes dates, un curseur commun.
+const svg = document.getElementById('svg'), tip = document.getElementById('tip'), chart = document.getElementById('chart')
+let active = null
+function niceMax(v) { const step = Math.pow(10, Math.floor(Math.log10(v))); return Math.ceil(v / step) * step }
+function draw() {
+  const W = chart.clientWidth - 32, L = 32, R = 8
+  const vTop = 34, vH = 150, cTop = vTop + vH + 40, cH = 56, H = cTop + cH + 24
+  const n = days.length, step = (W - L - R) / n
+  const x = (i) => L + step * (i + .5)
+  const vMax = niceMax(Math.max(...VIEWS)), cMax = Math.max(...CVS)
+  const vy = (v) => vTop + vH - v / vMax * vH
+  const cy = (v) => cTop + cH - v / cMax * cH
+  let s = ''
+  // Vues
+  s += `<text class="series-title" x="0" y="${vTop - 10}">Vues</text>`
+  for (const t of [0, vMax / 2, vMax]) s += `<line x1="${L}" x2="${W - R}" y1="${vy(t)}" y2="${vy(t)}" stroke="${t ? 'var(--grid)' : 'var(--line)'}"/><text class="axis" x="${L - 8}" y="${vy(t) + 4}" text-anchor="end">${t}</text>`
+  const pts = days.map((d, i) => `${x(i)},${vy(d.views)}`).join(' ')
+  s += `<polygon points="${x(0)},${vy(0)} ${pts} ${x(n - 1)},${vy(0)}" fill="var(--views)" opacity=".1"/>`
+  s += `<polyline points="${pts}" fill="none" stroke="var(--views)" stroke-width="2" stroke-linejoin="round"/>`
+  const peak = VIEWS.indexOf(Math.max(...VIEWS))
+  if (active === null) s += `<text class="peak" x="${x(peak)}" y="${vy(VIEWS[peak]) - 9}" text-anchor="middle">${VIEWS[peak]} · ${day(days[peak].date, { day: 'numeric', month: 'short' })}</text>`
+  // CV
+  s += `<text class="series-title" x="0" y="${cTop - 12}">CV téléchargés</text>`
+  s += `<line x1="${L}" x2="${W - R}" y1="${cy(0)}" y2="${cy(0)}" stroke="var(--line)"/><text class="axis" x="${L - 8}" y="${cy(0) + 4}" text-anchor="end">0</text>`
+  s += `<line x1="${L}" x2="${W - R}" y1="${cy(cMax)}" y2="${cy(cMax)}" stroke="var(--grid)"/><text class="axis" x="${L - 8}" y="${cy(cMax) + 4}" text-anchor="end">${cMax}</text>`
+  const bw = Math.max(2, Math.min(14, step - 3))
+  days.forEach((d, i) => { if (d.cvs) s += `<path d="M${x(i) - bw / 2},${cy(0)} V${cy(d.cvs) + 3} q0,-3 3,-3 h${bw - 6} q3,0 3,3 V${cy(0)} Z" fill="var(--cvs)"/>` })
+  // Dates : un lundi sur deux en mobile, chaque lundi sinon
+  const every = W < 500 ? 14 : 7
+  days.forEach((d, i) => { if (d.date.getDay() === 1 && Math.round((d.date - days[0].date) / 864e5) % every < 7) s += `<text class="axis" x="${x(i)}" y="${H - 6}" text-anchor="middle">${day(d.date, { day: 'numeric', month: 'short' })}</text>` })
+  // Curseur
+  if (active !== null) {
+    const d = days[active]
+    s += `<line x1="${x(active)}" x2="${x(active)}" y1="${vTop}" y2="${cTop + cH}" stroke="var(--ink)" stroke-opacity=".35"/>`
+    s += `<circle cx="${x(active)}" cy="${vy(d.views)}" r="4.5" fill="var(--views)" stroke="var(--surface)" stroke-width="2"/>`
+    tip.innerHTML = `<b>${day(d.date)}</b><div><span style="--c:var(--views)">Vues</span>${d.views}</div><div><span style="--c:var(--cvs)">CV</span>${d.cvs}</div><div><span class="none">Taux</span>${pct(d.cvs, d.views)}</div>`
+    tip.style.display = 'block'
+    const left = 16 + x(active) + 12
+    tip.style.left = (left + tip.offsetWidth > chart.clientWidth ? left - tip.offsetWidth - 24 : left) + 'px'
+    tip.style.top = '28px'
+  } else tip.style.display = 'none'
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`)
+  svg.setAttribute('height', H)
+  svg.innerHTML = s
+  chart.dataset.step = step; chart.dataset.left = L
+}
+chart.addEventListener('mousemove', (e) => {
+  const r = svg.getBoundingClientRect(), i = Math.floor((e.clientX - r.left - +chart.dataset.left) / +chart.dataset.step)
+  const next = Math.max(0, Math.min(days.length - 1, i))
+  if (next !== active) { active = next; draw() }
+})
+chart.addEventListener('mouseleave', () => { active = null; draw() })
+chart.addEventListener('keydown', (e) => {
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+  e.preventDefault()
+  active = Math.max(0, Math.min(days.length - 1, (active ?? days.length) + (e.key === 'ArrowLeft' ? -1 : 1)))
+  draw()
+})
+chart.addEventListener('blur', () => { active = null; draw() })
+new ResizeObserver(draw).observe(chart)
+
+// Tableau, alternative au graphique
+document.getElementById('daily-table').innerHTML = '<thead><tr><th>Jour</th><th>Vues</th><th>CV</th><th>Taux</th></tr></thead><tbody>' +
+  days.slice().reverse().map((d) => `<tr><td>${day(d.date)}</td><td>${d.views}</td><td>${d.cvs}</td><td>${pct(d.cvs, d.views)}</td></tr>`).join('') + '</tbody>'
+document.getElementById('table-toggle').addEventListener('click', (e) => {
+  const showTable = e.target.getAttribute('aria-expanded') === 'false'
+  e.target.setAttribute('aria-expanded', showTable)
+  e.target.textContent = showTable ? 'Voir en graphique' : 'Voir en tableau'
+  chart.hidden = showTable
+  document.getElementById('daily-table').hidden = !showTable
+})
+
+// Pages : 10 premières, triées par vues
+const PAGES = [['/fr', 412, 4], ['/fr/projets/ce-portfolio', 236, 9], ['/fr/projets/api-reservation', 151, 11], ['/en', 98, 1], ['/fr/a-propos', 74, 3], ['/fr/projets/app-mobile', 63, 2], ['/en/projects/booking-api', 41, 3], ['/fr/projets/site-associatif', 30, 1], ['/fr/contact', 22, 0], ['/en/projects/this-portfolio', 19, 1]]
+const pMax = PAGES[0][1]
+document.getElementById('pages').innerHTML =
+  `<div class="r th"><span>Page</span><button class="sort num on">Vues${ico('arrow-down')}</button><button class="sort num">CV</button><button class="sort num">Taux</button></div>` +
+  PAGES.map(([p, v, c]) => `<div class="r"><span class="label"><span class="txt" title="${p}">${p}</span><span class="bar" style="width:${v / pMax * 100}%"></span></span><span class="num">${fmt.format(v)}</span><span class="num">${c}</span><span class="num muted">${pct(c, v)}</span></div>`).join('')
+
+// Provenances : 5 premières, le reste regroupé
+const REFS = [['LinkedIn', 486], ['Accès direct', 352], ['Google', 168], ['GitHub', 97], ['malt.fr', 31]]
+const others = total.views - REFS.reduce((a, [, v]) => a + v, 0)
+const rMax = REFS[0][1]
+document.getElementById('refs').innerHTML =
+  `<div class="r th"><span>Source</span><span class="num">Vues</span><span class="num">Part</span></div>` +
+  REFS.map(([s, v]) => `<div class="r"><span class="label"><span class="txt">${s}</span><span class="bar" style="width:${v / rMax * 100}%"></span></span><span class="num">${fmt.format(v)}</span><span class="num muted">${pct(v, total.views).replace(/,\d/, '')}</span></div>`).join('') +
+  `<div class="r other"><span class="label"><span class="txt">4 autres sources</span></span><span class="num">${others}</span><span class="num muted">${pct(others, total.views).replace(/,\d/, '')}</span></div>`
+
+// Mise en avant
+const FEAT = [
+  ['Ce portfolio', 312, 14, `<span class="pill on">${ico('star')}Mis en avant (forcé)</span>`],
+  ['API de réservation', 128, 9, `<span class="pill on">${ico('star')}Mis en avant · 1er</span>`],
+  ['App mobile', 86, 4, `<span class="pill on">${ico('star')}Mis en avant · 2e</span>`],
+  ['Site associatif', 64, 2, `<span class="pill rank">3e</span>`],
+  ['Jeu de plateau', 12, 1, `<span class="progress" style="--p:60%">Pas assez de vues : 12 sur 20<i></i></span>`],
+]
+document.getElementById('feat').innerHTML =
+  `<div class="r th"><span>Projet</span><span class="num">Vues</span><span class="num">CV</span><span class="num">Score</span><span>Statut</span></div>` +
+  FEAT.map(([t, v, c, st]) => `<div class="r"><a href="#">${t}</a><span class="num">${v}</span><span class="num">${c}</span><span class="num">${v >= 20 ? pct(c, v) : '—'}</span>${st}</div>`).join('')
+
+lucide.createIcons()
+</script>
+</body>
+</html>
