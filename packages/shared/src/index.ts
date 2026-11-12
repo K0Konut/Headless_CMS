@@ -89,6 +89,28 @@ export const analyticsQuerySchema = z
     `La période ne peut pas dépasser ${MAX_PERIOD_DAYS} jours`,
   )
 
+/** Les événements sont gardés 6 mois, en mois calendaires (purge nocturne de l'API). */
+export const RETENTION_MONTHS = 6
+
+const parisDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' })
+
+/** Date du jour à Paris, `YYYY-MM-DD`. */
+export const parisToday = (now = new Date()) => parisDate.format(now)
+
+/** Date `YYYY-MM-DD` décalée de `days` jours. */
+export function addDays(date: string, days: number) {
+  const d = new Date(`${date}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+/** Plus ancienne date entière encore conservée : le jour limite de la purge est exclu. */
+export function oldestDate(now = new Date()) {
+  const d = new Date(`${parisToday(now)}T00:00:00Z`)
+  d.setUTCMonth(d.getUTCMonth() - RETENTION_MONTHS)
+  return addDays(d.toISOString().slice(0, 10), 1)
+}
+
 // ── Contenu (V2) : types et définitions de champs ──────────────────────────────────────
 
 /** Types de champs (document UX, « Les types de champs »). */

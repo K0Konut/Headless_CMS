@@ -66,3 +66,15 @@ export function parisInputs(date: Date) {
   const p = parisParts(date)
   return { date: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}` }
 }
+
+const whole = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 })
+
+/** Évolution entre deux valeurs : « +15 % », ou en points pour un taux en % (« −0,4 pt »).
+ *  `null` sans base de comparaison (0 avant, en pourcentage). */
+export function formatChange(now: number, before: number, unit: '%' | 'pt') {
+  if (unit === '%' && !before) return null
+  const diff = unit === '%' ? ((now - before) / before) * 100 : now - before
+  const shown = (unit === '%' ? whole : decimal).format(Math.abs(diff))
+  const sign = shown === '0' ? 0 : Math.sign(diff)
+  return { sign, text: `${sign > 0 ? '+' : sign < 0 ? '−' : ''}${shown} ${unit}` }
+}

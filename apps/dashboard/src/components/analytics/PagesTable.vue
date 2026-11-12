@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { Button } from '@/components/ui/button'
 import {
   Table,
   TableBody,
@@ -10,6 +11,8 @@ import {
 } from '@/components/ui/table'
 import type { Counts } from '@/lib/analytics'
 import { formatNumber, formatShare } from '@/lib/format'
+import AnalyticsPanel from './AnalyticsPanel.vue'
+import MagnitudeBar from './MagnitudeBar.vue'
 import SortableHead from './SortableHead.vue'
 
 const props = defineProps<{ pages: (Counts & { path: string })[] }>()
@@ -31,6 +34,13 @@ const rows = computed(() =>
   }),
 )
 
+/** 10 lignes, toutes à la demande. */
+const LIMIT = 10
+const showAll = ref(false)
+const shown = computed(() => (showAll.value ? rows.value : rows.value.slice(0, LIMIT)))
+// Les pages arrivent triées par vues décroissantes.
+const maxViews = computed(() => props.pages[0]?.views || 1)
+
 function sortBy(key: Key) {
   descending.value = sortKey.value === key ? !descending.value : true
   sortKey.value = key
@@ -38,12 +48,15 @@ function sortBy(key: Key) {
 </script>
 
 <template>
-  <section aria-labelledby="pages-title" class="min-w-0">
-    <h2 id="pages-title" class="text-lg font-semibold">Pages</h2>
-    <p v-if="pages.length >= 100" class="mt-1 text-sm text-muted-foreground">
-      Les 100 pages les plus vues de la période.
-    </p>
-    <Table class="mt-2">
+  <AnalyticsPanel title="Pages" title-id="pages-title">
+    <template #note>
+      {{
+        pages.length >= 100
+          ? 'les 100 pages les plus vues'
+          : `${pages.length} ${pages.length > 1 ? 'pages vues' : 'page vue'}`
+      }}
+    </template>
+    <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Page</TableHead>
@@ -58,17 +71,23 @@ function sortBy(key: Key) {
         </TableRow>
       </TableHeader>
       <TableBody>
-        <TableRow v-for="page in rows" :key="page.path">
-          <TableCell class="max-w-64 truncate font-medium" :title="page.path">{{
-            page.path
-          }}</TableCell>
+        <TableRow v-for="page in shown" :key="page.path">
+          <TableCell class="max-w-64">
+            <span class="block truncate font-medium" :title="page.path">{{ page.path }}</span>
+            <MagnitudeBar :value="page.views" :max="maxViews" />
+          </TableCell>
           <TableCell class="text-right tabular-nums">{{ formatNumber(page.views) }}</TableCell>
           <TableCell class="text-right tabular-nums">{{ formatNumber(page.cvs) }}</TableCell>
-          <TableCell class="text-right tabular-nums">{{
+          <TableCell class="text-right text-muted-foreground tabular-nums">{{
             formatShare(page.cvs, page.views)
           }}</TableCell>
         </TableRow>
       </TableBody>
     </Table>
-  </section>
+    <div v-if="pages.length > LIMIT" class="flex justify-center border-t p-1.5">
+      <Button variant="ghost" size="sm" class="text-primary" @click="showAll = !showAll">
+        {{ showAll ? 'Afficher moins' : `Afficher les ${pages.length} pages` }}
+      </Button>
+    </div>
+  </AnalyticsPanel>
 </template>
