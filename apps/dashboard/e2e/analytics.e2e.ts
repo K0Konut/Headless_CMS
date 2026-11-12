@@ -77,5 +77,5 @@ test('la pause arrête le temps réel', async ({ browser, page }) => {
 
   // La reprise recharge l'état : l'événement manqué apparaît.
   await live.getByRole('button', { name: 'Reprendre le temps réel' }).click()
-  await expect(live.getByText('/pendant-la-pause')).toBeVisible()
+  await expect(live.getByText(/Dernier événement .* \/pendant-la-pause/)).toBeVisible()
 })
