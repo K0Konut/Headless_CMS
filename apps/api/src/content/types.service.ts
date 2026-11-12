@@ -30,6 +30,7 @@ const publicColumns = {
   entryLabel: contentTypes.entryLabel,
   position: contentTypes.position,
   fields: contentTypes.fields,
+  featuring: contentTypes.featuring,
   updatedAt: contentTypes.updatedAt,
 }
 
@@ -108,6 +109,7 @@ export class TypesService {
           name: body.name,
           entryLabel: body.entryLabel,
           fields: body.fields,
+          ...(body.featuring !== undefined && { featuring: body.featuring }),
           updatedAt: new Date(),
         })
         .where(eq(contentTypes.id, current.id))

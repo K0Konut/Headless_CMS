@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  featuredOrder,
   imageWidths,
   mediaRefs,
   richtextSchema,
@@ -555,4 +556,81 @@ it('borne une publication programmée entre une minute et un an', () => {
   expect(at(120_000)).toBeNull()
   expect(at(367 * 86_400_000)).toMatch(/année/)
   expect(scheduleIssue(new Date('x'), now)).toMatch(/date et une heure/)
+})
+
+describe('featuredOrder', () => {
+  const row = (id: string, views: number, cv: number, forced = false) => ({ id, views, cv, forced })
+
+  it('place les forcées, puis les classées par taux, puis le tirage', () => {
+    const order = featuredOrder(
+      [
+        row('peu-vu', 12, 6),
+        row('bon', 100, 7),
+        row('force', 30, 1, true),
+        row('moyen', 200, 6),
+        row('neuf', 0, 0),
+      ],
+      (r) => (r.id === 'neuf' ? 'a' : 'b'),
+    )
+    expect(order.map((r) => [r.id, r.reason, r.rank])).toEqual([
+      ['force', 'forced', null],
+      ['bon', 'ranked', 1],
+      ['moyen', 'ranked', 2],
+      ['neuf', 'drawn', null],
+      ['peu-vu', 'drawn', null],
+    ])
+    // Sous 20 vues, pas de score : 6 CV pour 12 vues ne font pas 50 %.
+    expect(order.find((r) => r.id === 'peu-vu')!.score).toBeNull()
+    expect(order[1]!.score).toBeCloseTo(0.07)
+  })
+
+  it('départage deux taux égaux par les vues', () => {
+    const order = featuredOrder([row('a', 20, 1), row('b', 40, 2)])
+    expect(order.map((r) => r.id)).toEqual(['b', 'a'])
+  })
+})
+
+describe('featuringSchema', () => {
+  const type = {
+    slug: 'projets',
+    kind: 'collection',
+    name: 'Projets',
+    entryLabel: 'un projet',
+    fields: [
+      {
+        key: 'une',
+        label: 'À la une',
+        type: 'boolean',
+        required: false,
+        translatable: false,
+        defaultValue: false,
+      },
+      { key: 'titre', label: 'Titre', type: 'text', required: true, translatable: true },
+    ],
+  }
+  const featuring = (f: object) => createContentTypeSchema.safeParse({ ...type, featuring: f })
+
+  it('accepte des adresses avec {slug} et un forçage oui / non', () => {
+    expect(
+      featuring({
+        paths: { fr: '/fr/projets/{slug}', en: '/en/projects/{slug}' },
+        forceField: 'une',
+      }).success,
+    ).toBe(true)
+    expect(createContentTypeSchema.parse(type).featuring).toBeNull()
+  })
+
+  it('refuse une adresse sans {slug}, un forçage qui n’est pas oui / non, une page unique', () => {
+    expect(featuring({ paths: { fr: '/fr/projets' } }).success).toBe(false)
+    expect(featuring({ paths: { fr: 'projets/{slug}' } }).success).toBe(false)
+    expect(featuring({ paths: { fr: '/p/{slug}' }, forceField: 'titre' }).success).toBe(false)
+    expect(
+      createContentTypeSchema.safeParse({
+        ...type,
+        kind: 'single',
+        entryLabel: null,
+        featuring: { paths: { fr: '/p/{slug}' } },
+      }).success,
+    ).toBe(false)
+  })
 })

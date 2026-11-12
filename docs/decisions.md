@@ -154,3 +154,5 @@
 | 2026-11-12 | Tirage du jour : ordre pseudo-aléatoire par `sha256(date de Paris + type + id)` | Le build appelle l'API une fois par langue : les deux langues et deux builds du même jour tirent les mêmes projets ; le build nocturne en tire d'autres |
 | 2026-11-12 | Route publique `GET /api/v1/featured/:type`, hors de `/content/:type/…` ; en anglais, une entrée incomplète est sautée et la suivante prend sa place | `/content/projets/featured` serait lu comme une entrée ; même règle de langue que `/content` |
 | 2026-11-12 | Plus de 3 projets forcés : les 3 au meilleur score (puis au plus de vues) | Le nombre de places est fixe ; les forcés passent quand même avant les classés |
+| 2026-11-12 | Le classement d'Analytics montre la sélection française ; en anglais, une entrée incomplète est remplacée par la suivante sans que le tableau le montre | Le tableau sert à comprendre les scores, communs aux deux langues ; afficher deux sélections alourdirait l'écran pour un cas rare |
+| 2026-11-12 | Index `events (space_id, path)` ; un chemin compte avec ou sans barre finale | La mise en avant lit les événements par chemin ; un site peut servir `/fr/projets/cms/` |
