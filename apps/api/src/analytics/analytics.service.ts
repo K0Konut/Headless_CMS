@@ -26,6 +26,13 @@ function inPeriod(spaceId: string, from: string, to: string) {
   )
 }
 
+/** `YYYY-MM-DD` décalée de `days` jours. */
+function shiftDate(date: string, days: number) {
+  const d = new Date(`${date}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
 @Injectable()
 export class AnalyticsService {
   constructor(@Inject(DB) private readonly db: Db) {}
@@ -34,8 +41,22 @@ export class AnalyticsService {
     const where = inPeriod(spaceId, from, to)
     const day = sql<string>`to_char(${events.createdAt} at time zone 'Europe/Paris', 'YYYY-MM-DD')`
 
-    const [[totals], perDay, pages, referrers, [any]] = await Promise.all([
+    // Période précédente, de même durée, juste avant `from`.
+    const length = (Date.parse(to) - Date.parse(from)) / 86_400_000 + 1
+    const prevTo = shiftDate(from, -1)
+    const prevFrom = shiftDate(from, -length)
+
+    const [[totals], [prev], perDay, pages, referrers, [any]] = await Promise.all([
       this.db.select({ views, cvs }).from(events).where(where),
+      this.db
+        .select({
+          views,
+          cvs,
+          // Faux si la purge des 6 mois a pu retirer une partie de la période : l'écart serait faux.
+          complete: sql<boolean>`(${prevFrom}::date::timestamp at time zone 'Europe/Paris') >= now() - interval '6 months'`,
+        })
+        .from(events)
+        .where(inPeriod(spaceId, prevFrom, prevTo)),
       this.db.select({ date: day, views, cvs }).from(events).where(where).groupBy(day),
       this.db
         .select({ path: events.path, views, cvs })
@@ -62,7 +83,10 @@ export class AnalyticsService {
       d.setUTCDate(d.getUTCDate() + 1)
     }
 
-    return { totals: totals!, daily, pages, referrers, hasEvents: !!any }
+    const previous = prev!.complete
+      ? { from: prevFrom, to: prevTo, views: prev!.views, cvs: prev!.cvs }
+      : null
+    return { totals: totals!, previous, daily, pages, referrers, hasEvents: !!any }
   }
 
   /** Événements bruts de la période, du plus ancien au plus récent. */

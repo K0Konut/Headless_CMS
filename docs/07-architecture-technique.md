@@ -162,7 +162,7 @@ Toutes les routes sont préfixées par `/api`. Le corps des requêtes et les ré
 | `DELETE /spaces/:slug/invitations/:id` | Super-admin | Annule une invitation (en régénérer une = annuler puis recréer) |
 | `DELETE /spaces/:slug/members/:userId` | Super-admin | Retire un membre |
 | `POST /users/:id/password-reset` | Super-admin | Renvoie un lien de réinitialisation |
-| `GET /spaces/:slug/analytics?from&to` | Membre | Totaux, série par jour, pages, provenances |
+| `GET /spaces/:slug/analytics?from&to` | Membre | Totaux, série par jour, pages, provenances ; `previous` : `{ from, to, views, cvs }` de la période précédente de même durée, `null` si elle commence avant les 6 mois conservés |
 | `GET /spaces/:slug/analytics/export.csv?from&to` | Membre | Événements bruts de la période |
 | `GET /spaces/:slug/analytics/live` | Membre | Flux SSE des nouveaux événements |
 | `POST /e` | Public, CORS limité à `site_url` | Collecte d'un événement |
