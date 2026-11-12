@@ -63,34 +63,25 @@ const chart = computed(() => {
   })
 
   const peakIndex = days.reduce((best, d, i) => (d.views > days[best]!.views ? i : best), 0)
-  const peak = days[peakIndex]!.views
+  const top = days[peakIndex]!
+  // Le libellé du pic s'aligne sur le bord quand le pic en est proche.
+  const edge = peakIndex / days.length
+  const peak = top.views
     ? {
         x: x(peakIndex),
-        y: vy(days[peakIndex]!.views) - 9,
-        anchor:
-          peakIndex < days.length * 0.15
-            ? 'start'
-            : peakIndex > days.length * 0.85
-              ? 'end'
-              : 'middle',
-        label: `${formatNumber(days[peakIndex]!.views)} · ${formatDay(days[peakIndex]!.date)}`,
+        y: vy(top.views) - 9,
+        anchor: edge < 0.15 ? 'start' : edge > 0.85 ? 'end' : 'middle',
+        label: `${formatNumber(top.views)} · ${formatDay(top.date)}`,
       }
     : null
 
-  return {
-    w,
-    step,
-    x,
-    vy,
-    cy,
-    line,
-    area,
-    bars,
-    dates,
-    peak,
-    vTicks: vMax % 2 ? [0, vMax] : [0, vMax / 2, vMax],
-    cMax,
-  }
+  // Graduations des deux graphiques : 0, la moitié si elle est entière, le maximum.
+  const ticks = [
+    ...(vMax % 2 ? [0, vMax] : [0, vMax / 2, vMax]).map((t) => ({ t, y: vy(t) })),
+    ...[0, cMax].map((t) => ({ t, y: cy(t) })),
+  ]
+
+  return { w, step, x, vy, line, area, bars, dates, peak, ticks }
 })
 
 const tip = computed(() => {
@@ -98,7 +89,12 @@ const tip = computed(() => {
   const day = props.daily[active.value]!
   const x = chart.value.x(active.value)
   // Le cadre passe à gauche du curseur près du bord droit.
-  return { day, x, left: x + 12 + 176 > chart.value.w ? x - 12 - 176 : x + 12 }
+  const rows = [
+    { label: 'Vues', swatch: 'bg-series-views', value: formatNumber(day.views) },
+    { label: 'CV', swatch: 'bg-series-cvs', value: formatNumber(day.cvs) },
+    { label: 'Taux', swatch: '', value: formatShare(day.cvs, day.views) },
+  ]
+  return { day, x, rows, left: x + 12 + 176 > chart.value.w ? x - 12 - 176 : x + 12 }
 })
 
 function onMove(event: MouseEvent) {
@@ -141,16 +137,16 @@ function onKey(event: KeyboardEvent) {
       @mouseleave="active = null"
     >
       <text x="0" :y="V_TOP - 10" class="fill-foreground text-[13px] font-semibold">Vues</text>
-      <g v-for="t in chart.vTicks" :key="t">
+      <g v-for="tick in chart.ticks" :key="tick.y">
         <line
           :x1="LEFT"
           :x2="chart.w - RIGHT"
-          :y1="chart.vy(t)"
-          :y2="chart.vy(t)"
-          :class="t ? 'stroke-border/60' : 'stroke-border'"
+          :y1="tick.y"
+          :y2="tick.y"
+          :class="tick.t ? 'stroke-border/60' : 'stroke-border'"
         />
-        <text :x="LEFT - 8" :y="chart.vy(t) + 4" text-anchor="end" class="fill-muted-foreground">
-          {{ formatNumber(t) }}
+        <text :x="LEFT - 8" :y="tick.y + 4" text-anchor="end" class="fill-muted-foreground">
+          {{ formatNumber(tick.t) }}
         </text>
       </g>
       <polygon :points="chart.area" fill="var(--series-views)" opacity="0.1" />
@@ -174,18 +170,7 @@ function onKey(event: KeyboardEvent) {
       <text x="0" :y="C_TOP - 12" class="fill-foreground text-[13px] font-semibold">
         CV téléchargés
       </text>
-      <g v-for="t in [0, chart.cMax]" :key="t">
-        <line
-          :x1="LEFT"
-          :x2="chart.w - RIGHT"
-          :y1="chart.cy(t)"
-          :y2="chart.cy(t)"
-          :class="t ? 'stroke-border/60' : 'stroke-border'"
-        />
-        <text :x="LEFT - 8" :y="chart.cy(t) + 4" text-anchor="end" class="fill-muted-foreground">
-          {{ formatNumber(t) }}
-        </text>
-      </g>
+
       <path v-for="(d, i) in chart.bars" :key="i" :d="d" fill="var(--series-cvs)" />
 
       <text
@@ -221,21 +206,11 @@ function onKey(event: KeyboardEvent) {
       <p class="mb-1 font-semibold">
         {{ weekday.format(new Date(`${tip.day.date}T00:00:00Z`)) }} {{ formatDay(tip.day.date) }}
       </p>
-      <p class="flex justify-between">
+      <p v-for="row in tip.rows" :key="row.label" class="flex justify-between">
         <span class="inline-flex items-center gap-1.5 text-muted-foreground">
-          <span class="size-2 rounded-[2px] bg-series-views" />Vues
+          <span v-if="row.swatch" class="size-2 rounded-[2px]" :class="row.swatch" />{{ row.label }}
         </span>
-        {{ formatNumber(tip.day.views) }}
-      </p>
-      <p class="flex justify-between">
-        <span class="inline-flex items-center gap-1.5 text-muted-foreground">
-          <span class="size-2 rounded-[2px] bg-series-cvs" />CV
-        </span>
-        {{ formatNumber(tip.day.cvs) }}
-      </p>
-      <p class="flex justify-between">
-        <span class="text-muted-foreground">Taux</span>
-        {{ formatShare(tip.day.cvs, tip.day.views) }}
+        {{ row.value }}
       </p>
     </div>
   </div>

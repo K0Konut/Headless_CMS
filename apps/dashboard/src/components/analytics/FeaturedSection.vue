@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { FEATURED_MIN_VIEWS, type FeaturedSummary } from '@dashility/shared'
-import { Star } from '@lucide/vue'
 import { ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import FormError from '@/components/FormError.vue'
+import StatusPill from '@/components/StatusPill.vue'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/table'
 import { api, errorMessage } from '@/lib/api'
 import { formatNumber, formatShare } from '@/lib/format'
+import AnalyticsPanel from './AnalyticsPanel.vue'
 
 /** Classement des types mis en avant (document UX, « Analytics : le classement ») : toujours sur
  *  6 mois, quelle que soit la période choisie, puisque c'est la période du score. */
@@ -43,9 +44,8 @@ watch(() => props.slug, load, { immediate: true })
 
 const ordinal = (n: number) => (n === 1 ? '1er' : `${n}e`)
 
-/** Libellé d'une entrée mise en avant ; `null` pour les autres. */
+/** Libellé d'une entrée mise en avant. */
 function featuredLabel(row: FeaturedSummary['rows'][number]) {
-  if (!row.featured) return null
   return row.forced ? 'Mis en avant (forcé)' : `Mis en avant · ${ordinal(row.rank!)}`
 }
 </script>
@@ -62,38 +62,31 @@ function featuredLabel(row: FeaturedSummary['rows'][number]) {
       >Structure</RouterLink
     >.
   </p>
-  <section
+  <AnalyticsPanel
     v-for="summary in summaries"
     v-else
     :key="summary.type.slug"
-    :aria-labelledby="`featured-${summary.type.slug}`"
-    class="min-w-0 overflow-hidden rounded-lg border bg-card"
+    :title="`Mise en avant · ${summary.type.name}`"
+    :title-id="`featured-${summary.type.slug}`"
   >
-    <div class="flex flex-wrap items-baseline gap-x-2 border-b px-4 py-3">
-      <h2 :id="`featured-${summary.type.slug}`" class="font-semibold">
-        Mise en avant · {{ summary.type.name }}
-      </h2>
-      <p class="text-sm text-muted-foreground">
-        sur les 6 derniers mois, quelle que soit la période
-      </p>
-    </div>
+    <template #note>sur les 6 derniers mois, quelle que soit la période</template>
     <p v-if="!summary.rows.length" class="px-4 py-3 text-sm text-muted-foreground">
       Aucune entrée publiée.
     </p>
     <template v-else>
       <Table>
-        <TableHeader class="bg-canvas">
+        <TableHeader>
           <TableRow>
-            <TableHead class="pl-4">Entrée</TableHead>
+            <TableHead>Entrée</TableHead>
             <TableHead class="hidden text-right sm:table-cell">Vues</TableHead>
             <TableHead class="hidden text-right sm:table-cell">CV</TableHead>
             <TableHead class="text-right">Score</TableHead>
-            <TableHead class="pr-4">Statut</TableHead>
+            <TableHead>Statut</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           <TableRow v-for="row in summary.rows" :key="row.id">
-            <TableCell class="max-w-56 truncate pl-4 font-medium">
+            <TableCell class="max-w-56 truncate font-medium">
               <RouterLink
                 :to="`/espaces/${slug}/contenu/${summary.type.slug}/${row.id}`"
                 class="hover:underline"
@@ -109,13 +102,8 @@ function featuredLabel(row: FeaturedSummary['rows'][number]) {
             <TableCell class="text-right tabular-nums">
               {{ row.score === null ? '—' : formatShare(row.cv, row.views) }}
             </TableCell>
-            <TableCell class="w-52 pr-4">
-              <span
-                v-if="featuredLabel(row)"
-                class="inline-flex items-center gap-1 rounded-md bg-status-scheduled-tint px-2 py-0.5 text-[12.5px] font-medium text-status-scheduled"
-              >
-                <Star aria-hidden="true" class="size-3.5 fill-current" />{{ featuredLabel(row) }}
-              </span>
+            <TableCell class="w-52">
+              <StatusPill v-if="row.featured" tone="scheduled">{{ featuredLabel(row) }}</StatusPill>
               <span v-else-if="row.rank" class="text-muted-foreground">{{
                 ordinal(row.rank)
               }}</span>
@@ -142,5 +130,5 @@ function featuredLabel(row: FeaturedSummary['rows'][number]) {
         au hasard chaque jour, au build du site.
       </p>
     </template>
-  </section>
+  </AnalyticsPanel>
 </template>

@@ -1,3 +1,4 @@
+import { addDays, oldestDate } from '@dashility/shared'
 import { Inject, Injectable } from '@nestjs/common'
 import { and, desc, eq, gte, sql } from 'drizzle-orm'
 import { DB } from '../db/db.module.js'
@@ -26,13 +27,6 @@ function inPeriod(spaceId: string, from: string, to: string) {
   )
 }
 
-/** `YYYY-MM-DD` décalée de `days` jours. */
-function shiftDate(date: string, days: number) {
-  const d = new Date(`${date}T00:00:00Z`)
-  d.setUTCDate(d.getUTCDate() + days)
-  return d.toISOString().slice(0, 10)
-}
-
 @Injectable()
 export class AnalyticsService {
   constructor(@Inject(DB) private readonly db: Db) {}
@@ -43,20 +37,10 @@ export class AnalyticsService {
 
     // Période précédente, de même durée, juste avant `from`.
     const length = (Date.parse(to) - Date.parse(from)) / 86_400_000 + 1
-    const prevTo = shiftDate(from, -1)
-    const prevFrom = shiftDate(from, -length)
+    const prevTo = addDays(from, -1)
+    const prevFrom = addDays(from, -length)
 
-    const [[totals], [prev], perDay, pages, referrers, [any]] = await Promise.all([
-      this.db.select({ views, cvs }).from(events).where(where),
-      this.db
-        .select({
-          views,
-          cvs,
-          // Faux si la purge des 6 mois a pu retirer une partie de la période : l'écart serait faux.
-          complete: sql<boolean>`(${prevFrom}::date::timestamp at time zone 'Europe/Paris') >= now() - interval '6 months'`,
-        })
-        .from(events)
-        .where(inPeriod(spaceId, prevFrom, prevTo)),
+    const [perDay, pages, referrers, [any], prev] = await Promise.all([
       this.db.select({ date: day, views, cvs }).from(events).where(where).groupBy(day),
       this.db
         .select({ path: events.path, views, cvs })
@@ -72,21 +56,30 @@ export class AnalyticsService {
         .groupBy(source)
         .orderBy(desc(sql`count(*)`)),
       this.db.select({ id: events.id }).from(events).where(eq(events.spaceId, spaceId)).limit(1),
+      // Seulement si elle est encore entièrement conservée : sinon l'écart serait faux.
+      prevFrom >= oldestDate()
+        ? this.db
+            .select({ views, cvs })
+            .from(events)
+            .where(inPeriod(spaceId, prevFrom, prevTo))
+            .then(([counts]) => counts!)
+        : null,
     ])
 
     // Tous les jours de la période, à 0 quand il ne s'est rien passé.
     const byDate = new Map(perDay.map((d) => [d.date, d]))
     const daily = []
-    for (let d = new Date(`${from}T00:00:00Z`); d <= new Date(`${to}T00:00:00Z`);) {
-      const date = d.toISOString().slice(0, 10)
+    for (let date = from; date <= to; date = addDays(date, 1)) {
       daily.push(byDate.get(date) ?? { date, views: 0, cvs: 0 })
-      d.setUTCDate(d.getUTCDate() + 1)
+    }
+    const totals = { views: 0, cvs: 0 }
+    for (const d of perDay) {
+      totals.views += d.views
+      totals.cvs += d.cvs
     }
 
-    const previous = prev!.complete
-      ? { from: prevFrom, to: prevTo, views: prev!.views, cvs: prev!.cvs }
-      : null
-    return { totals: totals!, previous, daily, pages, referrers, hasEvents: !!any }
+    const previous = prev && { from: prevFrom, to: prevTo, ...prev }
+    return { totals, previous, daily, pages, referrers, hasEvents: !!any }
   }
 
   /** Événements bruts de la période, du plus ancien au plus récent. */

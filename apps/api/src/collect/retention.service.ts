@@ -1,3 +1,4 @@
+import { RETENTION_MONTHS } from '@dashility/shared'
 import { Inject, Injectable } from '@nestjs/common'
 import { Cron } from '@nestjs/schedule'
 import { lt, sql } from 'drizzle-orm'
@@ -15,7 +16,9 @@ export class RetentionService {
   async purge() {
     // Indépendantes : l'échec de l'une ne doit pas empêcher l'autre.
     const results = await Promise.allSettled([
-      this.db.delete(events).where(lt(events.createdAt, sql`now() - interval '6 months'`)),
+      this.db
+        .delete(events)
+        .where(lt(events.createdAt, sql.raw(`now() - interval '${RETENTION_MONTHS} months'`))),
       this.db
         .delete(previewLinks)
         .where(lt(previewLinks.expiresAt, sql`now() - interval '7 days'`)),

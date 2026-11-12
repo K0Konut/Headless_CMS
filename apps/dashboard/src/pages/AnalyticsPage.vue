@@ -71,21 +71,20 @@ const tiles = computed(() => {
   const rate = (c: { views: number; cvs: number }) => (c.views ? (c.cvs / c.views) * 100 : null)
   const now = rate(totals)
   const before = prev && rate(prev)
+  const counts = (
+    [
+      ['views', 'Vues', 'var(--series-views)'],
+      ['cvs', 'CV téléchargés', 'var(--series-cvs)'],
+    ] as const
+  ).map(([key, label, color]) => ({
+    label,
+    color,
+    value: formatNumber(totals[key]),
+    change: prev && formatChange(totals[key], prev[key], '%'),
+    before: prev && `${formatNumber(prev[key])} avant`,
+  }))
   return [
-    {
-      label: 'Vues',
-      value: formatNumber(totals.views),
-      color: 'var(--series-views)',
-      change: prev && formatChange(totals.views, prev.views, '%'),
-      before: prev && `${formatNumber(prev.views)} avant`,
-    },
-    {
-      label: 'CV téléchargés',
-      value: formatNumber(totals.cvs),
-      color: 'var(--series-cvs)',
-      change: prev && formatChange(totals.cvs, prev.cvs, '%'),
-      before: prev && `${formatNumber(prev.cvs)} avant`,
-    },
+    ...counts,
     {
       label: 'Taux de conversion',
       value: formatShare(totals.cvs, totals.views),
@@ -95,13 +94,14 @@ const tiles = computed(() => {
   ]
 })
 
+/** La période précédente a la même durée que la période choisie. */
 const comparedTo = computed(() => {
   const prev = summary.value?.previous
   if (!prev) return ''
-  const days = (Date.parse(prev.to) - Date.parse(prev.from)) / 86_400_000 + 1
-  const range =
-    days === 1 ? formatDay(prev.from) : `${formatDay(prev.from)} – ${formatDay(prev.to)}`
-  return `Comparé ${days === 1 ? 'au jour précédent' : `aux ${days} jours précédents`} (${range})`
+  const days = summary.value!.daily.length
+  return days === 1
+    ? `Comparé au jour précédent (${formatDay(prev.from)})`
+    : `Comparé aux ${days} jours précédents (${formatDay(prev.from)} – ${formatDay(prev.to)})`
 })
 
 const exportUrl = computed(
@@ -110,7 +110,7 @@ const exportUrl = computed(
 </script>
 
 <template>
-  <div class="grid grid-cols-[minmax(0,1fr)] gap-5">
+  <div class="grid gap-5">
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div>
         <h1 class="text-2xl font-semibold tracking-tight">Analytics</h1>
