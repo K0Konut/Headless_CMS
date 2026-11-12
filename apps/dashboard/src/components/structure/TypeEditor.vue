@@ -13,6 +13,7 @@ import { api, errorMessage } from '@/lib/api'
 import { type ContentType, removedFields } from '@/lib/content'
 import { plural } from '@/lib/format'
 import { slugify } from '@/lib/slug'
+import FeaturingSettings from './FeaturingSettings.vue'
 import FieldList from './FieldList.vue'
 import TypePreview from './TypePreview.vue'
 
@@ -35,14 +36,17 @@ async function switchTab() {
 
 /** Copie modifiable du type ; le nom d'entrée vide d'une page unique devient null à l'envoi. */
 const copyOf = (type: ContentType | null) => {
-  const { slug, kind, name, entryLabel, fields } = type ?? {
+  const { slug, kind, name, entryLabel, fields, featuring } = type ?? {
     slug: '',
     kind: 'collection' as const,
     name: '',
     entryLabel: '',
     fields: [],
+    featuring: null,
   }
-  return JSON.parse(JSON.stringify({ slug, kind, name, entryLabel: entryLabel ?? '', fields }))
+  return JSON.parse(
+    JSON.stringify({ slug, kind, name, entryLabel: entryLabel ?? '', fields, featuring }),
+  )
 }
 const form = reactive(copyOf(props.type))
 let initial = JSON.stringify(form)
@@ -80,6 +84,18 @@ watch(
   },
 )
 
+// Le champ de forçage supprimé (ou changé de type) ne force plus rien (document UX).
+watch(
+  () => form.fields,
+  (fields: ContentType['fields']) => {
+    const key = form.featuring?.forceField
+    if (key && !fields.some((f) => f.key === key && f.type === 'boolean')) {
+      delete form.featuring.forceField
+    }
+  },
+  { deep: true },
+)
+
 async function save() {
   done.value = false
   const body = {
@@ -87,6 +103,7 @@ async function save() {
     name: form.name,
     entryLabel: form.kind === 'collection' ? form.entryLabel : null,
     fields: form.fields,
+    featuring: form.kind === 'collection' ? form.featuring : null,
   }
   const parsed = isNew.value
     ? createContentTypeSchema.safeParse({ ...body, slug: form.slug })
@@ -306,6 +323,12 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onUnload))
           <TypePreview v-if="tab === 'preview'" :fields="form.fields" />
         </div>
       </section>
+
+      <FeaturingSettings
+        v-if="form.kind === 'collection'"
+        v-model="form.featuring"
+        :fields="form.fields"
+      />
     </form>
 
     <section

@@ -224,6 +224,27 @@ export type GroupField = z.infer<typeof groupFieldSchema>
 
 const fieldsSchema = z.array(fieldSchema).max(100).superRefine(checkFields)
 
+/** Mise en avant (V3) : les places, et les vues sous lesquelles une entrée n'est pas classée
+ *  (PRD, « Score d'effet et mise en avant »). La période est celle de la rétention : 6 mois. */
+export const FEATURED_PLACES = 3
+export const FEATURED_MIN_VIEWS = 20
+
+/** Adresse des pages d'un type sur le site : « /fr/projets/{slug} ». */
+const pathTemplate = z
+  .string()
+  .trim()
+  .max(200)
+  .refine((path) => path.startsWith('/'), 'L’adresse commence par /')
+  .refine((path) => path.split('{slug}').length === 2, 'L’adresse doit contenir {slug} une fois')
+
+/** Réglages de mise en avant d'une collection : les adresses de ses pages, pour relier les vues
+ *  aux entrées, et le champ « oui / non » qui force une entrée dans les places. */
+export const featuringSchema = z.object({
+  paths: z.object({ fr: pathTemplate, en: pathTemplate.optional() }),
+  forceField: z.string().optional(),
+})
+export type Featuring = z.infer<typeof featuringSchema>
+
 const contentTypeSchema = z.object({
   slug: slugSchema,
   kind: z.enum(['collection', 'single']),
@@ -231,7 +252,32 @@ const contentTypeSchema = z.object({
   // « un projet » : seulement pour une collection, dans « Ajouter un projet ».
   entryLabel: z.string().trim().min(1).max(100).nullable(),
   fields: fieldsSchema,
+  featuring: featuringSchema.nullable().default(null),
 })
+
+/** La mise en avant ne vaut que pour une collection, et son forçage pour un champ « oui / non »
+ *  de premier niveau. */
+function checkFeaturing(
+  t: { kind: string; fields: Field[]; featuring: Featuring | null },
+  ctx: z.RefinementCtx,
+) {
+  if (!t.featuring) return
+  if (t.kind !== 'collection') {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Seule une collection se met en avant',
+      path: ['featuring'],
+    })
+  }
+  const key = t.featuring.forceField
+  if (key && !t.fields.some((f) => f.key === key && f.type === 'boolean')) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Le forçage doit être un champ « oui / non » du type',
+      path: ['featuring', 'forceField'],
+    })
+  }
+}
 
 /** Une collection a un nom d'entrée (« un projet »), une page unique n'en a pas. */
 const entryLabelMatchesKind = (t: { kind: string; entryLabel: string | null }) =>
@@ -243,10 +289,9 @@ const entryLabelIssue = {
 
 /** Corps de `POST /spaces/:slug/types`. Un type sans champ est permis : il n'apparaît pas dans
  *  Contenu tant qu'il n'en a aucun. */
-export const createContentTypeSchema = contentTypeSchema.refine(
-  entryLabelMatchesKind,
-  entryLabelIssue,
-)
+export const createContentTypeSchema = contentTypeSchema
+  .refine(entryLabelMatchesKind, entryLabelIssue)
+  .superRefine(checkFeaturing)
 export type ContentTypeInput = z.infer<typeof createContentTypeSchema>
 
 /** Corps de `PUT /spaces/:slug/types/:type`. L'identifiant est dans l'URL ; la nature est
@@ -254,6 +299,7 @@ export type ContentTypeInput = z.infer<typeof createContentTypeSchema>
 export const updateContentTypeSchema = contentTypeSchema
   .omit({ slug: true })
   .refine(entryLabelMatchesKind, entryLabelIssue)
+  .superRefine(checkFeaturing)
 
 /** Corps de `PUT /spaces/:slug/type-order` : tous les types de l'espace, dans le nouvel ordre. */
 export const typeOrderSchema = z.object({ slugs: z.array(slugSchema).max(200) })
@@ -808,4 +854,61 @@ export function parisDateTime(date: string, time: string): Date {
   // Deux passes : le décalage dépend de l'instant cherché.
   const guess = wall - parisOffset(wall)
   return new Date(wall - parisOffset(guess))
+}
+
+/** Une entrée candidate à la mise en avant, avec ses vues et ses CV sur 6 mois. */
+export interface FeaturingCandidate {
+  id: string
+  views: number
+  cv: number
+  forced: boolean
+}
+export type FeaturedReason = 'forced' | 'ranked' | 'drawn'
+
+/**
+ * Ordre de mise en avant (architecture, « V3 : mise en avant ») : les forcées (par score, puis
+ * par vues), puis les classées (score = CV ÷ vues, à partir de 20 vues), puis les autres dans
+ * l'ordre du tirage (`drawKey` croissant). Les `FEATURED_PLACES` premières sont mises en avant ;
+ * la suite sert quand une entrée est sautée (incomplète en anglais).
+ */
+export function featuredOrder<T extends FeaturingCandidate>(
+  rows: T[],
+  drawKey: (row: T) => string = () => '',
+) {
+  const scored = rows.map((row) => ({
+    ...row,
+    score: row.views >= FEATURED_MIN_VIEWS ? row.cv / row.views : null,
+  }))
+  type Scored = (typeof scored)[number]
+  const byScore = (a: Scored, b: Scored) => (b.score ?? -1) - (a.score ?? -1) || b.views - a.views
+  const forced = scored.filter((r) => r.forced).sort(byScore)
+  const ranked = scored.filter((r) => !r.forced && r.score !== null).sort(byScore)
+  const drawn = scored
+    .filter((r) => !r.forced && r.score === null)
+    .map((row) => ({ row, key: drawKey(row) }))
+    .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+    .map(({ row }) => row)
+  return [
+    ...forced.map((r) => ({ ...r, reason: 'forced' as FeaturedReason, rank: null })),
+    ...ranked.map((r, i) => ({ ...r, reason: 'ranked' as FeaturedReason, rank: i + 1 })),
+    ...drawn.map((r) => ({ ...r, reason: 'drawn' as FeaturedReason, rank: null })),
+  ]
+}
+
+/** Classement d'un type, pour l'onglet Analytics (`GET /spaces/:slug/analytics/featured`). */
+export interface FeaturedSummary {
+  type: { slug: string; name: string }
+  rows: {
+    id: string
+    title: string
+    views: number
+    cv: number
+    score: number | null
+    forced: boolean
+    rank: number | null
+    /** Parmi les places : forcée ou classée. Les places tirées au hasard ne sont pas montrées. */
+    featured: boolean
+  }[]
+  /** Places laissées au tirage, refait chaque jour. */
+  drawnPlaces: number
 }

@@ -14,6 +14,7 @@ import { SessionGuard } from './auth/session.guard.js'
 import { CollectController } from './collect/collect.controller.js'
 import { EntriesController, TodoController } from './content/entries.controller.js'
 import { EntriesService } from './content/entries.service.js'
+import { FeaturingService } from './content/featuring.service.js'
 import { TypesController } from './content/types.controller.js'
 import { TypesService } from './content/types.service.js'
 import { RetentionService } from './collect/retention.service.js'
@@ -21,7 +22,7 @@ import { PublicMediaController, SpaceMediaController } from './media/media.contr
 import { MediaService } from './media/media.service.js'
 import { ApiKeyGuard } from './public-api/public-api.guard.js'
 import { PreviewController, previewHeaders } from './public-api/preview.controller.js'
-import { PublicApiController } from './public-api/public-api.controller.js'
+import { FeaturedController, PublicApiController } from './public-api/public-api.controller.js'
 import { PublicApiService } from './public-api/public-api.service.js'
 import { DeployController } from './deploy/deploy.controller.js'
 import { DeployService } from './deploy/deploy.service.js'
@@ -53,6 +54,7 @@ import { SpacesService } from './spaces/spaces.service.js'
     CollectController,
     DeployController,
     LinksController,
+    FeaturedController,
     PreviewController,
     PublicApiController,
     PublicMediaController,
@@ -76,6 +78,7 @@ import { SpacesService } from './spaces/spaces.service.js'
     SpacesService,
     TypesService,
     EntriesService,
+    FeaturingService,
     { provide: APP_GUARD, useClass: SessionGuard },
     { provide: APP_FILTER, useClass: ErrorFilter },
   ],

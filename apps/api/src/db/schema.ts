@@ -1,4 +1,4 @@
-import type { EntryData, Field, LastSchedule } from '@dashility/shared'
+import type { EntryData, Featuring, Field, LastSchedule } from '@dashility/shared'
 import { sql } from 'drizzle-orm'
 import {
   bigint,
@@ -127,6 +127,8 @@ export const contentTypes = pgTable(
     entryLabel: text('entry_label'),
     position: integer('position').notNull(),
     fields: jsonb('fields').$type<Field[]>().notNull(),
+    /** Mise en avant (V3) : adresses des pages sur le site et champ de forçage ; null sinon. */
+    featuring: jsonb('featuring').$type<Featuring>(),
     createdAt: createdAt(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

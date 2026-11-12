@@ -4,6 +4,7 @@ import { analyticsQuerySchema } from '@dashility/shared'
 import type { Response } from 'express'
 import { from, interval, map, merge, type Observable } from 'rxjs'
 import { type SpaceRequest, SpaceAccessGuard } from '../spaces/guards.js'
+import { FeaturingService } from '../content/featuring.service.js'
 import { AnalyticsService } from './analytics.service.js'
 import { LiveService } from './live.service.js'
 
@@ -17,7 +18,14 @@ export class AnalyticsController {
   constructor(
     private readonly analytics: AnalyticsService,
     private readonly live: LiveService,
+    private readonly featuring: FeaturingService,
   ) {}
+
+  /** Classement des types mis en avant (V3), toujours sur 6 mois. */
+  @Get('featured')
+  featured(@Req() { space }: SpaceRequest) {
+    return this.featuring.summary(space)
+  }
 
   @Get()
   summary(@Req() { space }: SpaceRequest, @Query() query: unknown) {

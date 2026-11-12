@@ -1,4 +1,5 @@
 import { GoneException, Inject, Injectable, NotFoundException } from '@nestjs/common'
+import { FEATURED_PLACES } from '@dashility/shared'
 import {
   type EntryData,
   type Field,
@@ -13,6 +14,7 @@ import type { Db } from '../db/index.js'
 import { hashToken } from '../auth/tokens.js'
 import { contentTypes, entries, media, previewLinks } from '../db/schema.js'
 import type { Space } from '../spaces/guards.js'
+import { FeaturingService } from '../content/featuring.service.js'
 import { type MediaInfo, resolveData } from './resolve.js'
 
 /** Une entrée à résoudre : sa version en ligne pour l'API publique, sa version en cours pour un
@@ -24,7 +26,10 @@ type Row = { slug: string | null; data: EntryData; publishedAt: Date | null }
  *  (V3), qui lit la version en cours d'une entrée avec un jeton. */
 @Injectable()
 export class PublicApiService {
-  constructor(@Inject(DB) private readonly db: Db) {}
+  constructor(
+    @Inject(DB) private readonly db: Db,
+    private readonly featuring: FeaturingService,
+  ) {}
 
   /** Collection : ses entrées publiées, la dernière publiée d'abord. Page unique : son entrée. */
   async content(space: Space, typeSlug: string, locale: Locale, origin: string) {
@@ -48,9 +53,37 @@ export class PublicApiService {
     return entry
   }
 
+  /** Entrées mises en avant d'un type (V3), dans l'ordre : forcées, classées, tirées. En
+   *  anglais, une entrée incomplète est sautée et la suivante prend sa place. */
+  async featured(space: Space, typeSlug: string, locale: Locale, origin: string) {
+    const type = await this.type(space, typeSlug)
+    if (!type.featuring) {
+      throw new NotFoundException({
+        code: 'type_not_featured',
+        message: 'Ce type n’a pas de mise en avant',
+      })
+    }
+    const order = await this.featuring.order(space, { ...type, featuring: type.featuring }, true)
+    const shown = order
+      .filter((row) => locale === 'fr' || isEnComplete(type.fields, row.published!))
+      .slice(0, FEATURED_PLACES)
+    const rows = shown.map((r) => ({
+      slug: r.slug,
+      data: r.published!,
+      publishedAt: r.publishedAt,
+    }))
+    const resolved = await this.resolve(type.fields, rows, locale, origin, space.id)
+    return resolved.map((entry, i) => ({ ...entry, featured: shown[i]!.reason }))
+  }
+
   private async type(space: Space, slug: string) {
     const [type] = await this.db
-      .select({ id: contentTypes.id, kind: contentTypes.kind, fields: contentTypes.fields })
+      .select({
+        id: contentTypes.id,
+        kind: contentTypes.kind,
+        fields: contentTypes.fields,
+        featuring: contentTypes.featuring,
+      })
       .from(contentTypes)
       .where(and(eq(contentTypes.spaceId, space.id), eq(contentTypes.slug, slug)))
     if (!type) throw new NotFoundException('Type introuvable')
