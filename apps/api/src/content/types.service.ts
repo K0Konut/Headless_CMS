@@ -109,7 +109,7 @@ export class TypesService {
           name: body.name,
           entryLabel: body.entryLabel,
           fields: body.fields,
-          featuring: body.featuring,
+          ...(body.featuring !== undefined && { featuring: body.featuring }),
           updatedAt: new Date(),
         })
         .where(eq(contentTypes.id, current.id))

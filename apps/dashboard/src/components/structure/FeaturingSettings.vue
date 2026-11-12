@@ -19,9 +19,14 @@ const props = defineProps<{ fields: Field[] }>()
 const booleans = computed(() => props.fields.filter((f) => f.type === 'boolean'))
 const NONE = '__aucun'
 
+// Décocher puis recocher retrouve les réglages d'avant.
+let previous: Featuring | null = null
 const enabled = computed({
   get: () => !!featuring.value,
-  set: (on: boolean) => (featuring.value = on ? { paths: { fr: '' } } : null),
+  set: (on: boolean) => {
+    if (!on) previous = featuring.value
+    featuring.value = on ? (previous ?? { paths: { fr: '' } }) : null
+  },
 })
 const fr = computed({
   get: () => featuring.value?.paths.fr ?? '',

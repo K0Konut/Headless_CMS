@@ -7,6 +7,7 @@ import {
   type Field,
   entryTitle,
   featuredOrder,
+  parisParts,
 } from '@dashility/shared'
 import { and, asc, count, eq, inArray, isNotNull } from 'drizzle-orm'
 import { createHash } from 'node:crypto'
@@ -19,7 +20,10 @@ import type { Space } from '../spaces/guards.js'
 export type FeaturedType = { id: string; fields: Field[]; featuring: Featuring }
 
 /** Date du jour à Paris (`2026-11-12`) : le tirage change chaque jour, pas à chaque appel. */
-const parisDay = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format()
+function parisDay() {
+  const { year, month, day } = parisParts(Date.now())
+  return `${year}-${month}-${day}`
+}
 
 /** Mise en avant (architecture, « V3 : mise en avant ») : relie les pages vues aux entrées
  *  publiées d'un type, puis les ordonne avec `featuredOrder`. Calculé à chaque demande. */
@@ -48,7 +52,11 @@ export class FeaturingService {
     )
     const entryOf = new Map<string, string>()
     for (const row of rows) {
-      for (const t of templates) entryOf.set(t.replace('{slug}', row.slug!), row.id)
+      for (const t of templates) {
+        // Avec ou sans barre finale : un site peut servir « /fr/projets/cms/ ».
+        const path = t.replace('{slug}', row.slug!).replace(/\/+$/, '')
+        entryOf.set(path, row.id).set(`${path}/`, row.id)
+      }
     }
     // La rétention ne garde que 6 mois d'événements : c'est la période du score.
     const counts = entryOf.size

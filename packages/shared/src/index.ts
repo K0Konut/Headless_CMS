@@ -298,8 +298,10 @@ export type ContentTypeInput = z.infer<typeof createContentTypeSchema>
  *  renvoyée pour que la même règle s'applique, et l'API refuse qu'elle change. */
 export const updateContentTypeSchema = contentTypeSchema
   .omit({ slug: true })
+  // Absent : la mise en avant enregistrée reste (un client d'avant la V3 ne l'efface pas).
+  .extend({ featuring: featuringSchema.nullable().optional() })
   .refine(entryLabelMatchesKind, entryLabelIssue)
-  .superRefine(checkFeaturing)
+  .superRefine((t, ctx) => checkFeaturing({ ...t, featuring: t.featuring ?? null }, ctx))
 
 /** Corps de `PUT /spaces/:slug/type-order` : tous les types de l'espace, dans le nouvel ordre. */
 export const typeOrderSchema = z.object({ slugs: z.array(slugSchema).max(200) })

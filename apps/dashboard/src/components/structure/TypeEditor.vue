@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { createContentTypeSchema, updateContentTypeSchema } from '@dashility/shared'
+import { type Featuring, createContentTypeSchema, updateContentTypeSchema } from '@dashility/shared'
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { ChevronLeft, Lock } from '@lucide/vue'
 import { RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
@@ -84,17 +84,14 @@ watch(
   },
 )
 
-// Le champ de forçage supprimé (ou changé de type) ne force plus rien (document UX).
-watch(
-  () => form.fields,
-  (fields: ContentType['fields']) => {
-    const key = form.featuring?.forceField
-    if (key && !fields.some((f) => f.key === key && f.type === 'boolean')) {
-      delete form.featuring.forceField
-    }
-  },
-  { deep: true },
-)
+/** Un champ de forçage supprimé (ou qui n'est plus « oui / non ») ne force plus rien (document
+ *  UX). Vérifié à l'enregistrement, pas à chaque frappe : renommer l'identifiant le perdrait. */
+function featuringFor(fields: ContentType['fields'], featuring: Featuring | null) {
+  const key = featuring?.forceField
+  if (!key || fields.some((f) => f.key === key && f.type === 'boolean')) return featuring
+  const { forceField: _, ...rest } = featuring!
+  return rest
+}
 
 async function save() {
   done.value = false
@@ -103,7 +100,7 @@ async function save() {
     name: form.name,
     entryLabel: form.kind === 'collection' ? form.entryLabel : null,
     fields: form.fields,
-    featuring: form.kind === 'collection' ? form.featuring : null,
+    featuring: form.kind === 'collection' ? featuringFor(form.fields, form.featuring) : null,
   }
   const parsed = isNew.value
     ? createContentTypeSchema.safeParse({ ...body, slug: form.slug })

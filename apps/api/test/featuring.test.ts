@@ -90,6 +90,11 @@ describe('réglages', () => {
       .send({ ...PROJECTS, fields: FIELDS, featuring: FEATURING })
       .expect(200)
     expect(res.body.featuring).toEqual(FEATURING)
+    // Un enregistrement qui ne parle pas de mise en avant la garde.
+    const kept = await api('put', '/spaces/portfolio/types/projets', admin)
+      .send({ ...PROJECTS, fields: FIELDS })
+      .expect(200)
+    expect(kept.body.featuring).toEqual(FEATURING)
   })
 
   it('sans réglage, la route publique répond type_not_featured', async () => {
@@ -113,7 +118,8 @@ describe('sélection', () => {
     await publish('peu-vu')
     await visit('/fr/projets/bon', 15, 2)
     await visit('/en/projects/bon', 10, 2) // 25 vues, 4 CV : 16 %
-    await visit('/fr/projets/moyen', 50, 4) // 8 %
+    await visit('/fr/projets/moyen', 30, 2)
+    await visit('/fr/projets/moyen/', 20, 2) // 50 vues, 4 CV : 8 %, barre finale comprise
     await visit('/fr/projets/faible', 100, 1) // 1 %
     await visit('/fr/projets/peu-vu', 10, 5) // sous le seuil
     await visit('/fr/projets', 500, 50) // page de liste : comptée nulle part

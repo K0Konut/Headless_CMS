@@ -24,14 +24,19 @@ const props = defineProps<{ slug: string; isSuperAdmin: boolean }>()
 const summaries = ref<FeaturedSummary[] | null>(null)
 const error = ref('')
 
+// Changement d'espace pendant un chargement : seule la dernière réponse compte.
+let latest = 0
 async function load() {
+  const request = ++latest
   error.value = ''
+  summaries.value = null
   try {
-    summaries.value = await api<FeaturedSummary[]>(
+    const loaded = await api<FeaturedSummary[]>(
       `/spaces/${encodeURIComponent(props.slug)}/analytics/featured`,
     )
+    if (request === latest) summaries.value = loaded
   } catch (err) {
-    error.value = errorMessage(err)
+    if (request === latest) error.value = errorMessage(err)
   }
 }
 watch(() => props.slug, load, { immediate: true })

@@ -108,7 +108,11 @@ export const events = pgTable(
     referrer: text('referrer').notNull().default(''),
     createdAt: createdAt(),
   },
-  (t) => [index('events_space_created_idx').on(t.spaceId, t.createdAt)],
+  (t) => [
+    index('events_space_created_idx').on(t.spaceId, t.createdAt),
+    // Mise en avant (V3) : vues et CV des pages des entrées.
+    index('events_space_path_idx').on(t.spaceId, t.path),
+  ],
 )
 
 /** Types de contenu d'un espace (V2). `slug` et `kind` sont figés après la création ;
