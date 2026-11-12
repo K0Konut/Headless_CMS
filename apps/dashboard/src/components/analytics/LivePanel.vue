@@ -139,7 +139,7 @@ onBeforeUnmount(() => {
         />
       </Button>
     </div>
-    <div v-if="showFeed" id="live-feed" class="border-t">
+    <div v-show="showFeed" id="live-feed" class="border-t">
       <ol v-if="recent.length" class="max-h-64 overflow-y-auto text-sm">
         <li
           v-for="event in recent"

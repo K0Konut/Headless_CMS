@@ -41,14 +41,14 @@ const chart = computed(() => {
   const area = `${x(0)},${vy(0)} ${line} ${x(days.length - 1)},${vy(0)}`
 
   const bw = Math.max(1, Math.min(14, step - 3))
-  const r = bw >= 6 ? 3 : 0
-  const bars = days.flatMap((d, i) =>
-    d.cvs
-      ? [
-          `M${x(i) - bw / 2},${cy(0)} V${cy(d.cvs) + r} q0,-${r} ${r},-${r} h${bw - 2 * r} q${r},0 ${r},${r} V${cy(0)} Z`,
-        ]
-      : [],
-  )
+  const bars = days.flatMap((d, i) => {
+    if (!d.cvs) return []
+    // Coins arrondis en haut seulement, jamais plus hauts que la barre.
+    const r = bw >= 6 ? Math.min(3, (cy(0) - cy(d.cvs)) / 2) : 0
+    return [
+      `M${x(i) - bw / 2},${cy(0)} V${cy(d.cvs) + r} q0,-${r} ${r},-${r} h${bw - 2 * r} q${r},0 ${r},${r} V${cy(0)} Z`,
+    ]
+  })
 
   // Repères de dates : chaque jour sur une semaine, les lundis sur un mois, le 1er au-delà ;
   // un repère trop proche du précédent est sauté.
@@ -88,18 +88,21 @@ const tip = computed(() => {
   if (active.value === null) return null
   const day = props.daily[active.value]!
   const x = chart.value.x(active.value)
-  // Le cadre passe à gauche du curseur près du bord droit.
   const rows = [
     { label: 'Vues', swatch: 'bg-series-views', value: formatNumber(day.views) },
     { label: 'CV', swatch: 'bg-series-cvs', value: formatNumber(day.cvs) },
     { label: 'Taux', swatch: '', value: formatShare(day.cvs, day.views) },
   ]
-  return { day, x, rows, left: x + 12 + 176 > chart.value.w ? x - 12 - 176 : x + 12 }
+  // Le cadre (176 px) passe à gauche du curseur près du bord droit, sans sortir à gauche.
+  const left = x + 12 + 176 > chart.value.w ? Math.max(0, x - 12 - 176) : x + 12
+  return { day, x, rows, left }
 })
 
 function onMove(event: MouseEvent) {
-  const left = (event.currentTarget as Element).getBoundingClientRect().left
-  const i = Math.floor((event.clientX - left - LEFT) / chart.value.step)
+  const rect = (event.currentTarget as Element).getBoundingClientRect()
+  // Position en unités du viewBox, au cas où le SVG serait mis à l'échelle.
+  const at = ((event.clientX - rect.left) / rect.width) * chart.value.w
+  const i = Math.floor((at - LEFT) / chart.value.step)
   active.value = Math.max(0, Math.min(props.daily.length - 1, i))
 }
 

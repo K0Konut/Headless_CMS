@@ -68,7 +68,9 @@ const empty = computed(
 const tiles = computed(() => {
   if (!summary.value) return []
   const { totals, previous: prev } = summary.value
-  const rate = (c: { views: number; cvs: number }) => (c.views ? (c.cvs / c.views) * 100 : null)
+  // Arrondi comme à l'affichage : l'écart doit tomber juste entre les deux taux montrés.
+  const rate = (c: { views: number; cvs: number }) =>
+    c.views ? Math.round((c.cvs / c.views) * 1000) / 10 : null
   const now = rate(totals)
   const before = prev && rate(prev)
   const counts = (
@@ -89,7 +91,7 @@ const tiles = computed(() => {
       label: 'Taux de conversion',
       value: formatShare(totals.cvs, totals.views),
       change: now !== null && before != null ? formatChange(now, before, 'pt') : null,
-      before: prev && `${formatShare(prev.cvs, prev.views)} avant`,
+      before: prev?.views ? `${formatShare(prev.cvs, prev.views)} avant` : null,
     },
   ]
 })
