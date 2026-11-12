@@ -1,8 +1,8 @@
 # Architecture technique
 
-4 novembre 2026, complété le 6 novembre 2026 pour la V2, puis pour la V3 · s'appuie sur `01-PRD.md`, `04-architecture-contenu-ux.md` et `decisions.md`
+4 novembre 2026, complété le 6 novembre 2026 pour la V2, puis du 8 au 12 novembre 2026 pour la V3 · s'appuie sur `01-PRD.md`, `04-architecture-contenu-ux.md` et `decisions.md`
 
-Ce document fixe comment la V1 (analytics) est construite, puis la V2 (contenu) dans la section « V2 : contenu », la publication programmée de la V3 dans « V3 : publication programmée » et sa prévisualisation dans « V3 : prévisualisation ».
+Ce document fixe comment la V1 (analytics) est construite, puis la V2 (contenu) dans la section « V2 : contenu », la publication programmée de la V3 dans « V3 : publication programmée » sa prévisualisation dans « V3 : prévisualisation » et la mise en avant dans « V3 : mise en avant ».
 
 ## Vue d'ensemble
 
@@ -513,6 +513,70 @@ Une table `preview_links`, sur le modèle des sessions et des liens à usage uni
 
 `send` n'envoie rien si l'URL courante contient `dashility-preview`. La suite de la visite (une navigation vers une autre page du site) est comptée normalement. Nouvelle version mineure du paquet npm `@dashility/client` (0.2.0), publiée à la main comme les précédentes ; le budget de 2 Ko ne bouge pas.
 
+## V3 : mise en avant
+
+S'appuie sur le PRD (« Score d'effet et mise en avant »), le document UX (« V3 : mise en avant ») et les décisions du 12 novembre 2026.
+
+### Données
+
+`content_types` gagne une colonne `featuring` (jsonb, null : pas de mise en avant) :
+
+```ts
+type Featuring = {
+  paths: { fr: string; en?: string } // modèles d'adresse : « /fr/projets/{slug} »
+  forceField?: string                // clé d'un champ « oui / non » du type
+}
+```
+
+- **Validation** (`featuringSchema`, `packages/shared`, ajouté à `contentTypeSchema`) : chaque modèle commence par `/`, contient `{slug}` une fois, 200 caractères au plus. Le type doit être une collection, et `forceField` désigner un champ de premier niveau de type `boolean`. Un type qui ne respecte pas ces règles est refusé à l'enregistrement (400) ; quand on supprime le champ de forçage dans Structure, le dashboard retire aussi `forceField`.
+- **Constantes** (`packages/shared`) : `FEATURED_PLACES = 3`, `FEATURED_MIN_VIEWS = 20`. La durée est celle de la rétention des événements (6 mois) : on compte tous les événements gardés.
+- Pas de table de classement : il se calcule à la demande. Au volume d'un portfolio (quelques projets, quelques milliers d'événements), c'est une requête groupée.
+
+### Calcul (`FeaturingService`)
+
+1. **Les entrées** : les entrées publiées du type (`published` non nul), avec leur identifiant d'URL publié (`slug`) et la valeur publiée du champ de forçage.
+2. **Les chemins** : pour chaque entrée, `paths.fr` et `paths.en` avec `{slug}` remplacé. Une table chemin → entrée.
+3. **Les événements** : `select path, kind, count(*) from events where space_id = $1 and path = any($2) group by path, kind`. L'index `(space_id, created_at)` suffit ; la rétention borne déjà la période à 6 mois.
+4. **La sélection**, par une fonction pure partagée, `featuredSelection(rows, seed)`, testée seule :
+   - score = `cv / views` si `views >= 20`, sinon pas de score ;
+   - **forcés** d'abord, triés par score puis par vues ; puis les **classés** par score décroissant (à égalité, le plus de vues) ; jusqu'à 3 places ;
+   - les places restantes sont **tirées** parmi les autres entrées, dans un ordre pseudo-aléatoire : tri par `sha256(seed + id)`.
+   - Renvoie chaque entrée avec `views`, `cv`, `score`, `forced`, `rank` (rang parmi les classés), et `featured` : `forced`, `ranked`, `drawn` ou null.
+
+**Le tirage du jour.** `seed` est la date du jour à l'heure de Paris (`2026-11-12`) et l'identifiant du type. Le build du site appelle l'API une fois par langue : le même jour, les deux appels tirent les mêmes projets, et deux builds le même jour aussi. Le build nocturne change de jour, donc de tirage.
+
+### API publique (`/api/v1`)
+
+```
+GET /api/v1/featured/:type?locale=fr
+Authorization: Bearer <clé API de l'espace>
+```
+
+- Hors de `/content/:type/…` : `/content/projets/featured` serait lu comme l'entrée d'identifiant `featured`.
+- **Réponse** : les entrées mises en avant, dans l'ordre (forcées, classées, tirées), au même format que `/content` (`{ slug, publishedAt, fields }`, résolues pour la langue), plus `featured: 'forced' | 'ranked' | 'drawn'`.
+- **En anglais**, une entrée incomplète en anglais est sautée (comme dans `/content`) et la suivante dans l'ordre prend sa place : la sélection anglaise peut différer de la française.
+- **Erreurs** : 404 `type_not_featured` si le type n'a pas de mise en avant, 404 si le type n'existe pas. Même clé, même limite de débit et même OpenAPI que le reste de `/api/v1`.
+
+### API du dashboard
+
+| Méthode et route | Accès | Rôle |
+| --- | --- | --- |
+| `GET /spaces/:slug/analytics/featured` | Membre | Pour chaque type mis en avant : `{ type: { slug, name }, places, minViews, rows, drawnPlaces }`, `rows` étant les entrées publiées avec `id`, titre (`entryTitle`), vues, CV, score, `forced`, `rank`, `featured` (sans les tirées) |
+| `PUT /spaces/:slug/types/:type` | Super-admin | Accepte `featuring`, comme le reste du type |
+
+- Le tableau d'Analytics ne montre pas le tirage, qui dépend du jour : `drawnPlaces` dit combien de places restent au hasard.
+
+### Dashboard
+
+- **Structure** : un composant `FeaturingSettings` dans l'éditeur d'un type de collection (case, deux modèles d'adresse, liste des champs oui / non). Supprimer le champ de forçage vide `forceField`.
+- **Analytics** : un composant `FeaturedSection` sous Pages et Provenances, un tableau par type ; le titre ouvre l'entrée.
+
+### Le portfolio (dans son dépôt)
+
+- `scripts/contenu.ts` lit `/api/v1/featured/projets?locale=…` et écrit la liste des identifiants dans `content/<langue>/mis-en-avant.json` ; l'accueil l'utilise au lieu de filtrer « À la une ».
+- Un build nocturne : `schedule` (cron, vers 4 h à Paris) dans le workflow qui lit le contenu et publie l'image, comme un `repository_dispatch`.
+- Rien ne change pour le reste du contrat : `a_la_une` reste un champ « oui / non » des projets.
+
 ## Environnements et déploiement
 
 | Environnement | Comment |
@@ -585,4 +649,10 @@ Puis la release, à la demande du propriétaire.
 1. `feat/dev/previsualisation` : table `preview_links` et colonne `preview_url` (migration), routes de création et de lecture avec CORS, lecture partagée avec l'API publique, purge, puis l'éditeur (« Prévisualiser », « Copier le lien d'aperçu »), Réglages › Intégration et les extraits d'installation. Une seule branche, comme la programmation.
 2. `feat/dev/collecte_apercu` : le script ne compte pas les visites d'aperçu, nouvelle version du paquet `@dashility/client`.
 
-Puis la release, à la demande du propriétaire, et la page d'aperçu du portfolio dans son dépôt (avec la nouvelle version du paquet). La mise en avant viendra ensuite.
+Puis la release, à la demande du propriétaire, et la page d'aperçu du portfolio dans son dépôt (avec la nouvelle version du paquet).
+
+## Ordre de construction de la V3 (mise en avant)
+
+1. `feat/dev/mise_en_avant` : colonne `featuring` (migration), `featuringSchema` et `featuredSelection` dans `packages/shared`, `FeaturingService`, routes `/api/v1/featured/:type` et `/spaces/:slug/analytics/featured`, OpenAPI, puis `FeaturingSettings` dans Structure et `FeaturedSection` dans Analytics. Une seule branche.
+
+Puis la release, à la demande du propriétaire, le réglage de la collection Projets dans Structure, et le portfolio dans son dépôt (lecture de la sélection, build nocturne).
