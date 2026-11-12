@@ -1,4 +1,4 @@
-import type { EntryData, Field, LastSchedule } from '@dashility/shared'
+import type { EntryData, Featuring, Field, LastSchedule } from '@dashility/shared'
 import { sql } from 'drizzle-orm'
 import {
   bigint,
@@ -108,7 +108,11 @@ export const events = pgTable(
     referrer: text('referrer').notNull().default(''),
     createdAt: createdAt(),
   },
-  (t) => [index('events_space_created_idx').on(t.spaceId, t.createdAt)],
+  (t) => [
+    index('events_space_created_idx').on(t.spaceId, t.createdAt),
+    // Mise en avant (V3) : vues et CV des pages des entrées.
+    index('events_space_path_idx').on(t.spaceId, t.path),
+  ],
 )
 
 /** Types de contenu d'un espace (V2). `slug` et `kind` sont figés après la création ;
@@ -127,6 +131,8 @@ export const contentTypes = pgTable(
     entryLabel: text('entry_label'),
     position: integer('position').notNull(),
     fields: jsonb('fields').$type<Field[]>().notNull(),
+    /** Mise en avant (V3) : adresses des pages sur le site et champ de forçage ; null sinon. */
+    featuring: jsonb('featuring').$type<Featuring>(),
     createdAt: createdAt(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

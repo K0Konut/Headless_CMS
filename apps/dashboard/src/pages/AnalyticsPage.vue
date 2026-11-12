@@ -3,6 +3,7 @@ import { Download } from '@lucide/vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import DailySection from '@/components/analytics/DailySection.vue'
+import FeaturedSection from '@/components/analytics/FeaturedSection.vue'
 import LivePanel from '@/components/analytics/LivePanel.vue'
 import PagesTable from '@/components/analytics/PagesTable.vue'
 import PeriodPicker from '@/components/analytics/PeriodPicker.vue'
@@ -128,6 +129,13 @@ const exportUrl = computed(
           </div>
         </template>
       </template>
+
+      <!-- Hors de la période choisie : le classement porte toujours sur 6 mois. -->
+      <FeaturedSection
+        v-if="summary?.hasEvents"
+        :slug="slug"
+        :is-super-admin="!!session.me?.user.isSuperAdmin"
+      />
     </div>
 
     <LivePanel :slug="slug" class="self-start" @event="onLiveEvent" />

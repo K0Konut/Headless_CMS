@@ -71,6 +71,13 @@
       "when": 1794413552009,
       "tag": "0009_previsualisation",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794477026952,
+      "tag": "0010_mise_en_avant",
+      "breakpoints": true
     }
   ]
 }

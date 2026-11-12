@@ -1,8 +1,8 @@
 # Architecture de contenu et UX — dashboard de Dashility
 
-4 novembre 2026, complété le 6 novembre 2026 pour la V2 le 11 novembre 2026 pour la refonte de Contenu et Structure, puis pour la prévisualisation · s'appuie sur `01-PRD.md` et `decisions.md`
+4 novembre 2026, complété le 6 novembre 2026 pour la V2, le 11 novembre 2026 pour la refonte de Contenu et Structure puis pour la prévisualisation, et le 12 novembre 2026 pour la mise en avant · s'appuie sur `01-PRD.md` et `decisions.md`
 
-Ce document organise les écrans et les parcours du dashboard. Les écrans V1 et V2 sont détaillés (wireframes et états), ainsi que la publication programmée et la prévisualisation de la V3 ; le reste de la V3 n'est décrit qu'en arborescence et en parcours.
+Ce document organise les écrans et les parcours du dashboard. Les écrans V1 et V2 sont détaillés (wireframes et états), ainsi que toute la V3 : publication programmée, prévisualisation et mise en avant.
 
 Méthode allégée : pas de territoire de marque. Le dashboard est construit avec shadcn-vue (PRD, « Exigences de qualité ») ; sa direction visuelle, légère, est dans `03-direction-artistique.md` depuis le 11 novembre 2026.
 
@@ -505,7 +505,7 @@ La V2 est acceptée quand le super-admin peut créer ces types dans Structure, s
 | Rôle, équipe | Texte court | oui | oui |
 | Durée | Période (au mois, avec « en cours ») ; le site trie les projets dessus | oui | — |
 | Stack | Liste de valeurs | oui | non |
-| À la une | Oui / non (remplacé par la mise en avant automatique en V3) | — | — |
+| À la une | Oui / non : en V3, force la mise en avant du projet (voir « V3 : mise en avant ») | — | — |
 | Image principale | Image | oui | alt. oui |
 | Cadre de la capture | Liste de choix : navigateur, téléphone | oui | — |
 | Contexte, Besoin | Texte court (accroche) + texte riche | oui | oui |
@@ -650,6 +650,71 @@ Dashility fournit la donnée ; le site fournit l'affichage. Ce que la page d'ape
 - **URL d'aperçu** : l'adresse de la page d'aperçu du site. Facultative : sans elle, la prévisualisation est simplement absente de l'éditeur.
 - **Tester** ouvre cette adresse avec un lien d'essai, pour vérifier que la page répond.
 
+## V3 : mise en avant
+
+Les 3 projets qui donnent le plus envie de télécharger le CV sont mis en avant sur l'accueil du portfolio, sans y toucher (PRD, « Score d'effet et mise en avant »).
+
+### Principes
+
+- **Le score est un taux.** Téléchargements du CV depuis la page du projet, divisés par ses vues, sur les 6 derniers mois. Un taux, pas un volume : un projet déjà mis en avant ne le reste pas seulement parce qu'il est plus vu.
+- **Un seuil de 20 vues.** En dessous, le projet n'est pas classé : 2 vues et 1 CV ne font pas un score de 50 %.
+- **3 places**, dans cet ordre : les projets **forcés** (« À la une » coché), puis les projets **classés** par score, puis un **tirage au hasard** parmi les autres projets publiés s'il reste des places.
+- **Dashility calcule, le site affiche.** Dashility relie les pages vues aux projets, calcule les scores et renvoie au site, à son build, les projets mis en avant. Le tirage est refait à chaque build : tous les visiteurs voient la même sélection jusqu'au suivant, et un build nocturne la rafraîchit.
+- **Seuil, nombre de places et durée sont fixes** (PRD), affichés à l'écran mais pas réglables. Le seuil sera revu quand le portfolio aura quelques mois de trafic.
+
+### Structure : relier un type aux pages du site
+
+Les analytics ne connaissent que des chemins (`/fr/projets/ce-portfolio`). Pour qu'un type soit classé, le super-admin indique, dans l'éditeur du type, l'adresse de ses pages sur le site. Collections seulement.
+
+```
+‹ Structure    Projets                                 [Annuler] [Enregistrer]
+  …
+  Mise en avant
+  [✓] Mettre en avant les entrées les plus efficaces (3 places)
+      Pages sur le site  FR [/fr/projets/{slug}  ]   EN [/en/projects/{slug} ]
+      Toujours mis en avant si coché  [À la une ▾]   (champs oui / non du type, ou « Aucun »)
+```
+
+- **`{slug}`** est remplacé par l'identifiant d'URL de chaque entrée. Une adresse sans `{slug}` est refusée (« L'adresse doit contenir {slug} »). L'anglais est facultatif : un site sans pages anglaises ne remplit que le français.
+- Les vues des deux langues s'additionnent : un projet a un seul score.
+- **Champ de forçage** : la liste ne propose que les champs « oui / non » du type. Supprimer ce champ retire le forçage.
+- Les réglages s'enregistrent avec le reste du type (« Enregistrer »).
+
+### Analytics : le classement
+
+Sous les tableaux Pages et Provenances, un bloc par type mis en avant :
+
+```
+┌ Mise en avant · Projets ────────────── sur les 6 derniers mois ┐
+│ Projet               Vues   CV   Score   Statut                  │
+│ Ce portfolio          312   14   4,5 %   ★ Mis en avant (forcé)  │
+│ API de réservation    128    9   7,0 %   ★ Mis en avant · 1er    │
+│ App mobile             86    4   4,7 %   ★ Mis en avant · 2e     │
+│ Site associatif        64    2   3,1 %   3e                      │
+│ Jeu de plateau         12    1     —     Pas assez de vues (12/20)│
+└──────────────────────────────────────────────────────────────────┘
+Les places restantes sont tirées au hasard à chaque build du site.
+```
+
+- **Toujours sur 6 mois**, quelle que soit la période choisie en haut de l'écran : c'est la période du score. Le titre du bloc le dit.
+- Une ligne par **entrée publiée** ; un brouillon n'est jamais mis en avant. Tri : mis en avant d'abord, puis par score, puis les projets sous le seuil par vues décroissantes.
+- **Statut** : « Mis en avant (forcé) », « Mis en avant · 1er » (rang parmi les classés), un rang simple, ou « Pas assez de vues (12/20) ». Si des places restent pour le tirage, une phrase sous le tableau le dit. Le tirage lui-même n'est pas affiché : il change à chaque build.
+- Le titre du projet ouvre son entrée dans l'éditeur.
+
+**États**
+
+| Situation | Affichage |
+| --- | --- |
+| Aucun type mis en avant | Pas de bloc ; pour le super-admin, une ligne « Mettez en avant vos projets les plus efficaces » avec un lien vers Structure |
+| Aucune entrée publiée | « Aucun projet publié » |
+| Aucune entrée au-dessus du seuil | Le tableau, tous en « Pas assez de vues », et « Les 3 places sont tirées au hasard à chaque build du site » |
+| Chargement, erreur | Comme les autres blocs de l'onglet |
+
+### Ce que le site doit faire
+
+- À son build, lire les projets mis en avant par l'API (dans l'ordre : forcés, classés, tirés) et les afficher sur l'accueil, à la place du filtre « À la une » qu'il fait aujourd'hui.
+- Se reconstruire chaque nuit, pour suivre l'évolution des scores sans attendre une publication.
+
 ## Parcours utilisateurs
 
 ### 1. Toi, premier lancement : brancher le portfolio (V1)
@@ -715,11 +780,14 @@ Le vendredi, tu termines le projet, puis « Programmer… » : lundi, 9:00. Les 
 
 Le projet est en brouillon. Tu cliques sur « Prévisualiser » : un nouvel onglet ouvre la page d'aperçu du portfolio, avec le projet dans la mise en page de son étude de cas et un bandeau « Aperçu ». Une image est trop sombre : tu la remplaces dans l'éditeur, puis tu recharges l'aperçu. Tu passes en English pour vérifier la version anglaise. Avant de publier, tu copies le lien d'aperçu et tu l'envoies à un ami pour avoir son avis ; il l'ouvre sans compte, et le lien expire le lendemain.
 
+### 10. Toi : laisser les projets les plus efficaces monter sur l'accueil (V3)
+
+Dans Structure › Projets, tu coches « Mettre en avant les entrées les plus efficaces », indiques `/fr/projets/{slug}` et `/en/projects/{slug}`, et choisis « À la une » comme champ de forçage. Dans Analytics, le bloc « Mise en avant · Projets » montre le score de chaque projet sur 6 mois. Tu viens de publier un projet sans vues : tu coches « À la une » pour qu'il prenne une place tout de suite, puis tu le décoches quelques semaines plus tard, quand il a passé les 20 vues. Chaque nuit, le portfolio se reconstruit avec la sélection du jour.
+
 ## V3 et au-delà : ce qui s'ajoute
 
 | Écran | Rôle | Version |
 | --- | --- | --- |
-| Analytics | Classement des projets par score et projets mis en avant | V3 |
 | Connexion et Mon compte | Double authentification TOTP : étape de code à la connexion, activation dans Mon compte, désactivation par le super-admin si un membre perd son téléphone | Après la V1 |
 
 ## Questions reportées

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { createContentTypeSchema, updateContentTypeSchema } from '@dashility/shared'
+import { type Featuring, createContentTypeSchema, updateContentTypeSchema } from '@dashility/shared'
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { ChevronLeft, Lock } from '@lucide/vue'
 import { RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
@@ -13,6 +13,7 @@ import { api, errorMessage } from '@/lib/api'
 import { type ContentType, removedFields } from '@/lib/content'
 import { plural } from '@/lib/format'
 import { slugify } from '@/lib/slug'
+import FeaturingSettings from './FeaturingSettings.vue'
 import FieldList from './FieldList.vue'
 import TypePreview from './TypePreview.vue'
 
@@ -35,18 +36,22 @@ async function switchTab() {
 
 /** Copie modifiable du type ; le nom d'entrée vide d'une page unique devient null à l'envoi. */
 const copyOf = (type: ContentType | null) => {
-  const { slug, kind, name, entryLabel, fields } = type ?? {
+  const { slug, kind, name, entryLabel, fields, featuring } = type ?? {
     slug: '',
     kind: 'collection' as const,
     name: '',
     entryLabel: '',
     fields: [],
+    featuring: null,
   }
-  return JSON.parse(JSON.stringify({ slug, kind, name, entryLabel: entryLabel ?? '', fields }))
+  return JSON.parse(
+    JSON.stringify({ slug, kind, name, entryLabel: entryLabel ?? '', fields, featuring }),
+  )
 }
 const form = reactive(copyOf(props.type))
-let initial = JSON.stringify(form)
-const dirty = computed(() => JSON.stringify(form) !== initial)
+// Réactif : après un enregistrement, la saisie redevient « à jour » sans avoir changé.
+const initial = ref(JSON.stringify(form))
+const dirty = computed(() => JSON.stringify(form) !== initial.value)
 
 const error = ref('')
 const deleteError = ref('')
@@ -64,7 +69,7 @@ watch(
     if (previous === undefined && slug === createdSlug) return
     createdSlug = ''
     Object.assign(form, copyOf(props.type))
-    initial = JSON.stringify(form)
+    initial.value = JSON.stringify(form)
     error.value = ''
     deleteError.value = ''
     done.value = false
@@ -80,6 +85,15 @@ watch(
   },
 )
 
+/** Un champ de forçage supprimé (ou qui n'est plus « oui / non ») ne force plus rien (document
+ *  UX). Vérifié à l'enregistrement, pas à chaque frappe : renommer l'identifiant le perdrait. */
+function featuringFor(fields: ContentType['fields'], featuring: Featuring | null) {
+  const key = featuring?.forceField
+  if (!key || fields.some((f) => f.key === key && f.type === 'boolean')) return featuring
+  const { forceField: _, ...rest } = featuring!
+  return rest
+}
+
 async function save() {
   done.value = false
   const body = {
@@ -87,6 +101,7 @@ async function save() {
     name: form.name,
     entryLabel: form.kind === 'collection' ? form.entryLabel : null,
     fields: form.fields,
+    featuring: form.kind === 'collection' ? featuringFor(form.fields, form.featuring) : null,
   }
   const parsed = isNew.value
     ? createContentTypeSchema.safeParse({ ...body, slug: form.slug })
@@ -112,7 +127,7 @@ async function save() {
       { method: isNew.value ? 'POST' : 'PUT', body: parsed.data },
     )
     // Avant d'avertir la page : elle change d'URL après une création, sans confirmation à demander.
-    initial = JSON.stringify(form)
+    initial.value = JSON.stringify(form)
     done.value = true
     if (isNew.value) createdSlug = saved.slug
     emit('saved', saved)
@@ -124,7 +139,7 @@ async function save() {
 }
 
 function reset() {
-  Object.assign(form, JSON.parse(initial))
+  Object.assign(form, JSON.parse(initial.value))
   error.value = ''
 }
 
@@ -306,6 +321,12 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onUnload))
           <TypePreview v-if="tab === 'preview'" :fields="form.fields" />
         </div>
       </section>
+
+      <FeaturingSettings
+        v-if="form.kind === 'collection'"
+        v-model="form.featuring"
+        :fields="form.fields"
+      />
     </form>
 
     <section

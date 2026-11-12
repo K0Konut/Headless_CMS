@@ -258,6 +258,7 @@ describe('documentation', () => {
     expect(Object.keys(res.body.paths)).toEqual([
       '/content/{type}',
       '/content/{type}/{slug}',
+      '/featured/{type}',
       '/preview/{token}',
     ])
     const page = await request(server()).get('/api/docs').redirects(1).expect(200)

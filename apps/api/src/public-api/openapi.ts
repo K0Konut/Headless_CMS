@@ -95,6 +95,41 @@ export const openApiDocument: OpenAPIObject = {
         },
       },
     },
+    '/featured/{type}': {
+      get: {
+        summary: 'Entrées mises en avant d’un type',
+        description:
+          'Pour un type dont la mise en avant est réglée dans Structure : jusqu’à 3 entrées publiées, dans l’ordre — forcées (champ « oui / non » choisi), puis classées par taux de téléchargement du CV (CV ÷ vues de leur page sur 6 mois, à partir de 20 vues), puis tirées au hasard. Le tirage change chaque jour (heure de Paris) et reste le même entre les langues : à appeler au build. En anglais, une entrée incomplète est sautée et la suivante prend sa place.',
+        parameters: [typeParam, locale],
+        responses: {
+          200: {
+            description: 'Entrées mises en avant',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'array',
+                  items: {
+                    allOf: [
+                      { $ref: '#/components/schemas/Entry' },
+                      {
+                        type: 'object',
+                        required: ['featured'],
+                        properties: {
+                          featured: { type: 'string', enum: ['forced', 'ranked', 'drawn'] },
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+          401: error('Clé absente, mal formée ou régénérée depuis'),
+          404: error('Type inconnu, ou `type_not_featured` : pas de mise en avant réglée'),
+          429: error('Plus de 120 requêtes dans la minute (en-tête `Retry-After`)'),
+        },
+      },
+    },
     '/preview/{token}': {
       servers: [{ url: '/api' }],
       get: {

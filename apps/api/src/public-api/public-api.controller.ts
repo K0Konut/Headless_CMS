@@ -36,3 +36,18 @@ export class PublicApiController {
     return this.api.entry(req.space, type, slug, locale, origin(req))
   }
 }
+
+/** Mise en avant (V3) : les entrées d'un type à mettre en avant, lues au build du site. Hors de
+ *  `v1/content/:type/…`, où `featured` serait pris pour l'identifiant d'une entrée. */
+@Controller('v1/featured')
+@Public()
+@UseGuards(ApiKeyGuard)
+export class FeaturedController {
+  constructor(private readonly api: PublicApiService) {}
+
+  @Get(':type')
+  featured(@Req() req: ApiKeyRequest, @Param('type') type: string, @Query() query: unknown) {
+    const { locale } = querySchema.parse(query)
+    return this.api.featured(req.space, type, locale, origin(req))
+  }
+}
