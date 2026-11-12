@@ -795,12 +795,6 @@ Le projet est en brouillon. Tu cliques sur « Prévisualiser » : un nouvel ongl
 
 Dans Structure › Projets, tu coches « Mettre en avant les entrées les plus efficaces », indiques `/fr/projets/{slug}` et `/en/projects/{slug}`, et choisis « À la une » comme champ de forçage. Dans Analytics, le bloc « Mise en avant · Projets » montre le score de chaque projet sur 6 mois. Tu viens de publier un projet sans vues : tu coches « À la une » pour qu'il prenne une place tout de suite, puis tu le décoches quelques semaines plus tard, quand il a passé les 20 vues. Chaque nuit, le portfolio se reconstruit avec la sélection du jour.
 
-## V3 et au-delà : ce qui s'ajoute
-
-| Écran | Rôle | Version |
-| --- | --- | --- |
-| Connexion et Mon compte | Double authentification TOTP : étape de code à la connexion, activation dans Mon compte, désactivation par le super-admin si un membre perd son téléphone | Après la V1 |
-
 ## Questions reportées
 
 À trancher dans l'architecture technique de la V2 :

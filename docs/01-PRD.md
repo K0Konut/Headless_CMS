@@ -53,7 +53,6 @@ Le CMS gère du contenu et mesure l'audience, rien de plus. Les analytics arrive
 | Prévisualisation des brouillons sur le vrai site | V3 |
 | Publication programmée | V3 |
 | Mise en avant automatique des projets | V3 |
-| Double authentification TOTP facultative | Après la V1, version à fixer |
 
 Le CMS ne fait pas :
 
@@ -66,7 +65,8 @@ Le CMS ne fait pas :
 - les notifications ;
 - les liens tracés par candidature ;
 - des rôles différents au sein d'un même espace ;
-- l'envoi d'emails en V1 : les liens d'invitation et de réinitialisation sont générés dans le dashboard et transmis à la main.
+- l'envoi d'emails en V1 : les liens d'invitation et de réinitialisation sont générés dans le dashboard et transmis à la main ;
+- la double authentification (TOTP), abandonnée le 12 novembre 2026.
 
 ## Contenus et édition
 
@@ -212,7 +212,7 @@ Le dashboard et les sites ne parlent qu'à l'API. À chaque publication, l'API a
 
 J'héberge le contenu de mes proches et clients et l'audience de leurs sites : je suis leur sous-traitant au sens du RGPD, et je l'accepte.
 
-- Mots de passe hachés (Argon2 ou bcrypt), sessions sécurisées ; double authentification TOTP facultative après la V1.
+- Mots de passe hachés (Argon2 ou bcrypt), sessions sécurisées ; pas de double authentification.
 - Liens d'invitation et de réinitialisation à usage unique, avec une durée de validité courte.
 - Chaque requête vérifie que l'utilisateur appartient à l'espace concerné ; un membre ne voit jamais les données d'un autre espace.
 - Le site lit le contenu publié avec une clé API en lecture seule, propre à son espace.
