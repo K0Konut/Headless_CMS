@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
 // Ports et base dédiés : les tests de bout en bout ne touchent ni au serveur de dev ni à ses données.
-const API_PORT = 3100
+export const API_PORT = 3100
 const WEB_PORT = 5174
 export const ADMIN_SESSION = 'e2e/.auth/admin.json'
 export const E2E_DATABASE_URL =

@@ -89,8 +89,8 @@ describe('session', () => {
 
     const adminMe = await request(server).get('/api/auth/me').set('Cookie', admin).expect(200)
     expect(adminMe.body.spaces).toEqual([
-      { slug: a!.slug, name: 'A', siteUrl: 'https://a.fr' },
-      { slug: b!.slug, name: 'B', siteUrl: 'https://b.fr' },
+      { slug: a!.slug, name: 'A', siteUrl: 'https://a.fr', previewUrl: null },
+      { slug: b!.slug, name: 'B', siteUrl: 'https://b.fr', previewUrl: null },
     ])
     const memberMe = await request(server)
       .get('/api/auth/me')
@@ -98,7 +98,7 @@ describe('session', () => {
       .expect(200)
     expect(memberMe.body).toEqual({
       user: { id: member!.id, email: 'membre@exemple.fr', isSuperAdmin: false },
-      spaces: [{ slug: 'b', name: 'B', siteUrl: 'https://b.fr' }],
+      spaces: [{ slug: 'b', name: 'B', siteUrl: 'https://b.fr', previewUrl: null }],
     })
   })
 

@@ -4,9 +4,11 @@ import CopyField from '@/components/CopyField.vue'
 import type { SpaceDetail } from '@/lib/spaces'
 import ApiKeyField from './ApiKeyField.vue'
 import DeploySettings from './DeploySettings.vue'
+import PreviewSettings from './PreviewSettings.vue'
 import SettingsSection from './SettingsSection.vue'
 
 const props = defineProps<{ space: SpaceDetail }>()
+const emit = defineEmits<{ updated: [SpaceDetail] }>()
 
 const snippet = computed(
   () => `import { initAnalytics } from '@dashility/client'
@@ -41,6 +43,7 @@ const projets = await res.json()`
       </div>
       <ApiKeyField :slug="space.slug" :created-at="space.apiKeyCreatedAt ?? null" />
       <DeploySettings :slug="space.slug" />
+      <PreviewSettings :space="space" @updated="emit('updated', $event)" />
       <div class="grid grid-cols-1 gap-2">
         <p class="text-sm font-medium">Lire le contenu publié</p>
         <CopyField :value="readSnippet" label="Exemple de lecture du contenu" multiline />

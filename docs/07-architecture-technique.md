@@ -1,8 +1,8 @@
 # Architecture technique
 
-4 novembre 2026, complété le 6 novembre 2026 pour la V2 · s'appuie sur `01-PRD.md`, `04-architecture-contenu-ux.md` et `decisions.md`
+4 novembre 2026, complété le 6 novembre 2026 pour la V2, puis pour la V3 · s'appuie sur `01-PRD.md`, `04-architecture-contenu-ux.md` et `decisions.md`
 
-Ce document fixe comment la V1 (analytics) est construite, puis la V2 (contenu) dans la section « V2 : contenu », et la publication programmée de la V3 dans « V3 : publication programmée ».
+Ce document fixe comment la V1 (analytics) est construite, puis la V2 (contenu) dans la section « V2 : contenu », la publication programmée de la V3 dans « V3 : publication programmée » et sa prévisualisation dans « V3 : prévisualisation ».
 
 ## Vue d'ensemble
 
@@ -426,6 +426,93 @@ Toute écriture qui change la version de l'entrée annule sa programmation, dans
 - **Rattrapage** : une publication manquée pendant un arrêt de l'API part au premier passage de la tâche après le démarrage (au plus une minute). `last_schedule.at` garde l'heure réelle, que l'éditeur affiche à côté de l'heure prévue.
 - **Auteur** : la tâche ne change pas `updated_by`, qui reste l'auteur de la dernière modification du contenu publié.
 
+## V3 : prévisualisation
+
+S'appuie sur le document UX, section « V3 : prévisualisation », et sur les décisions du 11 novembre 2026.
+
+```mermaid
+sequenceDiagram
+    participant E as Éditeur (dashboard)
+    participant A as API Dashility
+    participant S as Page d'aperçu (site)
+    E->>A: POST …/entries/:id/preview (session)
+    A-->>E: { url, expiresAt }
+    E->>S: nouvel onglet : <preview_url>?dashility-preview=<jeton>
+    S->>A: GET /api/preview/<jeton>?locale=fr (CORS, sans clé)
+    A-->>S: l'entrée, version en cours, même forme que /api/v1
+```
+
+### Données
+
+Une table `preview_links`, sur le modèle des sessions et des liens à usage unique :
+
+| Colonne | Rôle |
+| --- | --- |
+| `id` (text, PK) | Empreinte SHA-256 du jeton (`newToken`, `hashToken`) ; le jeton lui-même n'est jamais stocké |
+| `entry_id` (uuid, null, FK `entries` `on delete set null`) | L'entrée prévisualisée ; null quand elle a été supprimée, pour répondre « Cette entrée n'existe plus » plutôt que « lien invalide » |
+| `expires_at` (timestamptz) | Création + 24 h |
+
+- **Un lien par clic** : chaque « Prévisualiser » ou « Copier le lien d'aperçu » crée une ligne. Pas de réutilisation ni de révocation (décision du 11 novembre 2026).
+- **Purge** : la tâche de rétention de 3 h supprime les liens expirés depuis plus de 7 jours. Entre-temps, un lien expiré répond « expiré » plutôt que « invalide ».
+
+`spaces` gagne `preview_url` (text, null) : l'adresse de la page d'aperçu du site.
+
+### Routes
+
+| Méthode et route | Accès | Rôle |
+| --- | --- | --- |
+| `POST /spaces/:slug/types/:type/entries/:id/preview` | Membre | Crée un lien ; renvoie `{ url, expiresAt }`. 409 `preview_not_configured` si l'espace n'a pas de `preview_url` |
+| `PATCH /spaces/:slug` | Super-admin | Accepte `previewUrl` (ou `null` pour le retirer), comme les autres réglages de l'espace |
+| `GET /api/preview/:token?locale=fr\|en` | Public, avec le jeton | L'entrée, version en cours |
+
+- **`url`** est construite par l'API : `preview_url` avec le paramètre `dashility-preview=<jeton>` ajouté par `URL.searchParams` (une adresse qui a déjà des paramètres reste valable).
+- **`/auth/me`** renvoie `previewUrl` avec chaque espace : l'éditeur sait s'il doit afficher « Prévisualiser » sans requête de plus.
+- **`preview_url`** : même règle que `site_url` (https, ou http sur `localhost` pour tester un site en local), mais le chemin est gardé. `GET /spaces/:slug` la renvoie à tous les membres.
+
+### Lecture d'un aperçu (`GET /api/preview/:token`)
+
+- **Version en cours** : `draft ?? published`, et `draft_slug ?? slug`. C'est ce que montre l'éditeur, y compris pour une entrée programmée (sa version figée) ou publiée sans modification (la version en ligne).
+- **Même forme que l'API publique**, pour que le site réutilise ses chargeurs : `resolveData` et la lecture des médias de `PublicApiService.resolve` sont mises en commun. S'y ajoutent ce dont le bandeau a besoin :
+
+```ts
+{
+  type: string                    // identifiant du type : le site choisit la page à afficher
+  kind: 'collection' | 'single'
+  slug?: string
+  fields: …                       // résolus pour `locale`, comme /api/v1
+  status: 'draft' | 'published' | 'modified'   // entryStatus, comme l'éditeur
+  enComplete: boolean             // le bandeau prévient si l'anglais est incomplet
+  expiresAt: string
+}
+```
+
+- **En anglais, l'entrée est renvoyée même incomplète** (contrairement à `/api/v1`) : un champ sans valeur anglaise vaut `null`, et `enComplete` vaut `false`.
+- **Erreurs** : 404 `preview_not_found` (jeton inconnu), 410 `preview_expired`, 404 `preview_entry_deleted`. Le site affiche le message du document UX selon le code.
+- **CORS** : `Access-Control-Allow-Origin: *`, seulement sur cette route, posé aussi sur les réponses d'erreur. Le jeton est le seul secret (un `curl` le lit de toute façon) ; restreindre l'origine n'apporterait rien et empêcherait le site de lire l'erreur d'un jeton inconnu, dont on ignore l'espace (« Tester » en dépend). La requête est simple (`GET` sans en-tête particulier) : pas de requête préalable. Pas de cookies.
+- **En-têtes** : `Cache-Control: no-store` (un brouillon change), `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex`.
+- **Débit** : 60 requêtes par minute par IP, avec le `ThrottlerModule` déjà en place. Le jeton fait 32 octets aléatoires : il ne se devine pas.
+- **Documentation** : la route figure dans le document OpenAPI de `/api/docs`, avec ses codes d'erreur.
+- **Médias** : les images d'un brouillon sont déjà servies par `/api/media/<id>/…` (adresse non devinable, `Cross-Origin-Resource-Policy: cross-origin`). Rien ne change côté médias.
+
+### Dashboard
+
+- **Ouverture sans blocage de fenêtre** : le navigateur bloque un `window.open` fait après un `await`. « Prévisualiser » ouvre donc l'onglet tout de suite (`window.open('', '_blank')`), enregistre la saisie, demande le lien, puis donne son adresse à l'onglet. En cas d'échec, l'onglet est refermé et l'erreur s'affiche dans l'éditeur.
+- **« Copier le lien d'aperçu »** : `navigator.clipboard.writeText` après la réponse. Si le navigateur refuse (délai du geste dépassé), le lien s'affiche dans un champ sélectionnable avec « Copier ».
+- **Réglages › Intégration** : champ « URL d'aperçu » et « Tester », qui ouvre `preview_url?dashility-preview=essai`. La page doit afficher le message « lien expiré » : c'est la preuve qu'elle existe et qu'elle interroge Dashility.
+
+### Ce que le site doit faire (contrat)
+
+À décrire dans les extraits d'installation de Réglages › Intégration, et à faire dans le portfolio (dans son dépôt, après Dashility) :
+
+1. Une page à l'adresse de `preview_url`, exclue du pré-rendu et des sitemaps, avec `<meta name="robots" content="noindex">`.
+2. Elle lit `dashility-preview` dans l'URL, appelle `GET /api/preview/<jeton>?locale=…` et affiche l'entrée avec ses composants, selon `type`. Le bandeau, le sélecteur FR / EN et les états sont ceux du document UX.
+3. Sa CSP ouvre `connect-src` et `img-src` à l'origine de Dashility (pour le portfolio, `img-src` n'accepte aujourd'hui que `'self'`).
+4. Elle ne compte pas la visite : le script de collecte s'en charge (ci-dessous).
+
+### Script de collecte
+
+`send` n'envoie rien si l'URL courante contient `dashility-preview`. La suite de la visite (une navigation vers une autre page du site) est comptée normalement. Nouvelle version mineure du paquet npm `@dashility/client` (0.2.0), publiée à la main comme les précédentes ; le budget de 2 Ko ne bouge pas.
+
 ## Environnements et déploiement
 
 | Environnement | Comment |
@@ -491,4 +578,11 @@ Puis la release, et la migration du portfolio (dans son dépôt), à la demande 
 
 1. `feat/dev/programmation` : colonnes et migration, annulation dans les écritures, routes `schedule`, tâche de chaque minute, helper `parisDateTime`, puis l'éditeur (panneau « Programmer… », bandeau, lecture seule, messages d'issue), le badge, le filtre et le compteur. Une seule branche : l'API seule ne serait pas utilisable.
 
-Puis la release, à la demande du propriétaire. La prévisualisation et la mise en avant attendront que le portfolio soit branché sur Dashility.
+Puis la release, à la demande du propriétaire.
+
+## Ordre de construction de la V3 (prévisualisation)
+
+1. `feat/dev/previsualisation` : table `preview_links` et colonne `preview_url` (migration), routes de création et de lecture avec CORS, lecture partagée avec l'API publique, purge, puis l'éditeur (« Prévisualiser », « Copier le lien d'aperçu »), Réglages › Intégration et les extraits d'installation. Une seule branche, comme la programmation.
+2. `feat/dev/collecte_apercu` : le script ne compte pas les visites d'aperçu, nouvelle version du paquet `@dashility/client`.
+
+Puis la release, à la demande du propriétaire, et la page d'aperçu du portfolio dans son dépôt (avec la nouvelle version du paquet). La mise en avant viendra ensuite.

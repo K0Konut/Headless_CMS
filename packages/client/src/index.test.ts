@@ -92,6 +92,13 @@ describe('initAnalytics', () => {
     expect(sent().map((e) => e.t)).toEqual(['view', 'cv'])
   })
 
+  it('ne compte pas une page d’aperçu, mais la suite de la visite', () => {
+    history.replaceState(null, '', '/apercu?dashility-preview=jeton')
+    stop = initAnalytics(OPTIONS)
+    history.pushState(null, '', '/projets')
+    expect(sent().map((e) => e.p)).toEqual(['/projets'])
+  })
+
   it('n’envoie rien sous automatisation', () => {
     Object.defineProperty(navigator, 'webdriver', { value: true, configurable: true })
     stop = initAnalytics(OPTIONS)

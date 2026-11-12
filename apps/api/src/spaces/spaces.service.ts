@@ -13,6 +13,7 @@ import { type Space, spaceColumns } from './guards.js'
 const INVITATION_TTL_MS = 72 * 60 * 60 * 1000
 
 type SpaceFields = { name: string; slug: string; siteUrl: string }
+type SpaceUpdate = Partial<SpaceFields> & { previewUrl?: string | null }
 
 @Injectable()
 export class SpacesService {
@@ -29,7 +30,7 @@ export class SpacesService {
     return space!
   }
 
-  async update(space: Space, fields: Partial<SpaceFields>) {
+  async update(space: Space, fields: SpaceUpdate) {
     if (!Object.keys(fields).length) return space
     const [updated] = await this.uniqueSlug(() =>
       this.db.update(spaces).set(fields).where(eq(spaces.id, space.id)).returning(spaceColumns),

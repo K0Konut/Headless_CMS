@@ -10,6 +10,8 @@ export interface AnalyticsOptions {
 type EventType = 'view' | 'cv'
 
 const IGNORE = 'dashility-ignore'
+// Recopié de PREVIEW_PARAM (packages/shared), comme le reste : le budget de 2 Ko.
+const PREVIEW = 'dashility-preview'
 
 function isIgnored() {
   try {
@@ -60,8 +62,9 @@ function externalReferrer() {
 
 /**
  * Compte les vues (chargement et navigations SPA) et les clics sur les liens `data-dashility-cv`.
- * Rien n'est envoyé hors navigateur (pré-rendu), en local, sous automatisation, ou si le
- * visiteur s'est exclu avec le lien magique. Renvoie une fonction qui arrête la collecte.
+ * Rien n'est envoyé hors navigateur (pré-rendu), en local, sous automatisation, sur une page
+ * d'aperçu (`?dashility-preview=…`), ou si le visiteur s'est exclu avec le lien magique.
+ * Renvoie une fonction qui arrête la collecte.
  */
 let active = false
 
@@ -76,7 +79,14 @@ export function initAnalytics({ key, endpoint }: AnalyticsOptions) {
   let lastPath = location.pathname
 
   const send = (t: EventType) => {
-    if (local || navigator.webdriver || isIgnored()) return
+    // Page d'aperçu d'un brouillon (V3) : jamais comptée. La suite de la visite l'est.
+    if (
+      local ||
+      navigator.webdriver ||
+      isIgnored() ||
+      new URLSearchParams(location.search).has(PREVIEW)
+    )
+      return
     const event: Record<string, string> = { k: key, t, p: location.pathname.slice(0, 512) }
     // La provenance n'accompagne que la première vue de la visite.
     if (referrer) event.r = referrer
