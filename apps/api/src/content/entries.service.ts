@@ -20,6 +20,7 @@ import {
   scheduleIssue,
   type LastSchedule,
   type EntryData,
+  type Field,
   previewLink,
 } from '@dashility/shared'
 import { and, desc, eq, inArray, isNotNull, lt, lte, ne, or, sql } from 'drizzle-orm'
@@ -273,6 +274,7 @@ export class EntriesService {
       .from(entries)
       .where(this.byId(type, id))
     if (!current) throw new NotFoundException('Entrée introuvable')
+    await this.keepValidRelations(space, type.fields, data, current.id)
     // La version programmée est figée : on annule d'abord la programmation (« Modifier l'entrée »).
     if (current.scheduledAt) {
       throw new ConflictException({
@@ -629,6 +631,72 @@ export class EntriesService {
     })
     // Ce que les sites affichent a changé : un build par espace (regroupé sur 10 s).
     for (const spaceId of spaces) this.deploy.schedule(spaceId)
+  }
+
+  /** Champs Relation (V4) : ne garde que les entrées de la collection cible, corbeille comprise,
+   *  et jamais l'entrée elle-même. Un identifiant d'un autre espace ne passe donc pas, et celui
+   *  d'une entrée supprimée pour de bon part sans bloquer l'enregistrement. */
+  private async keepValidRelations(space: Space, fields: Field[], data: EntryData, self: string) {
+    for (const field of fields) {
+      if (field.type !== 'relation') continue
+      const ids = data[field.key] as string[] | undefined
+      if (!ids?.length) continue
+      const found = await this.db
+        .select({ id: entries.id })
+        .from(entries)
+        .innerJoin(contentTypes, eq(contentTypes.id, entries.typeId))
+        .where(
+          and(
+            eq(contentTypes.spaceId, space.id),
+            eq(contentTypes.slug, field.target),
+            inArray(entries.id, ids),
+          ),
+        )
+      const valid = new Set(found.map((e) => e.id))
+      data[field.key] = ids.filter((id) => id !== self && valid.has(id))
+    }
+  }
+
+  /** Entrées hors corbeille qui citent celle-ci par un champ Relation (V4) : « Supprimer » ne
+   *  demande confirmation que si la liste n'est pas vide. */
+  async citations(space: Space, typeSlug: string, id: EntryRef) {
+    const entry = await this.get(space, typeSlug, id)
+    const types = await this.db
+      .select({
+        id: contentTypes.id,
+        slug: contentTypes.slug,
+        name: contentTypes.name,
+        fields: contentTypes.fields,
+      })
+      .from(contentTypes)
+      .where(eq(contentTypes.spaceId, space.id))
+    const citing = []
+    for (const type of types) {
+      const keys = type.fields.flatMap((f) =>
+        f.type === 'relation' && f.target === typeSlug ? [f.key] : [],
+      )
+      if (!keys.length) continue
+      const cites = (column: typeof entries.published | typeof entries.draft) =>
+        keys.map((key) => sql`jsonb_exists(${column} -> ${key}, ${entry.id})`)
+      const rows = await this.db
+        .select({ id: entries.id, published: entries.published, draft: entries.draft })
+        .from(entries)
+        .where(
+          and(
+            eq(entries.typeId, type.id),
+            alive(),
+            or(...cites(entries.published), ...cites(entries.draft)),
+          ),
+        )
+      citing.push(
+        ...rows.map((row) => ({
+          type: { slug: type.slug, name: type.name },
+          id: row.id,
+          title: entryTitle(type.fields, row.draft ?? row.published ?? {}),
+        })),
+      )
+    }
+    return citing
   }
 
   /** Contrôles de « Publier » ; renvoie le changement à écrire, ou lève l'erreur à afficher. */

@@ -5,7 +5,15 @@ import { computed, watch } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { fieldKey } from '@/lib/content'
+import { useContentStore } from '@/stores/content'
 import FieldList from './FieldList.vue'
 
 const props = defineProps<{
@@ -16,6 +24,9 @@ const props = defineProps<{
 const field = defineModel<Field>({ required: true })
 
 const frozen = computed(() => !!props.saved)
+/** Cibles possibles d'une relation : les collections de l'espace ouvert. */
+const content = useContentStore()
+const collections = computed(() => content.types?.filter((t) => t.kind === 'collection') ?? [])
 const id = (name: string) => `${props.idPrefix}-${name}`
 
 // L'identifiant suit le libellé tant qu'il est celui généré à partir de lui : modifié à la main,
@@ -168,6 +179,46 @@ function setChoiceLabel(choice: { key: string; fr: string; en: string }, fr: str
           :saved="saved?.type === 'group' ? saved.fields : []"
           :allow-group="false"
         />
+      </fieldset>
+    </div>
+
+    <div v-else-if="field.type === 'relation'" class="flex flex-wrap gap-x-10 gap-y-4">
+      <div class="grid w-full max-w-xs gap-1.5">
+        <Label :for="id('target')">Collection cible</Label>
+        <Select v-model="field.target" :disabled="frozen">
+          <SelectTrigger :id="id('target')" :aria-describedby="id('target-hint')">
+            <SelectValue placeholder="Choisir une collection" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem v-for="type in collections" :key="type.slug" :value="type.slug">
+              {{ type.name }}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+        <p :id="id('target-hint')" class="text-sm text-muted-foreground">
+          {{ frozen ? 'Figée.' : 'Ne pourra plus être changée après l’enregistrement.' }}
+        </p>
+      </div>
+      <fieldset class="grid gap-2">
+        <legend class="mb-1 text-sm font-medium">Entrées</legend>
+        <label class="flex items-center gap-2 text-sm">
+          <input
+            v-model="field.multiple"
+            type="radio"
+            :value="true"
+            class="size-4 accent-primary"
+          />
+          Plusieurs
+        </label>
+        <label class="flex items-center gap-2 text-sm">
+          <input
+            v-model="field.multiple"
+            type="radio"
+            :value="false"
+            class="size-4 accent-primary"
+          />
+          Une seule
+        </label>
       </fieldset>
     </div>
 

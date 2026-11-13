@@ -5,8 +5,10 @@ import {
   type Field,
   type Locale,
   entryStatus,
+  entryTitle,
   isEnComplete,
   mediaRefs,
+  relationRefs,
 } from '@dashility/shared'
 import { and, desc, eq, inArray, isNotNull } from 'drizzle-orm'
 import { DB } from '../db/db.module.js'
@@ -162,7 +164,8 @@ export class PublicApiService {
       .filter((r) => locale === 'fr' || isEnComplete(fields, r.data))
   }
 
-  /** Valeurs résolues pour la langue ; les médias cités sont lus en une requête. */
+  /** Valeurs résolues pour la langue ; les médias cités sont lus en une requête, les entrées
+   *  liées par les champs Relation en une autre. */
   private async resolve(
     fields: Field[],
     rows: Row[],
@@ -184,10 +187,47 @@ export class PublicApiService {
           .where(and(eq(media.spaceId, spaceId), inArray(media.id, ids)))
       : []
     const mediaInfo = new Map<string, MediaInfo>(found.map(({ id, ...info }) => [id, info]))
+    const relations = await this.relations(
+      rows.flatMap((r) => relationRefs(fields, r.data)),
+      {
+        locale,
+        spaceId,
+      },
+    )
     return rows.map((row) => ({
       ...(row.slug !== null && { slug: row.slug }),
       publishedAt: row.publishedAt,
-      fields: resolveData(fields, row.data, { locale, origin, media: mediaInfo }),
+      fields: resolveData(fields, row.data, { locale, origin, media: mediaInfo, relations }),
     }))
+  }
+
+  /** Entrées liées en ligne (V4) : publiées, hors corbeille, de cet espace, et complètes en
+   *  anglais si la langue est l'anglais (même règle que `/content`). Identifiant et titre. */
+  private async relations(ids: string[], { locale, spaceId }: { locale: Locale; spaceId: string }) {
+    const unique = [...new Set(ids)]
+    const found = unique.length
+      ? await this.db
+          .select({
+            id: entries.id,
+            slug: entries.slug,
+            published: entries.published,
+            fields: contentTypes.fields,
+          })
+          .from(entries)
+          .innerJoin(contentTypes, eq(contentTypes.id, entries.typeId))
+          .where(
+            and(
+              inArray(entries.id, unique),
+              eq(contentTypes.spaceId, spaceId),
+              isNotNull(entries.published),
+              alive(),
+            ),
+          )
+      : []
+    return new Map(
+      found
+        .filter((e) => locale === 'fr' || isEnComplete(e.fields, e.published!))
+        .map((e) => [e.id, { slug: e.slug, title: entryTitle(e.fields, e.published!, locale) }]),
+    )
   }
 }

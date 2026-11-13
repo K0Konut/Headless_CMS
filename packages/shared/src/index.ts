@@ -126,6 +126,7 @@ export const FIELD_TYPES = [
   'image',
   'pdf',
   'group',
+  'relation',
 ] as const
 export type FieldType = (typeof FIELD_TYPES)[number]
 
@@ -240,9 +241,20 @@ const groupFieldSchema = z
     path: ['max'],
   })
 
-export const fieldSchema = z.union([simpleFieldSchema, groupFieldSchema])
+/** Relation (V4) : une ou plusieurs entrées d'une collection du même espace, désignée par son
+ *  identifiant (figé). Hors des champs simples, elle n'entre pas dans un groupe ; elle ne se
+ *  traduit pas. L'API vérifie que la cible existe (architecture, « Définition et valeur »). */
+const relationFieldSchema = z.object({
+  ...fieldBase,
+  type: z.literal('relation'),
+  target: slugSchema,
+  multiple: z.boolean(),
+})
+
+export const fieldSchema = z.union([simpleFieldSchema, groupFieldSchema, relationFieldSchema])
 export type Field = z.infer<typeof fieldSchema>
 export type GroupField = z.infer<typeof groupFieldSchema>
+export type RelationField = z.infer<typeof relationFieldSchema>
 
 const fieldsSchema = z.array(fieldSchema).max(100).superRefine(checkFields)
 
@@ -342,6 +354,9 @@ export function frozenFieldChange(before: Field[], after: Field[]): string | nul
     if (old.type === 'group' && next.type === 'group') {
       const inner = frozenFieldChange(old.fields, next.fields)
       if (inner) return inner
+    }
+    if (old.type === 'relation' && next.type === 'relation' && next.target !== old.target) {
+      return `La collection cible du champ « ${old.key} » ne peut plus changer`
     }
   }
   return null
@@ -543,7 +558,22 @@ function languageValueSchema(field: Field): z.ZodType {
       return imageValueSchema.nullable()
     case 'pdf':
       return z.uuid().nullable()
+    case 'relation':
+      return z
+        .array(z.uuid())
+        .max(field.multiple ? 100 : 1)
+        .refine((ids) => new Set(ids).size === ids.length, 'Une entrée choisie deux fois')
   }
+}
+
+/** Identifiants des entrées citées par les champs Relation (V4), qui sont tous au premier
+ *  niveau. */
+export function relationRefs(fields: Field[], data: EntryData): string[] {
+  return fields.flatMap((field) =>
+    field.type === 'relation' && Array.isArray(data[field.key])
+      ? (data[field.key] as string[])
+      : [],
+  )
 }
 
 const fieldValueSchema = (field: Field) =>
@@ -635,11 +665,14 @@ export function isValidLink(value: string) {
   }
 }
 
-/** Titre d'une entrée dans les listes : la valeur française du premier champ « texte court ». */
-export function entryTitle(fields: Field[], data: EntryData): string {
+/** Titre d'une entrée : la valeur du premier champ « texte court », en français dans les listes
+ *  du dashboard, dans la langue demandée pour une relation de l'API publique (V4). */
+export function entryTitle(fields: Field[], data: EntryData, locale: Locale = 'fr'): string {
   const field = fields.find((f) => f.type === 'text')
   const value = field && data[field.key]
-  const text = field?.translatable ? (value as { fr?: string } | undefined)?.fr : value
+  const text = field?.translatable
+    ? (value as Partial<Record<Locale, string>> | undefined)?.[locale]
+    : value
   return typeof text === 'string' ? text.trim() : ''
 }
 

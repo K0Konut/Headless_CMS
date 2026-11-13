@@ -9,7 +9,8 @@ import { FIELD_TYPE_HINTS, FIELD_TYPE_ICONS, FIELD_TYPE_LABELS } from '@/lib/con
 const props = defineProps<{ idPrefix: string; allowGroup: boolean }>()
 const emit = defineEmits<{ pick: [FieldType]; cancel: [] }>()
 
-const types = FIELD_TYPES.filter((t) => props.allowGroup || t !== 'group')
+// Dans un groupe : ni groupe, ni relation, qui ne se placent qu'au premier niveau.
+const types = FIELD_TYPES.filter((t) => props.allowGroup || (t !== 'group' && t !== 'relation'))
 const list = ref<HTMLUListElement>()
 onMounted(() => list.value?.querySelector('button')?.focus())
 </script>
