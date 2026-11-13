@@ -179,6 +179,27 @@ export const entries = pgTable(
   ],
 )
 
+/** Historique (V4) : une version par publication, ce qui est parti en ligne, pour le relire et le
+ *  restaurer. La version « en ligne » est la plus récente, si l'entrée est publiée. */
+export const entryVersions = pgTable(
+  'entry_versions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    entryId: uuid('entry_id')
+      .notNull()
+      .references(() => entries.id, { onDelete: 'cascade' }),
+    /** 1, 2, 3… pour chaque entrée. */
+    number: integer('number').notNull(),
+    /** Valeurs des champs publiées, comme `entries.published` ; pas l'identifiant d'URL. */
+    data: jsonb('data').$type<EntryData>().notNull(),
+    publishedAt: timestamp('published_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Null : publication programmée, ancien membre, ou version d'avant l'historique. */
+    publishedBy: uuid('published_by').references(() => users.id, { onDelete: 'set null' }),
+    scheduled: boolean('scheduled').notNull().default(false),
+  },
+  (t) => [unique('entry_versions_entry_number').on(t.entryId, t.number)],
+)
+
 /** Images et PDF envoyés dans les champs des entrées (V2). Les fichiers sont sur le NAS, dans
  *  `<MEDIA_DIR>/<id de l'espace>/<id>/` ; la table n'en garde que la description. */
 export const media = pgTable(

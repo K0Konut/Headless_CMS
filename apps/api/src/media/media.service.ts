@@ -15,7 +15,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import sharp from 'sharp'
 import { DB } from '../db/db.module.js'
 import type { Db } from '../db/index.js'
-import { contentTypes, entries, media } from '../db/schema.js'
+import { contentTypes, entries, entryVersions, media } from '../db/schema.js'
 import type { Space } from '../spaces/guards.js'
 import { mediaPath, removeMediaDir } from './storage.js'
 
@@ -188,8 +188,9 @@ export class MediaService {
   }
 
   /** Médias orphelins (architecture, « Fichiers orphelins ») : plus de 24 h, et cités ni par la
-   *  version en ligne ni par le brouillon d'aucune entrée de leur espace. Un fichier remplacé
-   *  reste donc servi tant que la version publiée l'utilise. Les références sont lues avec la
+   *  version en ligne, ni par le brouillon, ni par une version de l'historique d'aucune entrée de
+   *  leur espace. Un fichier remplacé reste donc servi tant que la version publiée l'utilise, et
+   *  jusqu'au bout de l'historique. Les références sont lues avec la
    *  définition des champs (`mediaRefs`), comme à l'enregistrement et dans l'API publique. */
   @Cron('30 3 * * *', { timeZone: 'Europe/Paris' })
   async purgeOrphans() {
@@ -204,12 +205,20 @@ export class MediaService {
         .from(entries)
         .innerJoin(contentTypes, eq(contentTypes.id, entries.typeId))
         .where(eq(contentTypes.spaceId, spaceId))
+      // Une image d'une ancienne version (V4) reste servie : la restaurer la remet en place.
+      const versions = await this.db
+        .select({ fields: contentTypes.fields, data: entryVersions.data })
+        .from(entryVersions)
+        .innerJoin(entries, eq(entries.id, entryVersions.entryId))
+        .innerJoin(contentTypes, eq(contentTypes.id, entries.typeId))
+        .where(eq(contentTypes.spaceId, spaceId))
       const used = new Set(
-        rows
-          .flatMap(({ fields, published, draft }) =>
+        [
+          ...rows.flatMap(({ fields, published, draft }) =>
             [published, draft].flatMap((data) => (data ? mediaRefs(fields, data) : [])),
-          )
-          .map((ref) => ref.id),
+          ),
+          ...versions.flatMap(({ fields, data }) => mediaRefs(fields, data)),
+        ].map((ref) => ref.id),
       )
       const orphans = old.filter((m) => m.spaceId === spaceId && !used.has(m.id)).map((m) => m.id)
       if (!orphans.length) continue
