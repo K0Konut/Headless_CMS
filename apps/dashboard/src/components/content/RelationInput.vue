@@ -96,7 +96,7 @@ function move(index: number, delta: -1 | 1) {
       <li
         v-for="(entry, i) in chosen"
         :key="entry.id"
-        class="flex items-center gap-1 rounded-md border bg-muted/50 py-0.5 pr-0.5 pl-2 text-sm"
+        class="flex items-center gap-1 rounded-md border bg-muted/50 py-0.5 pr-0.5 pl-2 text-sm [&_button]:size-6"
         :class="entry.inTrash && 'text-muted-foreground'"
       >
         {{ entry.title }}
@@ -140,7 +140,7 @@ function move(index: number, delta: -1 | 1) {
       @update:model-value="add"
     >
       <ComboboxAnchor
-        class="flex h-9 w-full max-w-sm items-center rounded-md border bg-transparent px-3 text-sm focus-within:ring-2 focus-within:ring-ring"
+        class="flex h-9 w-full max-w-sm items-center rounded-md border bg-card px-3 text-sm focus-within:ring-2 focus-within:ring-ring"
       >
         <ComboboxInput
           :id="id"
