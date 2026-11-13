@@ -510,6 +510,22 @@ describe('corbeille', () => {
     await api('post', `/spaces/portfolio/trash/${entry.id}/restore`, member).expect(404)
   })
 
+  it('reprend son identifiant d’origine si celui en attente a été pris entre-temps', async () => {
+    const entry = await published('origine')
+    const saved = await api('patch', `${BASE}/${entry.id}`, member)
+      .send({ version: entry.version, data: READY, slug: 'nouveau' })
+      .expect(200)
+    expect(saved.body.draftSlug).toBe('nouveau')
+    await api('delete', `${BASE}/${entry.id}`, member).expect(204)
+    // Une autre entrée a pris l'identifiant en attente (course rare, simulée en base).
+    const other = await published('autre')
+    await db.update(entries).set({ slug: 'nouveau' }).where(eq(entries.id, other.id))
+
+    await api('post', `/spaces/portfolio/trash/${entry.id}/restore`, member).expect(200)
+    const back = await api('get', `${BASE}/${entry.id}`, member).expect(200)
+    expect(back.body).toMatchObject({ slug: 'origine', draftSlug: null, published: null })
+  })
+
   it('seul le super-admin supprime pour de bon ou vide la corbeille', async () => {
     const one = await published('un')
     const two = await published('deux')

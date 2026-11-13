@@ -310,10 +310,11 @@ const unpublish = () =>
 
 /** « Supprimer » met à la corbeille, sans confirmation : la liste propose « Annuler » (V4). */
 async function remove() {
+  // La saisie en cours part avec l'entrée : restaurée, elle revient complète.
+  if (!(await saveFirst())) return
   busy.value = true
   actionError.value = ''
   try {
-    clearTimeout(timer)
     await api(base.value, { method: 'DELETE' })
     deleted = true
     content.trashed = {

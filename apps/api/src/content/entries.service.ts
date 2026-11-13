@@ -420,13 +420,15 @@ export class EntriesService {
       .innerJoin(contentTypes, eq(contentTypes.id, entries.typeId))
       .where(and(eq(entries.id, id), inTrash(space.id)))
     if (!entry) throw new NotFoundException('Entrée introuvable dans la corbeille')
-    await this.write(
-      id,
-      entry.version,
-      user,
-      { ...unpublished(entry), deletedAt: null, deletedBy: null },
-      false,
-    )
+    const restored = { ...unpublished(entry), deletedAt: null, deletedBy: null }
+    try {
+      await this.write(id, entry.version, user, restored, false)
+    } catch (err) {
+      // L'identifiant en attente a été pris depuis : l'entrée reprend le sien, qu'elle a gardé
+      // réservé dans la corbeille, plutôt que de rester bloquée.
+      if (!(err instanceof BadRequestException) || !entry.draftSlug) throw err
+      await this.write(id, entry.version, user, { ...restored, slug: entry.slug }, false)
+    }
     return { id, type: { slug: entry.typeSlug } }
   }
 

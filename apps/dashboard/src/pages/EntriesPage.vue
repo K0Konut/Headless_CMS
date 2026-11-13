@@ -94,14 +94,21 @@ const filter = ref('all')
 const shown = computed(() => (entries.value ?? []).filter(FILTERS[filter.value]!.keep))
 
 /** « Annuler » : l'entrée revient de la corbeille, en brouillon (document UX). */
+const undoing = ref(false)
 async function undo() {
   const { id, title } = notice.value!
+  undoing.value = true
+  // La liste relue ici remplace celle de l'arrivée sur la page, même si celle-ci répond après.
+  const request = ++latest
   try {
     await api(`/spaces/${encodeURIComponent(space.value)}/trash/${id}/restore`, { method: 'POST' })
     notice.value = { title }
-    entries.value = await api<EntrySummary[]>(`${base.value}/entries`)
+    const list = await api<EntrySummary[]>(`${base.value}/entries`)
+    if (request === latest) entries.value = list
   } catch (err) {
     error.value = errorMessage(err)
+  } finally {
+    undoing.value = false
   }
 }
 
@@ -142,7 +149,7 @@ async function add() {
       >
         <template v-if="notice.id">
           « {{ notice.title }} » mis à la corbeille.
-          <Button size="sm" variant="outline" @click="undo">Annuler</Button>
+          <Button size="sm" variant="outline" :disabled="undoing" @click="undo">Annuler</Button>
         </template>
         <template v-else>« {{ notice.title }} » restauré en brouillon.</template>
       </p>
