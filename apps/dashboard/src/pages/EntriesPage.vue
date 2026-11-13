@@ -26,6 +26,7 @@ import {
 import { api, errorMessage } from '@/lib/api'
 import type { ContentType, Entry, EntrySummary } from '@/lib/content'
 import { formatDate } from '@/lib/format'
+import { useContentStore } from '@/stores/content'
 
 /** Un type : la liste de ses entrées pour une collection, l'éditeur pour une page unique ou
  *  pour l'entrée de l'URL (`/contenu/:type/:entree`). */
@@ -40,6 +41,12 @@ const base = computed(
   () => `/spaces/${encodeURIComponent(space.value)}/types/${encodeURIComponent(typeSlug.value)}`,
 )
 
+const content = useContentStore()
+/** Entrée mise à la corbeille juste avant d'arriver sur la liste (V4) ; une autre navigation
+ *  efface le bandeau. */
+const trashed = ref<{ id: string; title: string } | null>(null)
+const undone = ref('')
+
 const type = ref<ContentType | null>(null)
 const entries = ref<EntrySummary[] | null>(null)
 const error = ref('')
@@ -51,6 +58,11 @@ watch(
   [base, entryParam],
   async ([url, entry], previous) => {
     const request = ++latest
+    const notice = content.trashed
+    content.trashed = null
+    trashed.value =
+      !entry && notice?.space === space.value && notice.type === typeSlug.value ? notice : null
+    undone.value = ''
     const sameType = previous?.[0] === url && type.value
     if (!sameType) type.value = null
     entries.value = null
@@ -83,6 +95,19 @@ const FILTERS: Record<string, { label: string; keep: (e: EntrySummary) => boolea
 const filter = ref('all')
 const shown = computed(() => (entries.value ?? []).filter(FILTERS[filter.value]!.keep))
 
+/** « Annuler » : l'entrée revient de la corbeille, en brouillon (document UX). */
+async function undo() {
+  const { id, title } = trashed.value!
+  try {
+    await api(`/spaces/${encodeURIComponent(space.value)}/trash/${id}/restore`, { method: 'POST' })
+    trashed.value = null
+    undone.value = `« ${title} » restauré en brouillon.`
+    entries.value = await api<EntrySummary[]>(`${base.value}/entries`)
+  } catch (err) {
+    error.value = errorMessage(err)
+  }
+}
+
 const adding = ref(false)
 async function add() {
   adding.value = true
@@ -110,6 +135,18 @@ async function add() {
       <Button :disabled="adding" @click="add">
         <Plus aria-hidden="true" />Ajouter {{ type.entryLabel }}
       </Button>
+    </div>
+
+    <!-- Lu par les lecteurs d'écran à l'arrivée sur la liste, comme une notification. -->
+    <div role="status" class="mt-4 empty:hidden">
+      <p
+        v-if="trashed"
+        class="flex flex-wrap items-center gap-3 rounded-lg border bg-card px-4 py-2.5 text-sm"
+      >
+        « {{ trashed.title }} » mis à la corbeille.
+        <Button size="sm" variant="outline" @click="undo">Annuler</Button>
+      </p>
+      <p v-else-if="undone" class="rounded-lg border bg-card px-4 py-2.5 text-sm">{{ undone }}</p>
     </div>
 
     <Skeleton v-if="!entries" class="mt-8 h-48" />

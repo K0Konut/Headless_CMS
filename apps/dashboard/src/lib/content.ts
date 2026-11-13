@@ -201,3 +201,15 @@ export interface EntryVersion {
   /** La version que le site affiche. */
   online: boolean
 }
+
+/** Une entrée de la corbeille (V4). */
+export interface TrashedEntry {
+  id: string
+  type: { slug: string; name: string }
+  title: string
+  deletedAt: string
+  /** Email de qui l'a supprimée ; null pour un ancien membre. */
+  deletedBy: string | null
+  /** Suppression définitive prévue. */
+  purgeAt: string
+}

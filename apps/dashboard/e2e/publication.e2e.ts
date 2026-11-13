@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { adminApi } from './fixtures'
 
-test('publier, modifier, annuler, dépublier puis supprimer un projet', async ({
+test('publier, modifier, annuler, dépublier, supprimer puis rattraper un projet', async ({
   browser,
   page,
 }) => {
@@ -88,9 +88,15 @@ test('publier, modifier, annuler, dépublier puis supprimer un projet', async ({
   await expect(page.getByRole('status')).toContainText('Entrée dépubliée')
   await expect(header).toContainText('Brouillon')
 
+  // Supprimer met à la corbeille, sans confirmation ; la liste propose « Annuler ».
+  const asked = dialogs.length
   await page.getByRole('button', { name: 'Autres actions' }).click()
   await page.getByRole('menuitem', { name: 'Supprimer' }).click()
-  expect(dialogs.at(-1)).toBe('Supprimer « Ce portfolio » ? C’est définitif.')
   await expect(page).toHaveURL('/espaces/vitrine/contenu/projets')
+  expect(dialogs).toHaveLength(asked)
   await expect(page.getByText('Aucune entrée pour l’instant.')).toBeVisible()
+  await expect(page.getByRole('status')).toContainText('« Ce portfolio » mis à la corbeille.')
+  await page.getByRole('button', { name: 'Annuler' }).click()
+  await expect(page.getByRole('status')).toHaveText('« Ce portfolio » restauré en brouillon.')
+  await expect(page.getByRole('link', { name: 'Ce portfolio' })).toBeVisible()
 })
