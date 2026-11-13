@@ -2,7 +2,8 @@ import argon2 from 'argon2'
 import request from 'supertest'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { upsertSuperAdmin } from '../src/auth/super-admin.js'
-import { users } from '../src/db/schema.js'
+import { eq } from 'drizzle-orm'
+import { entries, users } from '../src/db/schema.js'
 import { PASSWORD, db, sessionCookie, useTestApp } from './helpers.js'
 
 const ctx = useTestApp()
@@ -340,6 +341,17 @@ describe('publication', () => {
       .expect(200)
     expect(restored.body).toMatchObject({ published: changed, draft: READY })
 
+    // Une entrée programmée est figée : pas de restauration.
+    await db
+      .update(entries)
+      .set({ scheduledAt: new Date(Date.now() + 3_600_000) })
+      .where(eq(entries.id, entry.id))
+    const frozen = await api('post', `${BASE}/${entry.id}/versions/2/restore`, member)
+      .send({ version: restored.body.version })
+      .expect(409)
+    expect(frozen.body.error.code).toBe('entry_scheduled')
+    await db.update(entries).set({ scheduledAt: null }).where(eq(entries.id, entry.id))
+
     // Dépubliée, aucune version n'est en ligne.
     await act(entry.id, 'unpublish', restored.body.version).expect(200)
     versions = await api('get', `${BASE}/${entry.id}/versions`, member).expect(200)
@@ -357,8 +369,11 @@ describe('publication', () => {
     const restored = await api('post', `${BASE}/${entry.id}/versions/1/restore`, member)
       .send({ version: current.body.version })
       .expect(200)
-    // Le champ supprimé depuis ne revient pas.
-    expect(restored.body.draft).toEqual(READY)
+    // Le champ supprimé depuis ne revient pas : la version restaurée est celle en ligne, il n'y
+    // a donc rien à publier.
+    expect(restored.body).toMatchObject({ published: READY, draft: null })
+    const one = await api('get', `${BASE}/${entry.id}/versions/1`, member).expect(200)
+    expect(one.body.data).toEqual(READY)
   })
 
   it('supprime une entrée de collection, jamais une page unique', async () => {

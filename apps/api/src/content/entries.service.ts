@@ -88,6 +88,9 @@ function recordVersion(tx: Tx, entryId: string, data: EntryData, by: string | nu
   })
 }
 
+/** Identifiant d'URL unique dans le type : une autre violation d'unicité n'est pas « déjà pris ». */
+const SLUG_CONSTRAINT = 'entries_type_slug'
+
 /** Ce que l'API renvoie d'une version, sans son contenu. */
 const versionColumns = {
   number: entryVersions.number,
@@ -292,7 +295,7 @@ export class EntriesService {
       return slugError ? { ...entry, slugError } : entry
     } catch (err) {
       // Pris entre la vérification et l'écriture : cas rare, signalé sans perdre la suite.
-      if (isUniqueViolation(err)) throw new BadRequestException(SLUG_TAKEN)
+      if (isUniqueViolation(err, SLUG_CONSTRAINT)) throw new BadRequestException(SLUG_TAKEN)
       throw err
     }
   }
@@ -371,19 +374,11 @@ export class EntriesService {
 
   /** Une version, avec son contenu, pour la relire en lecture seule. */
   async version(space: Space, typeSlug: string, id: EntryRef, number: number) {
-    const type = await this.types.row(space, typeSlug)
-    const [row] = await this.db
-      .select({ ...versionColumns, data: entryVersions.data })
-      .from(entryVersions)
-      .innerJoin(entries, eq(entries.id, entryVersions.entryId))
-      .leftJoin(users, eq(users.id, entryVersions.publishedBy))
-      .where(and(this.byId(type, id), eq(entryVersions.number, number)))
-    if (!row) throw new NotFoundException('Version introuvable')
-    return row
+    return this.versionOf(await this.types.row(space, typeSlug), id, number)
   }
 
-  /** « Restaurer cette version » : son contenu remplace le brouillon, élagué selon la structure
-   *  actuelle du type. Rien n'est publié : on relit, puis on publie (document UX). */
+  /** « Restaurer cette version » : son contenu remplace le brouillon. Rien n'est publié : on
+   *  relit, puis on publie (document UX). */
   async restore(
     space: Space,
     typeSlug: string,
@@ -394,11 +389,24 @@ export class EntriesService {
   ) {
     const type = await this.types.row(space, typeSlug)
     const current = await this.current(type, id, version)
-    const { data: saved } = await this.version(space, typeSlug, id, number)
-    // Élaguée selon les champs actuels, elle reste valide pour le type (`entryPruner`).
-    const data = entryPruner(type.fields)(saved)
+    // Comme une sauvegarde : une entrée programmée est figée (« Modifier l'entrée » d'abord).
+    if (current.scheduledAt) {
+      throw new ConflictException({
+        code: 'entry_scheduled',
+        message: 'Cette entrée est programmée : annulez la programmation pour la modifier',
+      })
+    }
+    const { data } = await this.versionOf(type, id, number)
+    await this.media.checkRefs(space, mediaRefs(type.fields, data))
+    // La version en ligne, restaurée sans autre modification en attente : rien à publier, le
+    // brouillon est simplement retiré. L'identifiant d'URL n'est jamais touché.
+    const prune = entryPruner(type.fields)
+    const same =
+      !!current.published &&
+      !current.draftSlug &&
+      JSON.stringify(prune(current.published)) === JSON.stringify(data)
     return this.write(current.id, version, user, {
-      draft: data,
+      draft: same ? null : data,
       enComplete: isEnComplete(type.fields, data),
     })
   }
@@ -504,8 +512,13 @@ export class EntriesService {
         } catch (err) {
           // Une entrée en erreur ne bloque pas les autres : elle est marquée en échec, et la tâche
           // ne la reprendra pas à la minute suivante.
-          if (!isUniqueViolation(err)) this.logger.error(err)
-          await end(outcome('failed', isUniqueViolation(err) ? SLUG_TAKEN : 'erreur interne'))
+          if (!isUniqueViolation(err, SLUG_CONSTRAINT)) this.logger.error(err)
+          await end(
+            outcome(
+              'failed',
+              isUniqueViolation(err, SLUG_CONSTRAINT) ? SLUG_TAKEN : 'erreur interne',
+            ),
+          )
         }
       }
       return published
@@ -573,9 +586,22 @@ export class EntriesService {
     } catch (err) {
       // Publier ou dépublier met en ligne l'identifiant en attente : une autre entrée a pu le
       // prendre entre-temps.
-      if (isUniqueViolation(err)) throw new BadRequestException(SLUG_TAKEN)
+      if (isUniqueViolation(err, SLUG_CONSTRAINT)) throw new BadRequestException(SLUG_TAKEN)
       throw err
     }
+  }
+
+  /** Une version, élaguée selon les champs actuels du type : on voit ce que la restauration
+   *  remettrait, même si un champ a changé depuis. */
+  private async versionOf(type: ContentType, id: EntryRef, number: number) {
+    const [row] = await this.db
+      .select({ ...versionColumns, data: entryVersions.data })
+      .from(entryVersions)
+      .innerJoin(entries, eq(entries.id, entryVersions.entryId))
+      .leftJoin(users, eq(users.id, entryVersions.publishedBy))
+      .where(and(this.byId(type, id), eq(entryVersions.number, number)))
+    if (!row) throw new NotFoundException('Version introuvable')
+    return { ...row, data: entryPruner(type.fields)(row.data) }
   }
 
   /** `single` désigne l'entrée d'une page unique, la seule de son type. */

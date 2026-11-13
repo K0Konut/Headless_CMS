@@ -64,6 +64,9 @@ const base = computed(
 const isCollection = computed(() => props.type.kind === 'collection')
 
 const entry = ref<Entry | null>(null)
+// Historique (V4) : panneau ouvert, et version affichée en lecture seule (null : on édite).
+const historyOpen = ref(false)
+const viewing = ref<(EntryVersion & { data: EntryData }) | null>(null)
 const loadError = ref('')
 const data = ref<EntryData>({})
 const slug = ref('')
@@ -92,6 +95,10 @@ let inFlight: Promise<void> | null = null
 async function load() {
   loading = true
   loadError.value = ''
+  // Une autre entrée (même composant pour toutes les pages uniques) : sa version ouverte n'a plus
+  // de sens.
+  viewing.value = null
+  historyOpen.value = false
   clearTimeout(timer)
   try {
     apply(await api<Entry>(base.value))
@@ -345,14 +352,11 @@ onBeforeRouteUpdate(confirmLeave)
 
 /** Programmée : la version est figée, les champs sont en lecture seule. */
 const scheduled = computed(() => !!entry.value?.scheduledAt)
+provide(READONLY_KEY, scheduled)
 const panelOpen = ref(false)
 
 // ── Historique (V4, document UX « Historique, dans l'éditeur ») ────────────────────────────
 
-const historyOpen = ref(false)
-/** Version ouverte en lecture seule ; null : on édite l'entrée. */
-const viewing = ref<(EntryVersion & { data: EntryData }) | null>(null)
-provide(READONLY_KEY, scheduled)
 /** Après une restauration, l'annonce reste visible (document UX). */
 const showRestored = ref(false)
 
@@ -376,11 +380,13 @@ async function restoreVersion() {
   ) {
     return
   }
-  const done = `Version ${number} restaurée dans le brouillon. Relisez-la, puis publiez.`
-  if (await act(`versions/${number}/restore`, done)) {
-    viewing.value = null
-    showRestored.value = true
-  }
+  if (!(await act(`versions/${number}/restore`, ''))) return
+  viewing.value = null
+  showRestored.value = true
+  // La version en ligne, restaurée telle quelle : l'API ne garde pas de brouillon.
+  announcement.value = entry.value?.draft
+    ? `Version ${number} restaurée dans le brouillon. Relisez-la, puis publiez.`
+    : `Version ${number} restaurée : c’est déjà la version en ligne, rien à publier.`
 }
 async function scheduleAt(at: string) {
   if (!(await readyToPublish('Programmer'))) {
@@ -529,7 +535,7 @@ onBeforeUnmount(() => {
           ><template v-else-if="viewing.publishedBy"> par {{ viewing.publishedBy }}</template
           >. Lecture seule.
         </p>
-        <Button size="sm" :disabled="busy" @click="restoreVersion">
+        <Button v-if="!scheduled" size="sm" :disabled="busy" @click="restoreVersion">
           Restaurer cette version
         </Button>
         <Button size="sm" variant="outline" :disabled="busy" @click="viewing = null">
