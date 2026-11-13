@@ -268,7 +268,8 @@ export const featuringSchema = z.object({
 export type Featuring = z.infer<typeof featuringSchema>
 
 const contentTypeSchema = z.object({
-  slug: slugSchema,
+  // `/espaces/:espace/contenu/corbeille` est la corbeille (V4).
+  slug: slugSchema.refine((slug) => slug !== 'corbeille', 'Ce slug est réservé'),
   kind: z.enum(['collection', 'single']),
   name: label,
   // « un projet » : seulement pour une collection, dans « Ajouter un projet ».
