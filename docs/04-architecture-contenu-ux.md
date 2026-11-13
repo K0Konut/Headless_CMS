@@ -401,6 +401,7 @@ Publier, publier des modifications, dépublier ou supprimer une entrée publiée
 | Oui / non | Interrupteur | Valeur par défaut |
 | Image | Glisser-déposer ou « Parcourir », aperçu, textes alternatifs FR et EN obligatoires, « Remplacer » et « Retirer ». JPEG, PNG ou WebP, 10 Mo au plus | — |
 | Fichier PDF | « Parcourir », nom, taille et date du fichier, « Remplacer » (après confirmation, sans historique) et « Télécharger ». 10 Mo au plus | — |
+| Relation (V4) | Les entrées choisies, en étiquettes (titre, et « Brouillon » si elle n'est pas en ligne) ; « Ajouter » ouvre une liste avec recherche des entrées de la collection cible ; ↑ ↓ et × pour réordonner et retirer. Voir « V4 : relations, tags et catégories » | La collection cible (figée) ; une seule entrée ou plusieurs |
 | Groupe répétable | Cartes numérotées, repliées à l'ouverture de l'entrée ; l'en-tête montre le numéro et le premier texte court (« Contraintes 1 · Budget. ») et déplie la carte au clic. Un élément ajouté, ou qui a une erreur de publication, s'ouvre. « Ajouter », ↑ ↓ et suppression | Les sous-champs (tous les types sauf un autre groupe) ; nombre minimal et maximal d'éléments (facultatifs) |
 
 Tous les champs se règlent aussi en **obligatoire ou facultatif**, et en **traduisible ou non** (sauf le groupe : ce sont ses sous-champs qui sont traduisibles). Dans un groupe, les éléments sont les mêmes en FR et en EN : on ajoute une contrainte une fois, puis on remplit ses deux langues.
@@ -808,6 +809,70 @@ Les entrées sont supprimées définitivement 30 jours après leur mise à la co
 | Corbeille vide | « La corbeille est vide. » ; le lien disparaît de Contenu |
 | Restauration impossible (type supprimé entre-temps) | Pas de cas : supprimer un type supprime aussi ses entrées dans la corbeille |
 
+## V4 : relations, tags et catégories
+
+PRD, « Relations, tags et catégories ». Le champ **Relation** relie une entrée à une ou plusieurs entrées d'une autre collection du même espace. Les tags et les catégories ne sont pas un système à part : une collection « Catégories » (un champ titre suffit), et un champ Relation dans Projets.
+
+### Principes
+
+- **On relie ce qui existe.** Pas de création à la volée depuis l'éditeur : une nouvelle catégorie se crée dans sa collection, puis se choisit.
+- **Le site ne voit que ce qui est en ligne.** On peut relier un brouillon ; il apparaît sur le site quand il est publié. Une entrée liée masquée en anglais (EN incomplet) est omise en anglais.
+- **Le site reçoit l'identifiant et le titre** de chaque entrée liée, dans la langue demandée, dans l'ordre choisi : de quoi afficher un tag ou faire un lien vers un projet lié.
+- **Pas de lien cassé.** Une entrée liée qui part dans la corbeille disparaît du site, et revient si on la restaure ; supprimée pour de bon, elle disparaît des entrées qui la citaient.
+
+### Dans Structure
+
+Le champ « Relation » rejoint la grille d'ajout d'un champ (icône `waypoints`).
+
+```
+Relation · Catégories
+Collection cible    [Catégories ▾]          (figée après la création du champ)
+Entrées             (•) Plusieurs  ( ) Une seule
+☐ Obligatoire
+```
+
+- **Collection cible** : une collection de l'espace, y compris celle du type lui-même (« Projets liés » dans Projets). Une page unique ne peut pas être une cible.
+- **Pas de réglage « traduisible »** : la relation est la même en français et en anglais, seuls les titres changent.
+- **Pas dans un groupe répétable** : le champ Relation se place au premier niveau d'un type.
+- **Supprimer une collection ciblée est refusé** : « Ce type est utilisé par le champ « Catégories » de Projets. Supprimez ou modifiez ce champ d'abord. »
+
+### Dans l'éditeur
+
+```
+Catégories          [Développement web ×] [API ×] [Mobile · Brouillon ×]   ↑ ↓
+                    [+ Ajouter]
+                      ┌ Rechercher une catégorie… ────┐
+                      │ Design                        │
+                      │ DevOps                        │
+                      │ Data · Brouillon              │
+                      └───────────────────────────────┘
+```
+
+- **Plusieurs** : les entrées choisies en étiquettes, dans l'ordre ; « Ajouter » ouvre une liste avec recherche sur le titre, qui exclut les entrées déjà choisies et l'entrée elle-même. Les étiquettes se réordonnent avec ↑ ↓ (pas seulement au glisser-déposer) et se retirent avec ×.
+- **Une seule** : une liste avec recherche, et « Aucune » pour retirer.
+- Une entrée liée en brouillon porte la pastille « Brouillon » ; sous le champ : « Les entrées en brouillon n'apparaissent pas sur le site. »
+- Une entrée liée dans la corbeille reste affichée, grisée, avec « Dans la corbeille » ; on peut la retirer.
+- **Obligatoire** : au moins une entrée pour publier (une entrée liée en brouillon compte).
+- Une même entrée ne peut pas être choisie deux fois.
+- Le champ n'est pas en deux colonnes FR / EN : il occupe toute la largeur, une seule fois, comme un champ non traduisible.
+
+| État | Affichage |
+| --- | --- |
+| Collection cible vide | « Aucune entrée dans Catégories. » et le lien « Ajouter dans Catégories » (nouvel onglet) |
+| Recherche sans résultat | « Aucune catégorie ne correspond » |
+| Chargement de la liste | « Chargement… » dans la liste |
+
+### Supprimer une entrée liée ailleurs
+
+« Supprimer » n'a pas de confirmation (V4, corbeille), **sauf si l'entrée est citée** par d'autres :
+
+```
+« Développement web » est relié à 3 entrées (Projets › Dashility, Projets › Ce portfolio…).
+Il disparaîtra de ces entrées sur le site. Mettre à la corbeille ?
+```
+
+La relation est gardée tant que l'entrée est dans la corbeille : la restaurer la remet en place. La purge à 30 jours, ou une suppression définitive, la retire des entrées qui la citaient.
+
 ## Parcours utilisateurs
 
 ### 1. Toi, premier lancement : brancher le portfolio (V1)
@@ -884,6 +949,10 @@ Il supprime « Jeu de plateau » depuis l'éditeur. La notification propose « A
 ### 12. Toi : revenir au texte d'hier (V4)
 
 Tu as réécrit l'accroche de « Ce portfolio » et publié, puis tu préfères l'ancienne. Dans l'éditeur, « Historique », version 3, « Restaurer cette version » : l'ancienne accroche revient dans le brouillon, tu publies.
+
+### 13. Toi : classer tes projets par catégorie (V4)
+
+Dans Structure, tu crées une collection « Catégories » avec un champ titre, puis tu ajoutes à Projets un champ Relation « Catégories » vers elle. Dans Contenu › Catégories, tu crées et publies « Développement web », « API » et « Mobile ». Dans chaque projet, « Ajouter » dans le champ Catégories ; tu publies. Le site reçoit, pour chaque projet, `[{ slug: 'web', title: 'Développement web' }, …]` et affiche les tags.
 
 ## Questions reportées
 

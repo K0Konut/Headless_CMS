@@ -76,6 +76,7 @@ Lucide, déjà utilisé. 16 px, trait de 2 px, couleur du texte secondaire.
 | Oui / non | `toggle-right` |
 | Image | `image` |
 | Fichier PDF | `file-type` |
+| Relation (V4) | `waypoints` |
 | Groupe répétable | `rows-3` |
 
 ## Surfaces et densité
