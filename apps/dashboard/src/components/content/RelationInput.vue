@@ -37,25 +37,36 @@ const targetName = computed(
 const ids = computed<string[]>(() => (Array.isArray(value.value) ? value.value : []))
 const entries = ref<EntrySummary[] | null>(null)
 /** Entrées choisies qui sont dans la corbeille : affichées grisées. */
-const trashed = ref<TrashedEntry[]>([])
+const trashed = ref<TrashedEntry[] | null>(null)
 const loadError = ref('')
 
 watch(
   () => [space.value, props.field.target],
   async () => {
     loadError.value = ''
+    trashed.value = null
     try {
       const url = `/spaces/${encodeURIComponent(space.value)}/types/${encodeURIComponent(props.field.target)}/entries`
       entries.value = await api<EntrySummary[]>(url)
-      // Un identifiant absent de la liste est peut-être dans la corbeille ; introuvable, il
-      // n'est pas affiché et part à la prochaine sauvegarde (architecture, « Lecture tolérante »).
-      if (ids.value.some((id) => !entries.value!.some((e) => e.id === id))) {
-        trashed.value = await api<TrashedEntry[]>(
-          `/spaces/${encodeURIComponent(space.value)}/trash`,
-        )
-      }
     } catch {
       loadError.value = `Les entrées de ${targetName.value} n’ont pas pu être chargées.`
+    }
+  },
+  { immediate: true },
+)
+
+// Un identifiant absent de la liste est peut-être dans la corbeille, y compris après un
+// changement de valeur (version restaurée) ; introuvable, il n'est pas affiché et part à la
+// prochaine sauvegarde (architecture, « Lecture tolérante »). La corbeille est lue une fois.
+watch(
+  () => entries.value && ids.value.some((id) => !entries.value!.some((e) => e.id === id)),
+  async (missing) => {
+    if (!missing || trashed.value) return
+    trashed.value = []
+    try {
+      trashed.value = await api<TrashedEntry[]>(`/spaces/${encodeURIComponent(space.value)}/trash`)
+    } catch {
+      // Sans la corbeille, ces identifiants restent simplement non affichés.
     }
   },
   { immediate: true },
@@ -65,7 +76,7 @@ const chosen = computed(() =>
   ids.value.flatMap((id) => {
     const entry = entries.value?.find((e) => e.id === id)
     if (entry) return [{ id, title: name(entry), draft: entry.status === 'draft', inTrash: false }]
-    const gone = trashed.value.find((e) => e.id === id)
+    const gone = trashed.value?.find((e) => e.id === id)
     return gone ? [{ id, title: name(gone), draft: false, inTrash: true }] : []
   }),
 )
@@ -130,7 +141,7 @@ function move(index: number, delta: -1 | 1) {
       >
     </p>
     <ComboboxRoot
-      v-else-if="field.multiple || !ids.length"
+      v-else-if="field.multiple || !chosen.length"
       :model-value="null"
       open-on-click
       open-on-focus

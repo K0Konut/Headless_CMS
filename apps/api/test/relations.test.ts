@@ -141,18 +141,24 @@ describe('champ Relation', () => {
     expect(en.body.fields.categories).toEqual([{ slug: 'web', title: 'Web development' }])
   })
 
-  it('une seule entrée : un objet ou null', async () => {
-    await api('put', '/spaces/portfolio/types/projets')
-      .send({ ...PROJECTS, fields: [title, { ...cats, multiple: false }] })
-      .expect(200)
+  it('une seule entrée : un objet ou null, et plus de retour à « une seule »', async () => {
+    const one = { ...cats, key: 'principale', multiple: false }
+    await api('post', '/spaces/portfolio/types')
+      .send({ slug: 'vedettes', ...PROJECTS, fields: [title, one] })
+      .expect(201)
     const web = await entry('categories', { titre: { fr: 'Web' } }, 'web')
-    await entry('projets', { titre: { fr: 'Avec' }, categories: [web] }, 'avec')
-    await entry('projets', { titre: { fr: 'Sans' } }, 'sans')
-    expect((await read('/content/projets/avec').expect(200)).body.fields.categories).toEqual({
+    await entry('vedettes', { titre: { fr: 'Avec' }, principale: [web] }, 'avec')
+    await entry('vedettes', { titre: { fr: 'Sans' } }, 'sans')
+    expect((await read('/content/vedettes/avec').expect(200)).body.fields.principale).toEqual({
       slug: 'web',
       title: 'Web',
     })
-    expect((await read('/content/projets/sans').expect(200)).body.fields.categories).toBeNull()
+    expect((await read('/content/vedettes/sans').expect(200)).body.fields.principale).toBeNull()
+
+    // « Plusieurs » vers « Une seule » effacerait les entrées qui en citent plusieurs.
+    const narrowed = { ...PROJECTS, fields: [title, { ...cats, multiple: false }] }
+    const res = await api('put', '/spaces/portfolio/types/projets').send(narrowed).expect(400)
+    expect(res.body.error.message).toMatch(/plus passer à une seule/)
   })
 
   it('liste les entrées qui en citent une, et protège la collection ciblée', async () => {

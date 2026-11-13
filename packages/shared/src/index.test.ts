@@ -236,8 +236,9 @@ describe('types de contenu', () => {
     const before = fieldSchema.array().parse([relation])
     const after = fieldSchema.array().parse([{ ...relation, target: 'tags', multiple: false }])
     expect(frozenFieldChange(before, after)).toMatch(/collection cible du champ « cats »/)
-    const same = fieldSchema.array().parse([{ ...relation, multiple: false }])
-    expect(frozenFieldChange(before, same)).toBeNull()
+    const single = fieldSchema.array().parse([{ ...relation, multiple: false }])
+    expect(frozenFieldChange(before, single)).toMatch(/plus passer à une seule/)
+    expect(frozenFieldChange(single, before)).toBeNull()
   })
 })
 

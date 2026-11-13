@@ -216,6 +216,7 @@ function setChoiceLabel(choice: { key: string; fr: string; en: string }, fr: str
             type="radio"
             :value="false"
             class="size-4 accent-primary"
+            :disabled="saved?.type === 'relation' && saved.multiple"
           />
           Une seule
         </label>

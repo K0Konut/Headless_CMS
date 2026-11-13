@@ -173,21 +173,24 @@ export class PublicApiService {
     spaceId: string,
   ) {
     const ids = [...new Set(rows.flatMap((r) => mediaRefs(fields, r.data).map((m) => m.id)))]
-    const found = ids.length
-      ? await this.db
-          .select({
-            id: media.id,
-            kind: media.kind,
-            width: media.width,
-            height: media.height,
-            bytes: media.bytes,
-          })
-          .from(media)
-          .where(and(eq(media.spaceId, spaceId), inArray(media.id, ids)))
-      : []
-    const mediaInfo = new Map<string, MediaInfo>(found.map(({ id, ...info }) => [id, info]))
     const refs = rows.flatMap((r) => relationRefs(fields, r.data))
-    const relations = await this.relations(refs, locale, spaceId)
+    // Médias et entrées liées : deux lectures indépendantes, en parallèle.
+    const [found, relations] = await Promise.all([
+      ids.length
+        ? this.db
+            .select({
+              id: media.id,
+              kind: media.kind,
+              width: media.width,
+              height: media.height,
+              bytes: media.bytes,
+            })
+            .from(media)
+            .where(and(eq(media.spaceId, spaceId), inArray(media.id, ids)))
+        : [],
+      this.relations(refs, locale, spaceId),
+    ])
+    const mediaInfo = new Map<string, MediaInfo>(found.map(({ id, ...info }) => [id, info]))
     return rows.map((row) => ({
       ...(row.slug !== null && { slug: row.slug }),
       publishedAt: row.publishedAt,
@@ -214,7 +217,14 @@ export class PublicApiService {
     return new Map(
       found
         .filter((e) => shownIn(locale, e.fields, e.published!))
-        .map((e) => [e.id, { slug: e.slug, title: entryTitle(e.fields, e.published!, locale) }]),
+        .map((e) => [
+          e.id,
+          // Un titre anglais facultatif et vide : le titre français plutôt qu'une étiquette vide.
+          {
+            slug: e.slug,
+            title: entryTitle(e.fields, e.published!, locale) || entryTitle(e.fields, e.published!),
+          },
+        ]),
     )
   }
 }

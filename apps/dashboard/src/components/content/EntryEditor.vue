@@ -320,7 +320,8 @@ async function confirmCitations() {
   )
 }
 
-/** « Supprimer » met à la corbeille, sans confirmation : la liste propose « Annuler » (V4). */
+/** « Supprimer » met à la corbeille : la liste propose « Annuler » (V4). Pas de confirmation,
+ *  sauf si l'entrée est citée par un champ Relation (`confirmCitations`). */
 async function remove() {
   // La saisie en cours part avec l'entrée : restaurée, elle revient complète.
   if (!(await saveFirst())) return

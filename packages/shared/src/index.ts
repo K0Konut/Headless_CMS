@@ -355,8 +355,14 @@ export function frozenFieldChange(before: Field[], after: Field[]): string | nul
       const inner = frozenFieldChange(old.fields, next.fields)
       if (inner) return inner
     }
-    if (old.type === 'relation' && next.type === 'relation' && next.target !== old.target) {
-      return `La collection cible du champ « ${old.key} » ne peut plus changer`
+    if (old.type === 'relation' && next.type === 'relation') {
+      if (next.target !== old.target) {
+        return `La collection cible du champ « ${old.key} » ne peut plus changer`
+      }
+      // Les entrées qui en citent plusieurs perdraient leur valeur ; l'inverse ne retire rien.
+      if (old.multiple && !next.multiple) {
+        return `Le champ « ${old.key} » accepte déjà plusieurs entrées : il ne peut plus passer à une seule`
+      }
     }
   }
   return null

@@ -510,11 +510,10 @@ export class EntriesService {
     await this.keepValidRelations(space, type.fields, data, current.id)
     // La version en ligne, restaurée sans autre modification en attente : rien à publier, le
     // brouillon est simplement retiré. L'identifiant d'URL n'est jamais touché.
-    const prune = entryPruner(type.fields)
-    const same =
-      !!current.published &&
-      !current.draftSlug &&
-      JSON.stringify(prune(current.published)) === JSON.stringify(data)
+    // Comparée telle que la restauration l'écrirait : élaguée et sans entrée liée disparue.
+    const online = current.published && entryPruner(type.fields)(current.published)
+    if (online) await this.keepValidRelations(space, type.fields, online, current.id)
+    const same = !!online && !current.draftSlug && JSON.stringify(online) === JSON.stringify(data)
     return this.write(current.id, version, user, {
       draft: same ? null : data,
       enComplete: isEnComplete(type.fields, data),
@@ -670,31 +669,31 @@ export class EntriesService {
       })
       .from(contentTypes)
       .where(eq(contentTypes.spaceId, space.id))
-    const citing = []
-    for (const type of types) {
-      const keys = relationFieldsTargeting(type.fields, typeSlug).map((f) => f.key)
-      if (!keys.length) continue
-      const cites = (column: typeof entries.published | typeof entries.draft) =>
-        keys.map((key) => sql`jsonb_exists(${column} -> ${key}, ${entry.id})`)
-      const rows = await this.db
-        .select({ id: entries.id, published: entries.published, draft: entries.draft })
-        .from(entries)
-        .where(
-          and(
-            eq(entries.typeId, type.id),
-            alive(),
-            or(...cites(entries.published), ...cites(entries.draft)),
-          ),
-        )
-      citing.push(
-        ...rows.map((row) => ({
+    // Une lecture par type qui cite cette collection, en parallèle.
+    const citing = await Promise.all(
+      types.map(async (type) => {
+        const keys = relationFieldsTargeting(type.fields, typeSlug).map((f) => f.key)
+        if (!keys.length) return []
+        const cites = (column: typeof entries.published | typeof entries.draft) =>
+          keys.map((key) => sql`jsonb_exists(${column} -> ${key}, ${entry.id})`)
+        const rows = await this.db
+          .select({ id: entries.id, published: entries.published, draft: entries.draft })
+          .from(entries)
+          .where(
+            and(
+              eq(entries.typeId, type.id),
+              alive(),
+              or(...cites(entries.published), ...cites(entries.draft)),
+            ),
+          )
+        return rows.map((row) => ({
           type: { slug: type.slug, name: type.name },
           id: row.id,
           title: entryTitle(type.fields, row.draft ?? row.published ?? {}),
-        })),
-      )
-    }
-    return citing
+        }))
+      }),
+    )
+    return citing.flat()
   }
 
   /** Contrôles de « Publier » ; renvoie le changement à écrire, ou lève l'erreur à afficher. */
