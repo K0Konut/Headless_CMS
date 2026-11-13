@@ -649,6 +649,59 @@ Mêmes règles que la V2 : session, `SpaceAccessGuard`, 404 pour un espace inacc
 - **Corbeille** : une page `TrashPage`, route `espaces/:espace/contenu/corbeille`, déclarée **avant** `contenu/:type` dans le routeur. `corbeille` devient un identifiant de type réservé (`contentTypeSchema`, comme `nouveau` pour les espaces). L'écran Contenu lit `GET /trash` pour afficher le lien « Corbeille (n) ».
 - **« Annuler » après une suppression** : pas de bibliothèque de notifications ; un bandeau `role="status"` en haut de la liste des entrées, avec le titre et le bouton « Annuler », jusqu'à la prochaine navigation.
 
+## V4 : relations, tags et catégories
+
+S'appuie sur le PRD (« Relations, tags et catégories »), le document UX (« V4 : relations, tags et catégories ») et les décisions du 13 novembre 2026.
+
+### Définition et valeur
+
+Un troisième genre de champ dans `packages/shared`, à côté des champs simples et du groupe : il n'entre donc pas dans un groupe, sans règle de plus.
+
+```ts
+type RelationField = {
+  key: string; label: string; required: boolean
+  type: 'relation'
+  translatable: false   // refusé à true, comme pour une image d'un autre type
+  target: string        // identifiant (slug, figé) d'une collection du même espace
+  multiple: boolean
+}
+```
+
+- **Valeur** : un tableau d'identifiants d'entrées (`string[]`, UUID), dans l'ordre choisi, sans doublon ; au plus un si `multiple` est faux. Le même format pour les deux réglages : pas de cas à part dans les schémas ni dans l'éditeur.
+- **Règles partagées** : `entryDataSchema` valide le format (UUID, doublons, nombre) ; `publicationIssues` exige au moins un identifiant si le champ est obligatoire ; `entryPruner` garde la valeur ; `entryTitle` l'ignore.
+- **Ce que la base ne peut pas vérifier dans le schéma partagé**, l'API le vérifie à l'enregistrement du type (`TypesService`) : `target` désigne une collection de l'espace (la sienne comprise), et le champ, une fois créé, garde sa cible (`frozenFieldChange`, comme le type d'un champ).
+
+### Enregistrer une entrée
+
+- **Filtre plutôt que refus.** `save` ne garde, dans chaque champ Relation, que les identifiants d'entrées de la collection cible, corbeille comprise, et retire l'entrée elle-même. Un identifiant d'un autre espace ou d'une autre collection ne peut donc pas être enregistré ; un identifiant d'une entrée supprimée pour de bon disparaît à la sauvegarde suivante, sans bloquer l'éditeur. Une requête par champ Relation du type (`select id from entries where type_id = $cible and id = any($ids)`).
+- **Lecture tolérante partout ailleurs.** Une entrée supprimée pour de bon (purge à 30 jours, suppression définitive) n'est pas retirée des entrées qui la citaient, ni de l'historique : son identifiant y reste, et toutes les lectures l'ignorent. Pas de réécriture du JSON des autres entrées, pas d'ordre de purge à respecter.
+
+### API publique (`/api/v1` et aperçu)
+
+- **Format** : `[{ slug, title }]` si `multiple`, sinon `{ slug, title }` ou `null`. `title` est `entryTitle` de l'entrée liée, dans la langue demandée.
+- **Seulement les entrées en ligne** : publiées, hors corbeille (`alive`), et, en anglais, complètes en anglais (même règle que `/content`). Les autres sont omises, sans trou dans le tableau.
+- **Une requête par réponse** : `resolveData` reçoit, dans `ResolveContext`, une table `relations` (identifiant → `{ slug, title }` ou absent), construite comme celle des médias : on réunit les identifiants de toutes les entrées de la réponse, puis `select id, slug, published, type_id from entries where id = any($ids) and published is not null and deleted_at is null`, avec la définition des types cibles pour le titre.
+- L'OpenAPI décrit les deux formes.
+
+### Dashboard
+
+- **Structure** : la grille d'ajout propose « Relation » au premier niveau seulement (pas dans les sous-champs d'un groupe). Ses réglages : la collection cible (les collections de l'espace, chargées par le store `content`) et « Une seule / Plusieurs ». Pas de case « Traduisible ».
+- **Éditeur** : un composant `RelationInput`. Il lit la liste de la collection cible (`GET …/types/:cible/entries`, qui donne titre et statut) pour la recherche et les étiquettes ; un identifiant absent de cette liste est cherché dans la corbeille (`GET /trash`, déjà là) pour l'étiquette « Dans la corbeille » ; introuvable ailleurs, il n'est pas affiché et part à la prochaine sauvegarde. Combobox de reka-ui (déjà installé avec shadcn-vue), ↑ ↓ avec `MoveButtons`.
+- **« Supprimer » d'une entrée citée** : `GET …/entries/:id/citations` renvoie les entrées en vie qui la citent (`{ type, id, title }`) ; l'éditeur ne demande confirmation que si la liste n'est pas vide.
+
+### Routes
+
+| Méthode et route | Accès | Rôle |
+| --- | --- | --- |
+| `GET /spaces/:slug/types/:type/entries/:id/citations` | Membre | Entrées hors corbeille dont `published` ou `draft` cite cette entrée, par les champs Relation qui ciblent son type : `jsonb ? id` sur chaque champ |
+| `DELETE /spaces/:slug/types/:type` | Super-admin | Refusée (409, `type_targeted`) si un champ Relation d'un autre type de l'espace cible ce type ; le message nomme le champ et son type |
+
+### Tests
+
+- Partagés : format de la valeur (UUID, doublons, `multiple`), règle « obligatoire », `translatable` refusé, relation refusée dans un groupe.
+- API : cible validée et figée ; filtre à l'enregistrement (autre espace, autre collection, soi-même, entrée purgée) ; API publique (brouillon, corbeille et EN incomplet omis, titre dans la langue, forme simple et multiple) ; `citations` ; suppression d'un type ciblé refusée.
+- e2e : créer « Catégories », relier un projet, voir l'étiquette « Brouillon », publier.
+
 ## Environnements et déploiement
 
 | Environnement | Comment |
@@ -735,3 +788,9 @@ Puis la release, à la demande du propriétaire, le réglage de la collection Pr
 2. `feat/dev/corbeille` : colonnes `deleted_at` et `deleted_by`, helper `alive` sur toutes les lectures, suppression devenue mise à la corbeille, routes de la corbeille, purge à 30 jours, identifiant `corbeille` réservé, puis `TrashPage`, le lien dans Contenu et le bandeau « Annuler ».
 
 Deux branches : chacune est utilisable seule. Puis la release, à la demande du propriétaire.
+
+## Ordre de construction de la V4 (relations)
+
+1. `feat/dev/relations` : `relationFieldSchema` et les règles partagées, cible validée et figée dans `TypesService`, filtre à l'enregistrement, résolution dans l'API publique et l'aperçu, OpenAPI, route `citations`, refus de supprimer un type ciblé, puis Structure (réglages du champ), `RelationInput` dans l'éditeur et la confirmation de « Supprimer ». Une seule branche : le champ n'est utile qu'avec sa saisie.
+
+Puis la release, à la demande du propriétaire.
