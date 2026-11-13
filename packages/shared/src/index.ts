@@ -566,6 +566,10 @@ function languageValueSchema(field: Field): z.ZodType {
   }
 }
 
+/** Champs Relation d'un type qui ciblent la collection `target` (V4). */
+export const relationFieldsTargeting = (fields: Field[], target: string) =>
+  fields.filter((f): f is RelationField => f.type === 'relation' && f.target === target)
+
 /** Identifiants des entrées citées par les champs Relation (V4), qui sont tous au premier
  *  niveau. */
 export function relationRefs(fields: Field[], data: EntryData): string[] {

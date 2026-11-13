@@ -316,7 +316,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onUnload))
             v-model="form.fields"
             id-prefix="field"
             :saved="type?.fields ?? []"
-            allow-group
+            top-level
           />
           <TypePreview v-if="tab === 'preview'" :fields="form.fields" />
         </div>

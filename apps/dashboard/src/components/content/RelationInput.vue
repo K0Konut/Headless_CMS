@@ -64,18 +64,15 @@ watch(
 const chosen = computed(() =>
   ids.value.flatMap((id) => {
     const entry = entries.value?.find((e) => e.id === id)
-    if (entry)
-      return [
-        { id, title: entry.title || 'Sans titre', draft: entry.status === 'draft', inTrash: false },
-      ]
+    if (entry) return [{ id, title: name(entry), draft: entry.status === 'draft', inTrash: false }]
     const gone = trashed.value.find((e) => e.id === id)
-    return gone ? [{ id, title: gone.title || 'Sans titre', draft: false, inTrash: true }] : []
+    return gone ? [{ id, title: name(gone), draft: false, inTrash: true }] : []
   }),
 )
 const available = computed(
   () => entries.value?.filter((e) => e.id !== self.value && !ids.value.includes(e.id)) ?? [],
 )
-const canAdd = computed(() => props.field.multiple || !ids.value.length)
+const name = (entry: { title: string }) => entry.title || 'Sans titre'
 
 function add(id: unknown) {
   if (typeof id === 'string') value.value = props.field.multiple ? [...ids.value, id] : [id]
@@ -133,14 +130,14 @@ function move(index: number, delta: -1 | 1) {
       >
     </p>
     <ComboboxRoot
-      v-else-if="canAdd"
+      v-else-if="field.multiple || !ids.length"
       :model-value="null"
       open-on-click
       open-on-focus
       @update:model-value="add"
     >
       <ComboboxAnchor
-        class="flex h-9 w-full max-w-sm items-center rounded-md border bg-card px-3 text-sm focus-within:ring-2 focus-within:ring-ring"
+        class="flex h-9 w-full max-w-sm items-center rounded-md border border-input bg-card px-3 text-sm shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 has-[[aria-invalid=true]]:border-destructive has-[[aria-invalid=true]]:ring-destructive/20"
       >
         <ComboboxInput
           :id="id"
@@ -165,10 +162,10 @@ function move(index: number, delta: -1 | 1) {
               v-for="entry in available"
               :key="entry.id"
               :value="entry.id"
-              :text-value="entry.title || 'Sans titre'"
+              :text-value="name(entry)"
               class="flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none select-none data-highlighted:bg-accent"
             >
-              {{ entry.title || 'Sans titre' }}
+              {{ name(entry) }}
               <StatusPill v-if="entry.status === 'draft'" tone="draft">Brouillon</StatusPill>
             </ComboboxItem>
           </ComboboxViewport>

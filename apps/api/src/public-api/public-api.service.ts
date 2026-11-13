@@ -19,6 +19,12 @@ import type { Space } from '../spaces/guards.js'
 import { FeaturingService } from '../content/featuring.service.js'
 import { type MediaInfo, resolveData } from './resolve.js'
 
+/** Entrée en ligne pour les sites : publiée, hors corbeille. En anglais, il faut aussi que sa
+ *  version publiée soit complète en anglais (`shownIn`). */
+const online = () => and(isNotNull(entries.published), alive())
+const shownIn = (locale: Locale, fields: Field[], data: EntryData) =>
+  locale === 'fr' || isEnComplete(fields, data)
+
 /** Une entrée à résoudre : sa version en ligne pour l'API publique, sa version en cours pour un
  *  aperçu. */
 type Row = { slug: string | null; data: EntryData; publishedAt: Date | null }
@@ -150,18 +156,11 @@ export class PublicApiService {
         publishedAt: entries.publishedAt,
       })
       .from(entries)
-      .where(
-        and(
-          eq(entries.typeId, typeId),
-          isNotNull(entries.published),
-          alive(),
-          ...(slug ? [eq(entries.slug, slug)] : []),
-        ),
-      )
+      .where(and(eq(entries.typeId, typeId), online(), ...(slug ? [eq(entries.slug, slug)] : [])))
       .orderBy(desc(entries.publishedAt))
     return rows
       .map((r): Row => ({ slug: r.slug, data: r.published!, publishedAt: r.publishedAt }))
-      .filter((r) => locale === 'fr' || isEnComplete(fields, r.data))
+      .filter((r) => shownIn(locale, fields, r.data))
   }
 
   /** Valeurs résolues pour la langue ; les médias cités sont lus en une requête, les entrées
@@ -187,13 +186,8 @@ export class PublicApiService {
           .where(and(eq(media.spaceId, spaceId), inArray(media.id, ids)))
       : []
     const mediaInfo = new Map<string, MediaInfo>(found.map(({ id, ...info }) => [id, info]))
-    const relations = await this.relations(
-      rows.flatMap((r) => relationRefs(fields, r.data)),
-      {
-        locale,
-        spaceId,
-      },
-    )
+    const refs = rows.flatMap((r) => relationRefs(fields, r.data))
+    const relations = await this.relations(refs, locale, spaceId)
     return rows.map((row) => ({
       ...(row.slug !== null && { slug: row.slug }),
       publishedAt: row.publishedAt,
@@ -203,7 +197,7 @@ export class PublicApiService {
 
   /** Entrées liées en ligne (V4) : publiées, hors corbeille, de cet espace, et complètes en
    *  anglais si la langue est l'anglais (même règle que `/content`). Identifiant et titre. */
-  private async relations(ids: string[], { locale, spaceId }: { locale: Locale; spaceId: string }) {
+  private async relations(ids: string[], locale: Locale, spaceId: string) {
     const unique = [...new Set(ids)]
     const found = unique.length
       ? await this.db
@@ -215,18 +209,11 @@ export class PublicApiService {
           })
           .from(entries)
           .innerJoin(contentTypes, eq(contentTypes.id, entries.typeId))
-          .where(
-            and(
-              inArray(entries.id, unique),
-              eq(contentTypes.spaceId, spaceId),
-              isNotNull(entries.published),
-              alive(),
-            ),
-          )
+          .where(and(inArray(entries.id, unique), eq(contentTypes.spaceId, spaceId), online()))
       : []
     return new Map(
       found
-        .filter((e) => locale === 'fr' || isEnComplete(e.fields, e.published!))
+        .filter((e) => shownIn(locale, e.fields, e.published!))
         .map((e) => [e.id, { slug: e.slug, title: entryTitle(e.fields, e.published!, locale) }]),
     )
   }

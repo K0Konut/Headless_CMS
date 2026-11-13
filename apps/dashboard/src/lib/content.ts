@@ -219,3 +219,7 @@ export interface TrashedEntry {
   /** Suppression définitive prévue. */
   purgeAt: string
 }
+
+/** « Projets › Ce portfolio » : une entrée nommée avec son type, hors de sa liste. */
+export const entryLabel = (typeName: string, title: string) =>
+  `${typeName} › ${title || 'Sans titre'}`

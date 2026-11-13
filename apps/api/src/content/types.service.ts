@@ -9,6 +9,7 @@ import {
   type createContentTypeSchema,
   type Field,
   frozenFieldChange,
+  relationFieldsTargeting,
   entryPruner,
   isEnComplete,
   type updateContentTypeSchema,
@@ -148,7 +149,7 @@ export class TypesService {
       .from(contentTypes)
       .where(and(eq(contentTypes.spaceId, space.id), ne(contentTypes.slug, slug)))
     for (const other of others) {
-      const field = other.fields.find((f) => f.type === 'relation' && f.target === slug)
+      const [field] = relationFieldsTargeting(other.fields, slug)
       if (field) {
         throw new ConflictException({
           code: 'type_targeted',

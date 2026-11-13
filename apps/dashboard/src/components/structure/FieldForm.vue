@@ -177,7 +177,7 @@ function setChoiceLabel(choice: { key: string; fr: string; en: string }, fr: str
           v-model="field.fields"
           :id-prefix="id('sub')"
           :saved="saved?.type === 'group' ? saved.fields : []"
-          :allow-group="false"
+          :top-level="false"
         />
       </fieldset>
     </div>

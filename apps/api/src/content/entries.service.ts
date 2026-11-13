@@ -15,6 +15,8 @@ import {
   mediaRefs,
   publicationIssues,
   publicationMessage,
+  relationFieldsTargeting,
+  relationRefs,
   type saveEntrySchema,
   type scheduleEntrySchema,
   scheduleIssue,
@@ -274,7 +276,6 @@ export class EntriesService {
       .from(entries)
       .where(this.byId(type, id))
     if (!current) throw new NotFoundException('Entrée introuvable')
-    await this.keepValidRelations(space, type.fields, data, current.id)
     // La version programmée est figée : on annule d'abord la programmation (« Modifier l'entrée »).
     if (current.scheduledAt) {
       throw new ConflictException({
@@ -282,6 +283,7 @@ export class EntriesService {
         message: 'Cette entrée est programmée : annulez la programmation pour la modifier',
       })
     }
+    await this.keepValidRelations(space, type.fields, data, current.id)
 
     // Sur une entrée publiée, l'identifiant d'URL attend « Publier », comme le contenu : il va
     // dans `draftSlug` (null : rien en attente, l'entrée garde son adresse).
@@ -504,6 +506,8 @@ export class EntriesService {
     }
     const { data } = await this.versionOf(type, id, number)
     await this.media.checkRefs(space, mediaRefs(type.fields, data))
+    // Une entrée liée supprimée pour de bon depuis ne revient pas avec la version.
+    await this.keepValidRelations(space, type.fields, data, current.id)
     // La version en ligne, restaurée sans autre modification en attente : rien à publier, le
     // brouillon est simplement retiré. L'identifiant d'URL n'est jamais touché.
     const prune = entryPruner(type.fields)
@@ -637,23 +641,19 @@ export class EntriesService {
    *  et jamais l'entrée elle-même. Un identifiant d'un autre espace ne passe donc pas, et celui
    *  d'une entrée supprimée pour de bon part sans bloquer l'enregistrement. */
   private async keepValidRelations(space: Space, fields: Field[], data: EntryData, self: string) {
+    const ids = relationRefs(fields, data)
+    if (!ids.length) return
+    // Une seule requête pour tous les champs : chaque entrée trouvée, avec sa collection.
+    const found = await this.db
+      .select({ id: entries.id, type: contentTypes.slug })
+      .from(entries)
+      .innerJoin(contentTypes, eq(contentTypes.id, entries.typeId))
+      .where(and(eq(contentTypes.spaceId, space.id), inArray(entries.id, ids)))
     for (const field of fields) {
-      if (field.type !== 'relation') continue
-      const ids = data[field.key] as string[] | undefined
-      if (!ids?.length) continue
-      const found = await this.db
-        .select({ id: entries.id })
-        .from(entries)
-        .innerJoin(contentTypes, eq(contentTypes.id, entries.typeId))
-        .where(
-          and(
-            eq(contentTypes.spaceId, space.id),
-            eq(contentTypes.slug, field.target),
-            inArray(entries.id, ids),
-          ),
-        )
-      const valid = new Set(found.map((e) => e.id))
-      data[field.key] = ids.filter((id) => id !== self && valid.has(id))
+      if (field.type !== 'relation' || !Array.isArray(data[field.key])) continue
+      data[field.key] = (data[field.key] as string[]).filter(
+        (id) => id !== self && found.some((e) => e.id === id && e.type === field.target),
+      )
     }
   }
 
@@ -672,9 +672,7 @@ export class EntriesService {
       .where(eq(contentTypes.spaceId, space.id))
     const citing = []
     for (const type of types) {
-      const keys = type.fields.flatMap((f) =>
-        f.type === 'relation' && f.target === typeSlug ? [f.key] : [],
-      )
+      const keys = relationFieldsTargeting(type.fields, typeSlug).map((f) => f.key)
       if (!keys.length) continue
       const cites = (column: typeof entries.published | typeof entries.draft) =>
         keys.map((key) => sql`jsonb_exists(${column} -> ${key}, ${entry.id})`)

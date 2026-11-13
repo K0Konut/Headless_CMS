@@ -41,6 +41,7 @@ import {
   type ContentType,
   type Entry,
   type EntryVersion,
+  entryLabel,
   FROZEN,
   READONLY_KEY,
 } from '@/lib/content'
@@ -308,6 +309,17 @@ const unpublish = () =>
     'Entrée dépubliée : elle est de nouveau en brouillon.',
   )
 
+/** Citée par un champ Relation (V4) : elle disparaîtra de ces entrées sur le site, on demande. */
+async function confirmCitations() {
+  const citing = await api<{ type: { name: string }; title: string }[]>(`${base.value}/citations`)
+  if (!citing.length) return true
+  const names = citing.slice(0, 2).map((c) => entryLabel(c.type.name, c.title))
+  const more = citing.length > 2 ? '…' : ''
+  return window.confirm(
+    `« ${title.value || 'Sans titre'} » est relié à ${plural(citing.length, 'entrée')} (${names.join(', ')}${more}). Il disparaîtra de ces entrées sur le site. Mettre à la corbeille ?`,
+  )
+}
+
 /** « Supprimer » met à la corbeille, sans confirmation : la liste propose « Annuler » (V4). */
 async function remove() {
   // La saisie en cours part avec l'entrée : restaurée, elle revient complète.
@@ -315,16 +327,7 @@ async function remove() {
   busy.value = true
   actionError.value = ''
   try {
-    // Citée par un champ Relation (V4) : elle disparaîtra de ces entrées sur le site.
-    const citing = await api<{ type: { name: string }; title: string }[]>(`${base.value}/citations`)
-    if (citing.length) {
-      const names = citing
-        .slice(0, 2)
-        .map((c) => `${c.type.name} › ${c.title || 'Sans titre'}`)
-        .join(', ')
-      const question = `« ${title.value || 'Sans titre'} » est relié à ${plural(citing.length, 'entrée')} (${names}${citing.length > 2 ? '…' : ''}). Il disparaîtra de ces entrées sur le site. Mettre à la corbeille ?`
-      if (!window.confirm(question)) return
-    }
+    if (!(await confirmCitations())) return
     await api(base.value, { method: 'DELETE' })
     deleted = true
     content.trashed = {
