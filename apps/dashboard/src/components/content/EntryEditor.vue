@@ -49,6 +49,7 @@ import { slugify } from '@/lib/slug'
 import { useSessionStore } from '@/stores/session'
 import FieldRows from './FieldRows.vue'
 import HistoryPanel from './HistoryPanel.vue'
+import VersionView from './VersionView.vue'
 import DeployStatus from './DeployStatus.vue'
 import SchedulePanel from './SchedulePanel.vue'
 import StatusBadges from './StatusBadges.vue'
@@ -236,7 +237,7 @@ async function act(
 ) {
   busy.value = true
   actionError.value = ''
-  restored.value = ''
+  showRestored.value = false
   try {
     apply(await api<Entry>(`${base.value}/${path}`, request))
     checking.value = false
@@ -351,11 +352,9 @@ const panelOpen = ref(false)
 const historyOpen = ref(false)
 /** Version ouverte en lecture seule ; null : on édite l'entrée. */
 const viewing = ref<(EntryVersion & { data: EntryData }) | null>(null)
-/** Programmée ou version ouverte : les champs sont en lecture seule. */
-const readonly = computed(() => scheduled.value || !!viewing.value)
-provide(READONLY_KEY, readonly)
-/** Message visible après une restauration (document UX). */
-const restored = ref('')
+provide(READONLY_KEY, scheduled)
+/** Après une restauration, l'annonce reste visible (document UX). */
+const showRestored = ref(false)
 
 async function viewVersion(number: number) {
   actionError.value = ''
@@ -380,7 +379,7 @@ async function restoreVersion() {
   const done = `Version ${number} restaurée dans le brouillon. Relisez-la, puis publiez.`
   if (await act(`versions/${number}/restore`, done)) {
     viewing.value = null
-    restored.value = done
+    showRestored.value = true
   }
 }
 async function scheduleAt(at: string) {
@@ -638,7 +637,7 @@ onBeforeUnmount(() => {
           Programmer à nouveau
         </Button>
       </div>
-      <p v-if="restored" class="text-sm">{{ restored }}</p>
+      <p v-if="showRestored" class="text-sm">{{ announcement }}</p>
       <p role="status" class="sr-only">{{ announcement }}</p>
       <FormError :message="actionError" />
       <div v-if="preview.message.value || preview.fallback.value" class="grid max-w-xl gap-2">
@@ -667,7 +666,11 @@ onBeforeUnmount(() => {
     </header>
 
     <!-- Programmée : lecture seule. Le fieldset désactive tous ses contrôles ; ils restent lisibles. -->
-    <fieldset v-if="isCollection" :disabled="readonly" :class="['grid max-w-md gap-1.5', FROZEN]">
+    <fieldset
+      v-if="isCollection"
+      :disabled="scheduled || !!viewing"
+      :class="['grid max-w-md gap-1.5', FROZEN]"
+    >
       <Label for="entry-slug">Identifiant d’URL</Label>
       <Input
         id="entry-slug"
@@ -720,24 +723,24 @@ onBeforeUnmount(() => {
       <p v-if="!type.fields.length" class="text-sm text-muted-foreground">
         Ce type n’a encore aucun champ.
       </p>
-      <fieldset :disabled="readonly" :class="['min-w-0', FROZEN]">
+      <!-- Une version ouverte s'affiche à la place de la saisie, sans la modifier. -->
+      <VersionView
+        v-if="viewing"
+        :fields="type.fields"
+        :data="viewing.data"
+        :number="viewing.number"
+        :lang="lang"
+      />
+      <fieldset v-else :disabled="scheduled" :class="['min-w-0', FROZEN]">
         <legend class="sr-only">
-          {{
-            viewing
-              ? `Champs (lecture seule : version ${viewing.number})`
-              : scheduled
-                ? 'Champs (lecture seule : publication programmée)'
-                : 'Champs'
-          }}
+          {{ scheduled ? 'Champs (lecture seule : publication programmée)' : 'Champs' }}
         </legend>
-        <!-- Une version ouverte s'affiche à la place de la saisie, sans la modifier. -->
         <FieldRows
-          :model-value="viewing?.data ?? data"
+          v-model="data"
           :fields="type.fields"
           id-prefix="entry"
           :lang="lang"
           :errors="errors"
-          @update:model-value="(value: EntryData) => !viewing && (data = value)"
         />
       </fieldset>
     </section>

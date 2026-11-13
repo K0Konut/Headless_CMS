@@ -88,6 +88,14 @@ function recordVersion(tx: Tx, entryId: string, data: EntryData, by: string | nu
   })
 }
 
+/** Ce que l'API renvoie d'une version, sans son contenu. */
+const versionColumns = {
+  number: entryVersions.number,
+  publishedAt: entryVersions.publishedAt,
+  publishedBy: users.email,
+  scheduled: entryVersions.scheduled,
+}
+
 const PREVIEW_TTL_MS = 24 * 60 * 60 * 1000
 
 /** Une entrée d'une collection (identifiant validé par la route), ou celle d'une page unique. */
@@ -295,12 +303,8 @@ export class EntriesService {
     const type = await this.types.row(space, typeSlug)
     const current = await this.current(type, id, version)
     const change = this.checkPublication(type, current)
-    const entry = await this.db.transaction(async (tx) => {
-      // Publier tout de suite retire la programmation, sans message : c'est la publication voulue.
-      const written = await this.write(current.id, version, user, change, false, tx)
-      await recordVersion(tx, written.id, change.published, user.id)
-      return written
-    })
+    // Publier tout de suite retire la programmation, sans message : c'est la publication voulue.
+    const entry = await this.write(current.id, version, user, change, false)
     // Ce que le site affiche a changé : un déploiement est demandé (regroupé sur 10 s).
     this.deploy.schedule(space.id)
     return entry
@@ -353,25 +357,15 @@ export class EntriesService {
 
   /** Versions publiées (V4), la plus récente d'abord, sans leur contenu. */
   async versions(space: Space, typeSlug: string, id: EntryRef) {
-    const type = await this.types.row(space, typeSlug)
-    const [entry] = await this.db
-      .select({ id: entries.id, published: entries.published })
-      .from(entries)
-      .where(this.byId(type, id))
-    if (!entry) throw new NotFoundException('Entrée introuvable')
+    const entry = await this.get(space, typeSlug, id)
     const rows = await this.db
-      .select({
-        number: entryVersions.number,
-        publishedAt: entryVersions.publishedAt,
-        publishedBy: users.email,
-        scheduled: entryVersions.scheduled,
-      })
+      .select(versionColumns)
       .from(entryVersions)
       .leftJoin(users, eq(users.id, entryVersions.publishedBy))
       .where(eq(entryVersions.entryId, entry.id))
       .orderBy(desc(entryVersions.number))
-    // Toute écriture de `published` crée une version ou le vide (« Dépublier ») : la plus récente
-    // est en ligne tant que l'entrée est publiée.
+    // Toute publication crée une version (`write`, `publishDue`) et « Dépublier » vide `published` :
+    // la plus récente est en ligne tant que l'entrée est publiée.
     return rows.map((row, i) => ({ ...row, online: i === 0 && !!entry.published }))
   }
 
@@ -379,13 +373,7 @@ export class EntriesService {
   async version(space: Space, typeSlug: string, id: EntryRef, number: number) {
     const type = await this.types.row(space, typeSlug)
     const [row] = await this.db
-      .select({
-        number: entryVersions.number,
-        data: entryVersions.data,
-        publishedAt: entryVersions.publishedAt,
-        publishedBy: users.email,
-        scheduled: entryVersions.scheduled,
-      })
+      .select({ ...versionColumns, data: entryVersions.data })
       .from(entryVersions)
       .innerJoin(entries, eq(entries.id, entryVersions.entryId))
       .leftJoin(users, eq(users.id, entryVersions.publishedBy))
@@ -406,12 +394,9 @@ export class EntriesService {
   ) {
     const type = await this.types.row(space, typeSlug)
     const current = await this.current(type, id, version)
-    const [row] = await this.db
-      .select({ data: entryVersions.data })
-      .from(entryVersions)
-      .where(and(eq(entryVersions.entryId, current.id), eq(entryVersions.number, number)))
-    if (!row) throw new NotFoundException('Version introuvable')
-    const data = entryPruner(type.fields)(row.data)
+    const { data: saved } = await this.version(space, typeSlug, id, number)
+    // Élaguée selon les champs actuels, elle reste valide pour le type (`entryPruner`).
+    const data = entryPruner(type.fields)(saved)
     return this.write(current.id, version, user, {
       draft: data,
       enComplete: isEnComplete(type.fields, data),
@@ -566,21 +551,25 @@ export class EntriesService {
     >,
     /** Laisser le message « programmation annulée » si l'entrée était programmée. */
     notice = true,
-    db: Db | Tx = this.db,
   ) {
     try {
-      const [entry] = await db
-        .update(entries)
-        .set({
-          ...change,
-          ...nextVersion(notice),
-          updatedAt: new Date(),
-          updatedBy: user.id,
-        })
-        .where(and(eq(entries.id, id), eq(entries.version, version)))
-        .returning(entryColumns)
-      if (!entry) throw new ConflictException('Cette entrée a été modifiée ailleurs')
-      return entry
+      // Une publication laisse sa version dans l'historique, dans la même transaction : aucune
+      // publication par le dashboard ne peut l'oublier (la tâche de programmation fait de même).
+      return await this.db.transaction(async (tx) => {
+        const [entry] = await tx
+          .update(entries)
+          .set({
+            ...change,
+            ...nextVersion(notice),
+            updatedAt: new Date(),
+            updatedBy: user.id,
+          })
+          .where(and(eq(entries.id, id), eq(entries.version, version)))
+          .returning(entryColumns)
+        if (!entry) throw new ConflictException('Cette entrée a été modifiée ailleurs')
+        if (change.published) await recordVersion(tx, id, change.published, user.id)
+        return entry
+      })
     } catch (err) {
       // Publier ou dépublier met en ligne l'identifiant en attente : une autre entrée a pu le
       // prendre entre-temps.
