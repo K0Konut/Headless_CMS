@@ -168,6 +168,10 @@ export const entries = pgTable(
     scheduledAt: timestamp('scheduled_at', { withTimezone: true }),
     /** Issue de la dernière programmation, effacée à la prochaine écriture. */
     lastSchedule: jsonb('last_schedule').$type<LastSchedule>(),
+    /** Corbeille (V4) : l'entrée n'existe plus que là, 30 jours. Toutes les lectures la filtrent
+     *  (`alive`). */
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    deletedBy: uuid('deleted_by').references(() => users.id, { onDelete: 'set null' }),
   },
   (t) => [
     unique('entries_type_slug').on(t.typeId, t.slug),
@@ -176,6 +180,10 @@ export const entries = pgTable(
       .on(t.scheduledAt)
       .where(sql`${t.scheduledAt} is not null`),
     check('entries_has_data', sql`${t.published} is not null or ${t.draft} is not null`),
+    // La corbeille et sa purge ne lisent que les entrées supprimées.
+    index('entries_deleted_at_idx')
+      .on(t.deletedAt)
+      .where(sql`${t.deletedAt} is not null`),
   ],
 )
 

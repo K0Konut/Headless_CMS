@@ -196,6 +196,17 @@ describe('lecture du contenu publié', () => {
     await read('/content/projets/francais', key).expect(200)
   })
 
+  it('ne sert pas une entrée de la corbeille', async () => {
+    const id = await publish(
+      { title: { fr: 'Supprimé', en: 'Deleted' }, kind: 'perso' },
+      'supprime',
+    )
+    await api('delete', `/spaces/portfolio/types/projets/entries/${id}`, admin).expect(204)
+    const list = await read('/content/projets', key).expect(200)
+    expect(list.body).toEqual([])
+    await read('/content/projets/supprime', key).expect(404)
+  })
+
   it('renvoie les images avec leurs variantes en adresses absolues', async () => {
     const image = await sharp({
       create: { width: 1500, height: 500, channels: 3, background: '#000' },
