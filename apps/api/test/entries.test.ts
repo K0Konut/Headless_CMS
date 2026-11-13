@@ -309,6 +309,58 @@ describe('publication', () => {
     await act(entry.id, 'inconnue', entry.version).expect(404)
   })
 
+  it('garde une version par publication et en restaure une dans le brouillon', async () => {
+    const entry = await entryWith(READY)
+    const first = await act(entry.id, 'publish', entry.version).expect(200)
+    const changed = { title: { fr: 'Nouveau titre', en: 'New title' } }
+    const saved = await api('patch', `${BASE}/${entry.id}`, member)
+      .send({ version: first.body.version, data: changed })
+      .expect(200)
+    // Une sauvegarde automatique ne crée pas de version.
+    let versions = await api('get', `${BASE}/${entry.id}/versions`, member).expect(200)
+    expect(versions.body).toHaveLength(1)
+    const second = await act(entry.id, 'publish', saved.body.version).expect(200)
+
+    versions = await api('get', `${BASE}/${entry.id}/versions`, member).expect(200)
+    expect(versions.body).toMatchObject([
+      { number: 2, online: true, publishedBy: 'lea@exemple.fr', scheduled: false },
+      { number: 1, online: false },
+    ])
+    const one = await api('get', `${BASE}/${entry.id}/versions/1`, member).expect(200)
+    expect(one.body).toMatchObject({ number: 1, data: READY })
+    await api('get', `${BASE}/${entry.id}/versions/9`, member).expect(404)
+    await api('get', `${BASE}/${entry.id}/versions/abc`, member).expect(404)
+
+    // Restaurer remplace le brouillon et ne publie rien.
+    await api('post', `${BASE}/${entry.id}/versions/1/restore`, member)
+      .send({ version: second.body.version - 1 })
+      .expect(409)
+    const restored = await api('post', `${BASE}/${entry.id}/versions/1/restore`, member)
+      .send({ version: second.body.version })
+      .expect(200)
+    expect(restored.body).toMatchObject({ published: changed, draft: READY })
+
+    // Dépubliée, aucune version n'est en ligne.
+    await act(entry.id, 'unpublish', restored.body.version).expect(200)
+    versions = await api('get', `${BASE}/${entry.id}/versions`, member).expect(200)
+    expect(versions.body.map((v: { online: boolean }) => v.online)).toEqual([false, false])
+  })
+
+  it('restaure une version selon la structure actuelle du type', async () => {
+    const entry = await entryWith({ ...READY, stack: ['Vue'] })
+    const published = await act(entry.id, 'publish', entry.version).expect(200)
+    await api('put', '/spaces/portfolio/types/projets', admin)
+      .send({ ...PROJECTS, slug: undefined, fields: [title] })
+      .expect(200)
+    const current = await api('get', `${BASE}/${entry.id}`, member).expect(200)
+    expect(current.body.version).toBeGreaterThan(published.body.version)
+    const restored = await api('post', `${BASE}/${entry.id}/versions/1/restore`, member)
+      .send({ version: current.body.version })
+      .expect(200)
+    // Le champ supprimé depuis ne revient pas.
+    expect(restored.body.draft).toEqual(READY)
+  })
+
   it('supprime une entrée de collection, jamais une page unique', async () => {
     const entry = await entryWith(READY)
     await api('delete', `${BASE}/${entry.id}`, member).expect(204)

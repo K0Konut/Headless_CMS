@@ -604,7 +604,7 @@ erDiagram
 - **Pas d'identifiant d'URL dans une version** (document UX) : `data` ne contient que les valeurs des champs.
 - **Volume** : quelques Ko par version, gardées sans limite (PRD). `shortcut: aucune purge des versions ; en garder les 50 dernières par entrée si la base grossit`
 
-**Mise en route** (migration `0011_historique_corbeille`) : la table, les deux colonnes, puis une version 1 pour chaque entrée publiée, avec `data = published`, `published_at` de l'entrée et `published_by` nul : on ne sait pas qui l'a publiée. Le panneau l'affiche sans auteur.
+**Mise en route** (migration `0011_historique`) : la table, puis une version 1 pour chaque entrée publiée, avec `data = published`, `published_at` de l'entrée et `published_by` nul : on ne sait pas qui l'a publiée. Le panneau l'affiche sans auteur.
 
 ### Restaurer une version
 

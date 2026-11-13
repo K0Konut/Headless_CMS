@@ -10,6 +10,7 @@ import {
   Put,
   Req,
   NotFoundException,
+  ParseIntPipe,
   type PipeTransform,
   UseGuards,
 } from '@nestjs/common'
@@ -35,6 +36,9 @@ const singleOrUuid: PipeTransform<string, Promise<EntryRef>> = {
   transform: async (value, meta) =>
     value === 'single' ? value : ((await uuidOr404.transform(value, meta)) as string),
 }
+
+/** Numéro de version : un entier positif, sinon 404 comme une version qui n'existe pas. */
+const versionNumber = new ParseIntPipe({ errorHttpStatusCode: 404 })
 
 /** Entrées d'un type : tous les membres de l'espace les lisent et les modifient (PRD, « Rôles »).
  *  `single` désigne l'entrée d'une page unique ; sinon l'identifiant d'une entrée de collection. */
@@ -101,6 +105,39 @@ export class EntriesController {
     @Param('id', singleOrUuid) id: EntryRef,
   ) {
     return this.entries.unschedule(space, type, id)
+  }
+
+  /** Historique (V4). */
+  @Get(':id/versions')
+  versions(
+    @Req() { space }: SpaceRequest,
+    @Param('type') type: string,
+    @Param('id', singleOrUuid) id: EntryRef,
+  ) {
+    return this.entries.versions(space, type, id)
+  }
+
+  @Get(':id/versions/:number')
+  version(
+    @Req() { space }: SpaceRequest,
+    @Param('type') type: string,
+    @Param('id', singleOrUuid) id: EntryRef,
+    @Param('number', versionNumber) number: number,
+  ) {
+    return this.entries.version(space, type, id, number)
+  }
+
+  @Post(':id/versions/:number/restore')
+  @HttpCode(200)
+  restore(
+    @Req() { space, user }: SpaceRequest,
+    @Param('type') type: string,
+    @Param('id', singleOrUuid) id: EntryRef,
+    @Param('number', versionNumber) number: number,
+    @Body() body: unknown,
+  ) {
+    const { version } = entryActionSchema.parse(body)
+    return this.entries.restore(space, type, id, number, version, user)
   }
 
   /** Lien d'aperçu (V3). Déclarée avant `:id/:action`, qui la prendrait sinon. */
