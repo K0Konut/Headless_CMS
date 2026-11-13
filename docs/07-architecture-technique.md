@@ -577,6 +577,78 @@ Authorization: Bearer <clé API de l'espace>
 - Un build nocturne : `schedule` (cron, vers 4 h à Paris) dans le workflow qui lit le contenu et publie l'image, comme un `repository_dispatch`.
 - Rien ne change pour le reste du contrat : `a_la_une` reste un champ « oui / non » des projets.
 
+## V4 : historique et corbeille
+
+S'appuie sur le PRD (« V4 : filet de sécurité et organisation »), le document UX (« V4 : historique et corbeille ») et les décisions du 13 novembre 2026.
+
+### Données
+
+```mermaid
+erDiagram
+    entries ||--o{ entry_versions : publie
+    entry_versions {
+        uuid id PK
+        uuid entry_id FK "on delete cascade"
+        int number "1, 2, 3… ; unique avec entry_id"
+        jsonb data "contenu publié, comme entries.published"
+        timestamptz published_at
+        uuid published_by FK "null : publication programmée, ancien membre ou version d'origine"
+        bool scheduled "publiée par la tâche de chaque minute"
+    }
+```
+
+`entries` gagne `deleted_at` (timestamptz, null) et `deleted_by` (uuid, `on delete set null`), avec un index partiel `where deleted_at is not null` pour la corbeille et sa purge.
+
+- **Une version par publication.** `publish` et la tâche `publishDue` insèrent la version dans la **même transaction** que l'écriture de `published` : `number` = le plus grand numéro de l'entrée + 1. La ligne de l'entrée est verrouillée par l'écriture (contrôle de `version`), donc deux publications simultanées ne prennent pas le même numéro ; la contrainte unique `(entry_id, number)` le garantit en dernier recours.
+- **« En ligne »** : la version la plus récente, si `entries.published` n'est pas nul. Toute écriture de `published` passe par une publication (qui crée une version) ou par « Dépublier » (qui le vide) : pas de colonne de plus à tenir à jour. Seule exception, supprimer un champ dans Structure retire sa clé de `published` sans créer de version ; la version en ligne garde alors une valeur que le site ne voit plus, ce qui ne change rien à la restauration (voir ci-dessous).
+- **Pas d'identifiant d'URL dans une version** (document UX) : `data` ne contient que les valeurs des champs.
+- **Volume** : quelques Ko par version, gardées sans limite (PRD). `shortcut: aucune purge des versions ; en garder les 50 dernières par entrée si la base grossit`
+
+**Mise en route** (migration `0011_historique_corbeille`) : la table, les deux colonnes, puis une version 1 pour chaque entrée publiée, avec `data = published`, `published_at` de l'entrée et `published_by` nul : on ne sait pas qui l'a publiée. Le panneau l'affiche sans auteur.
+
+### Restaurer une version
+
+`POST …/versions/:number/restore` avec la `version` lue de l'entrée :
+
+1. `data` de la version passe par `entryPruner(fields)` du type **actuel** : un champ supprimé depuis, ou un choix retiré, perd sa valeur ; un champ ajouté depuis reste vide.
+2. Le résultat est écrit dans `draft` par le helper `write`, comme une sauvegarde : la version de l'entrée change, ce qui annule une programmation (V3), et `en_complete` est recalculé.
+3. Rien n'est publié, rien n'est déployé.
+
+### Corbeille
+
+- **Mettre à la corbeille** (`DELETE …/entries/:id`, qui supprimait définitivement) : `deleted_at = now()`, `deleted_by`, par `write`, donc la programmation est annulée. `published` et `draft` ne bougent pas. Si l'entrée était publiée, `DeployService.schedule` : le site la retire au prochain build.
+- **Une entrée de la corbeille n'existe plus ailleurs.** Toutes les lectures d'entrées ajoutent `isNull(entries.deletedAt)` : liste, `byId` (une entrée de la corbeille répond 404 dans l'éditeur), À traiter, compteurs des types, API publique, aperçu, mise en avant, tâche de programmation. Un helper `alive` dans `entries.service.ts` porte la condition ; un test par surface vérifie qu'une entrée de la corbeille n'y apparaît pas.
+- **L'identifiant d'URL reste réservé** : la contrainte unique `(type_id, slug)` ne change pas. Une nouvelle entrée qui le demande reçoit le code `slug_in_trash` et le message du document UX.
+- **Restaurer** (`POST /spaces/:slug/trash/:id/restore`) : `deleted_at` et `deleted_by` repassent à null, et l'entrée est dépubliée au passage, comme « Dépublier » (`draft` reçoit `draft ?? published`, `published` passe à null, l'identifiant en attente devient l'identifiant). Elle revient donc **en brouillon**, avec son historique, sans déploiement. Le « Annuler » qui suit une suppression appelle la même route : l'entrée revient elle aussi en brouillon.
+- **Purge** : une tâche quotidienne (`@Cron('15 3 * * *')`, heure de Paris) supprime les entrées dont `deleted_at` a plus de 30 jours ; leurs versions partent par la cascade. Elle passe avant la purge des médias orphelins (3 h 30), qui libère leurs fichiers le soir même.
+- **Supprimer un type** supprime ses entrées, corbeille comprise, comme aujourd'hui (cascade).
+
+### Médias
+
+- **Une image d'une ancienne version reste servie** : la purge des orphelins compte aussi les références de `entry_versions.data` (même `mediaRefs`, avec la définition actuelle du type). Une image retirée d'une entrée n'est donc effacée que quand plus aucune version ne la cite, c'est-à-dire quand l'entrée part de la corbeille. `shortcut: les images citées par une version ne sont jamais effacées tant que l'entrée existe ; à revoir avec une purge des versions`
+- `mediaRefs` lit les références avec la définition **actuelle** : une image d'un champ supprimé depuis n'est plus comptée, et son fichier peut partir. La version restaurée perd de toute façon ce champ (`entryPruner`).
+
+### Routes
+
+Mêmes règles que la V2 : session, `SpaceAccessGuard`, 404 pour un espace inaccessible, format d'erreur unique.
+
+| Méthode et route | Accès | Rôle |
+| --- | --- | --- |
+| `GET /spaces/:slug/types/:type/entries/:id/versions` | Membre | Les versions, de la plus récente à la plus ancienne : `number`, `publishedAt`, `publishedBy` (email ou null), `scheduled`, `online`. Sans `data` |
+| `GET /spaces/:slug/types/:type/entries/:id/versions/:number` | Membre | Une version, avec `data` |
+| `POST /spaces/:slug/types/:type/entries/:id/versions/:number/restore` | Membre | `{ version }` : restaure dans le brouillon ; renvoie l'entrée |
+| `DELETE /spaces/:slug/types/:type/entries/:id` | Membre | Met à la corbeille (n'efface plus) |
+| `GET /spaces/:slug/trash` | Membre | Les entrées de la corbeille : `id`, `type { slug, name }`, titre (`entryTitle`), `deletedAt`, `deletedBy` (email ou null), `purgeAt` |
+| `POST /spaces/:slug/trash/:id/restore` | Membre | Restaure en brouillon ; renvoie `{ type, id }` pour le lien « Ouvrir » |
+| `DELETE /spaces/:slug/trash/:id` | Super-admin | Suppression définitive (entrée et versions) |
+| `DELETE /spaces/:slug/trash` | Super-admin | Vide la corbeille de l'espace |
+
+### Dashboard
+
+- **Historique** : un composant `HistoryPanel` (le `Sheet` de shadcn-vue, déjà installé) ouvert depuis l'en-tête de `EntryEditor`. Une version s'affiche dans l'éditeur lui-même, avec le **mode lecture seule** de la V3 (le `fieldset` désactivé des entrées programmées) et le bandeau « Version 2 · … [Restaurer cette version] [Fermer] » à la place de l'en-tête d'actions. Pas de second rendu des champs.
+- **Corbeille** : une page `TrashPage`, route `espaces/:espace/contenu/corbeille`, déclarée **avant** `contenu/:type` dans le routeur. `corbeille` devient un identifiant de type réservé (`contentTypeSchema`, comme `nouveau` pour les espaces). L'écran Contenu lit `GET /trash` pour afficher le lien « Corbeille (n) ».
+- **« Annuler » après une suppression** : pas de bibliothèque de notifications ; un bandeau `role="status"` en haut de la liste des entrées, avec le titre et le bouton « Annuler », jusqu'à la prochaine navigation.
+
 ## Environnements et déploiement
 
 | Environnement | Comment |
@@ -656,3 +728,10 @@ Puis la release, à la demande du propriétaire, et la page d'aperçu du portfol
 1. `feat/dev/mise_en_avant` : colonne `featuring` (migration), `featuringSchema` et `featuredSelection` dans `packages/shared`, `FeaturingService`, routes `/api/v1/featured/:type` et `/spaces/:slug/analytics/featured`, OpenAPI, puis `FeaturingSettings` dans Structure et `FeaturedSection` dans Analytics. Une seule branche.
 
 Puis la release, à la demande du propriétaire, le réglage de la collection Projets dans Structure, et le portfolio dans son dépôt (lecture de la sélection, build nocturne).
+
+## Ordre de construction de la V4 (historique et corbeille)
+
+1. `feat/dev/historique` : table `entry_versions` et migration (avec la version 1 des entrées publiées), version créée par `publish` et `publishDue`, routes des versions et de la restauration, médias cités par les versions, puis `HistoryPanel` et la lecture seule d'une version dans l'éditeur.
+2. `feat/dev/corbeille` : colonnes `deleted_at` et `deleted_by`, helper `alive` sur toutes les lectures, suppression devenue mise à la corbeille, routes de la corbeille, purge à 30 jours, identifiant `corbeille` réservé, puis `TrashPage`, le lien dans Contenu et le bandeau « Annuler ».
+
+Deux branches : chacune est utilisable seule. Puis la release, à la demande du propriétaire.
