@@ -12,7 +12,7 @@ import { LinksController } from './auth/links.controller.js'
 import { LinksService } from './auth/links.service.js'
 import { SessionGuard } from './auth/session.guard.js'
 import { CollectController } from './collect/collect.controller.js'
-import { EntriesController, TodoController } from './content/entries.controller.js'
+import { EntriesController, TodoController, TrashController } from './content/entries.controller.js'
 import { EntriesService } from './content/entries.service.js'
 import { FeaturingService } from './content/featuring.service.js'
 import { TypesController } from './content/types.controller.js'
@@ -64,6 +64,7 @@ import { SpacesService } from './spaces/spaces.service.js'
     TypesController,
     EntriesController,
     TodoController,
+    TrashController,
   ],
   providers: [
     AnalyticsService,

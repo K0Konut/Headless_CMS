@@ -18,7 +18,7 @@ import type { z } from 'zod'
 import { DB } from '../db/db.module.js'
 import { isUniqueViolation } from '../db/errors.js'
 import type { Db } from '../db/index.js'
-import { contentTypes, entries } from '../db/schema.js'
+import { alive, contentTypes, entries } from '../db/schema.js'
 import { nextVersion } from './schedule.js'
 import type { Space } from '../spaces/guards.js'
 
@@ -186,7 +186,7 @@ export class TypesService {
           lastEntryUpdatedAt: sql`max(${entries.updatedAt})`.mapWith(entries.updatedAt),
         })
         .from(contentTypes)
-        .leftJoin(entries, eq(entries.typeId, contentTypes.id))
+        .leftJoin(entries, and(eq(entries.typeId, contentTypes.id), alive()))
         .where(where)
         .groupBy(contentTypes.id)
         // Deux créations simultanées peuvent partager une position : la date les départage.

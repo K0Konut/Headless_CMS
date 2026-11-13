@@ -46,6 +46,7 @@ import {
 } from '@/lib/content'
 import { formatLongDateTime, formatShortDateTime, formatTime } from '@/lib/format'
 import { slugify } from '@/lib/slug'
+import { useContentStore } from '@/stores/content'
 import { useSessionStore } from '@/stores/session'
 import FieldRows from './FieldRows.vue'
 import HistoryPanel from './HistoryPanel.vue'
@@ -56,6 +57,7 @@ import StatusBadges from './StatusBadges.vue'
 
 const props = defineProps<{ space: string; type: ContentType; entryId: string }>()
 const router = useRouter()
+const content = useContentStore()
 
 const base = computed(
   () =>
@@ -306,15 +308,21 @@ const unpublish = () =>
     'Entrée dépubliée : elle est de nouveau en brouillon.',
   )
 
+/** « Supprimer » met à la corbeille, sans confirmation : la liste propose « Annuler » (V4). */
 async function remove() {
-  const name = title.value || 'Sans titre'
-  if (!window.confirm(`Supprimer « ${name} » ? C’est définitif.`)) return
+  // La saisie en cours part avec l'entrée : restaurée, elle revient complète.
+  if (!(await saveFirst())) return
   busy.value = true
   actionError.value = ''
   try {
-    clearTimeout(timer)
     await api(base.value, { method: 'DELETE' })
     deleted = true
+    content.trashed = {
+      space: props.space,
+      type: props.type.slug,
+      id: props.entryId,
+      title: title.value || 'Sans titre',
+    }
     await router.push(`/espaces/${props.space}/contenu/${props.type.slug}`)
   } catch (err) {
     actionError.value = errorMessage(err)

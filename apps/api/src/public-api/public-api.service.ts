@@ -12,7 +12,7 @@ import { and, desc, eq, inArray, isNotNull } from 'drizzle-orm'
 import { DB } from '../db/db.module.js'
 import type { Db } from '../db/index.js'
 import { hashToken } from '../auth/tokens.js'
-import { contentTypes, entries, media, previewLinks } from '../db/schema.js'
+import { alive, contentTypes, entries, media, previewLinks } from '../db/schema.js'
 import type { Space } from '../spaces/guards.js'
 import { FeaturingService } from '../content/featuring.service.js'
 import { type MediaInfo, resolveData } from './resolve.js'
@@ -108,7 +108,8 @@ export class PublicApiService {
         spaceId: contentTypes.spaceId,
       })
       .from(previewLinks)
-      .leftJoin(entries, eq(entries.id, previewLinks.entryId))
+      // Une entrée de la corbeille n'a plus d'aperçu : « Cette entrée n'existe plus ».
+      .leftJoin(entries, and(eq(entries.id, previewLinks.entryId), alive()))
       .leftJoin(contentTypes, eq(contentTypes.id, entries.typeId))
       .where(eq(previewLinks.id, hashToken(token)))
     if (!link) {
@@ -151,6 +152,7 @@ export class PublicApiService {
         and(
           eq(entries.typeId, typeId),
           isNotNull(entries.published),
+          alive(),
           ...(slug ? [eq(entries.slug, slug)] : []),
         ),
       )

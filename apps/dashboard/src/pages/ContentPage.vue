@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { File, Library, Plus } from '@lucide/vue'
+import { File, Library, Plus, Trash2 } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import FormError from '@/components/FormError.vue'
@@ -21,6 +21,8 @@ const session = useSessionStore()
 const content = useContentStore()
 const space = computed(() => String(route.params.espace))
 
+/** Nombre d'entrées de la corbeille, pour son lien (absent si elle est vide). */
+const trashCount = ref(0)
 const todo = ref<TodoEntry[] | null>(null)
 const showAllTodo = ref(false)
 const todoError = ref('')
@@ -32,6 +34,11 @@ watch(
     todo.value = null
     todoError.value = ''
     showAllTodo.value = false
+    trashCount.value = 0
+    // La corbeille n'empêche pas l'écran : sans réponse, son lien n'apparaît pas.
+    api<{ count: number }>(`/spaces/${encodeURIComponent(space.value)}/trash/count`)
+      .then(({ count }) => request === latest && (trashCount.value = count))
+      .catch(() => {})
     try {
       const loaded = await api<TodoEntry[]>(`/spaces/${encodeURIComponent(space.value)}/todo`)
       if (request === latest) todo.value = loaded
@@ -259,5 +266,13 @@ const STRETCHED =
         </li>
       </ul>
     </section>
+
+    <RouterLink
+      v-if="trashCount"
+      :to="`/espaces/${space}/contenu/corbeille`"
+      class="inline-flex w-fit items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+    >
+      <Trash2 class="size-4" aria-hidden="true" />Corbeille ({{ trashCount }})
+    </RouterLink>
   </div>
 </template>

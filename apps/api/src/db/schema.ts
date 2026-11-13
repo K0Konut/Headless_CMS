@@ -1,5 +1,5 @@
 import type { EntryData, Featuring, Field, LastSchedule } from '@dashility/shared'
-import { sql } from 'drizzle-orm'
+import { isNull, sql } from 'drizzle-orm'
 import {
   bigint,
   boolean,
@@ -168,6 +168,10 @@ export const entries = pgTable(
     scheduledAt: timestamp('scheduled_at', { withTimezone: true }),
     /** Issue de la dernière programmation, effacée à la prochaine écriture. */
     lastSchedule: jsonb('last_schedule').$type<LastSchedule>(),
+    /** Corbeille (V4) : l'entrée n'existe plus que là, 30 jours. Toutes les lectures la filtrent
+     *  (`alive`). */
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    deletedBy: uuid('deleted_by').references(() => users.id, { onDelete: 'set null' }),
   },
   (t) => [
     unique('entries_type_slug').on(t.typeId, t.slug),
@@ -176,8 +180,16 @@ export const entries = pgTable(
       .on(t.scheduledAt)
       .where(sql`${t.scheduledAt} is not null`),
     check('entries_has_data', sql`${t.published} is not null or ${t.draft} is not null`),
+    // La corbeille et sa purge ne lisent que les entrées supprimées.
+    index('entries_deleted_at_idx')
+      .on(t.deletedAt)
+      .where(sql`${t.deletedAt} is not null`),
   ],
 )
+
+/** Entrée hors de la corbeille (V4) : une entrée supprimée n'existe plus ailleurs que dans la
+ *  corbeille. Toute lecture d'entrées l'ajoute (un test par écran le vérifie). */
+export const alive = () => isNull(entries.deletedAt)
 
 /** Historique (V4) : une version par publication, ce qui est parti en ligne, pour le relire et le
  *  restaurer. La version « en ligne » est la plus récente, si l'entrée est publiée. */

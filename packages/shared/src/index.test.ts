@@ -138,6 +138,7 @@ describe('types de contenu', () => {
 
   it.each([
     ['une collection sans nom d’entrée', { entryLabel: null }],
+    ['l’identifiant réservé à la corbeille', { slug: 'corbeille' }],
     ['une page unique avec un nom d’entrée', { kind: 'single' }],
     ['deux champs avec le même identifiant', { fields: [title, { ...title, label: 'Autre' }] }],
     ['un identifiant de champ invalide', { fields: [{ ...title, key: 'Titre du projet' }] }],

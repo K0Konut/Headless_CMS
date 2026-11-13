@@ -15,6 +15,7 @@ import {
   UseGuards,
 } from '@nestjs/common'
 import { entryActionSchema, saveEntrySchema, scheduleEntrySchema } from '@dashility/shared'
+import { SuperAdminGuard } from '../auth/session.guard.js'
 import { type SpaceRequest, SpaceAccessGuard } from '../spaces/guards.js'
 import { uuidOr404 } from '../uuid-or-404.pipe.js'
 import { EntriesService, type EntryRef } from './entries.service.js'
@@ -173,13 +174,53 @@ export class EntriesController {
     }
   }
 
+  /** Met l'entrée à la corbeille (V4). */
   @Delete(':id')
   @HttpCode(204)
   remove(
-    @Req() { space }: SpaceRequest,
+    @Req() { space, user }: SpaceRequest,
     @Param('type') type: string,
     @Param('id', singleOrUuid) id: EntryRef,
   ) {
-    return this.entries.remove(space, type, id)
+    return this.entries.remove(space, type, id, user)
+  }
+}
+
+/** Corbeille d'un espace (V4) : les membres la voient et restaurent ; seul le super-admin
+ *  supprime pour de bon. */
+@Controller('spaces/:slug/trash')
+@UseGuards(SpaceAccessGuard)
+export class TrashController {
+  constructor(private readonly entries: EntriesService) {}
+
+  @Get()
+  list(@Req() { space }: SpaceRequest) {
+    return this.entries.trash(space)
+  }
+
+  /** Nombre d'entrées, pour le lien « Corbeille (n) » de l'écran Contenu. */
+  @Get('count')
+  async count(@Req() { space }: SpaceRequest) {
+    return { count: await this.entries.trashCount(space) }
+  }
+
+  @Post(':id/restore')
+  @HttpCode(200)
+  restore(@Req() { space, user }: SpaceRequest, @Param('id', uuidOr404) id: string) {
+    return this.entries.untrash(space, id, user)
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @UseGuards(SuperAdminGuard)
+  destroy(@Req() { space }: SpaceRequest, @Param('id', uuidOr404) id: string) {
+    return this.entries.destroy(space, id)
+  }
+
+  @Delete()
+  @HttpCode(204)
+  @UseGuards(SuperAdminGuard)
+  empty(@Req() { space }: SpaceRequest) {
+    return this.entries.emptyTrash(space)
   }
 }

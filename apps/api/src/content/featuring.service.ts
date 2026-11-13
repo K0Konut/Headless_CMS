@@ -13,7 +13,7 @@ import { and, asc, count, eq, inArray, isNotNull } from 'drizzle-orm'
 import { createHash } from 'node:crypto'
 import { DB } from '../db/db.module.js'
 import type { Db } from '../db/index.js'
-import { contentTypes, entries, events } from '../db/schema.js'
+import { alive, contentTypes, entries, events } from '../db/schema.js'
 import type { Space } from '../spaces/guards.js'
 
 /** Ce que le classement lit d'un type. */
@@ -43,7 +43,12 @@ export class FeaturingService {
       })
       .from(entries)
       .where(
-        and(eq(entries.typeId, type.id), isNotNull(entries.published), isNotNull(entries.slug)),
+        and(
+          eq(entries.typeId, type.id),
+          isNotNull(entries.published),
+          isNotNull(entries.slug),
+          alive(),
+        ),
       )
 
     // Chemin de page → entrée, pour chaque langue réglée.

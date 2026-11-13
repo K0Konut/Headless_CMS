@@ -8,7 +8,7 @@ import { PASSWORD, db, sessionCookie, useTestApp } from './helpers.js'
 const ctx = useTestApp()
 const server = () => ctx.app.getHttpServer()
 
-function api(method: 'get' | 'post' | 'put' | 'patch', path: string, cookie: string) {
+function api(method: 'get' | 'post' | 'put' | 'patch' | 'delete', path: string, cookie: string) {
   return request(server())[method](`/api${path}`).type('json').set('Cookie', cookie)
 }
 const read = (path: string, key: string) =>
@@ -49,6 +49,7 @@ async function publish(slug: string, { une = false, en = true } = {}) {
   await api('post', `${BASE}/${body.id}/publish`, admin)
     .send({ version: saved.body.version })
     .expect(200)
+  return body.id as string
 }
 
 /** Vues et CV sur la page d'un projet, en français ou en anglais. */
@@ -159,6 +160,14 @@ describe('sélection', () => {
     )
     const summary = await api('get', '/spaces/portfolio/analytics/featured', admin).expect(200)
     expect(summary.body[0].drawnPlaces).toBe(3)
+  })
+
+  it('ignore une entrée de la corbeille, même forcée', async () => {
+    const id = await publish('supprime', { une: true })
+    await publish('garde')
+    await api('delete', `${BASE}/${id}`, admin).expect(204)
+    const fr = await read('/featured/projets', key).expect(200)
+    expect(fr.body.map((e: { slug: string }) => e.slug)).toEqual(['garde'])
   })
 
   it('en anglais, saute une entrée incomplète', async () => {
