@@ -21,6 +21,8 @@ function previewable<F extends Field>(fields: F[]): F[] {
       return [{ ...field, choices }]
     }
     if (field.type === 'group') return [{ ...field, fields: previewable(field.fields) }]
+    // Une relation sans collection cible n'a rien à montrer.
+    if (field.type === 'relation' && !field.target) return []
     return [field]
   })
 }

@@ -5,8 +5,10 @@ import {
   type Field,
   type Locale,
   entryStatus,
+  entryTitle,
   isEnComplete,
   mediaRefs,
+  relationRefs,
 } from '@dashility/shared'
 import { and, desc, eq, inArray, isNotNull } from 'drizzle-orm'
 import { DB } from '../db/db.module.js'
@@ -16,6 +18,12 @@ import { alive, contentTypes, entries, media, previewLinks } from '../db/schema.
 import type { Space } from '../spaces/guards.js'
 import { FeaturingService } from '../content/featuring.service.js'
 import { type MediaInfo, resolveData } from './resolve.js'
+
+/** Entrée en ligne pour les sites : publiée, hors corbeille. En anglais, il faut aussi que sa
+ *  version publiée soit complète en anglais (`shownIn`). */
+const online = () => and(isNotNull(entries.published), alive())
+const shownIn = (locale: Locale, fields: Field[], data: EntryData) =>
+  locale === 'fr' || isEnComplete(fields, data)
 
 /** Une entrée à résoudre : sa version en ligne pour l'API publique, sa version en cours pour un
  *  aperçu. */
@@ -148,21 +156,15 @@ export class PublicApiService {
         publishedAt: entries.publishedAt,
       })
       .from(entries)
-      .where(
-        and(
-          eq(entries.typeId, typeId),
-          isNotNull(entries.published),
-          alive(),
-          ...(slug ? [eq(entries.slug, slug)] : []),
-        ),
-      )
+      .where(and(eq(entries.typeId, typeId), online(), ...(slug ? [eq(entries.slug, slug)] : [])))
       .orderBy(desc(entries.publishedAt))
     return rows
       .map((r): Row => ({ slug: r.slug, data: r.published!, publishedAt: r.publishedAt }))
-      .filter((r) => locale === 'fr' || isEnComplete(fields, r.data))
+      .filter((r) => shownIn(locale, fields, r.data))
   }
 
-  /** Valeurs résolues pour la langue ; les médias cités sont lus en une requête. */
+  /** Valeurs résolues pour la langue ; les médias cités sont lus en une requête, les entrées
+   *  liées par les champs Relation en une autre. */
   private async resolve(
     fields: Field[],
     rows: Row[],
@@ -171,23 +173,58 @@ export class PublicApiService {
     spaceId: string,
   ) {
     const ids = [...new Set(rows.flatMap((r) => mediaRefs(fields, r.data).map((m) => m.id)))]
-    const found = ids.length
-      ? await this.db
-          .select({
-            id: media.id,
-            kind: media.kind,
-            width: media.width,
-            height: media.height,
-            bytes: media.bytes,
-          })
-          .from(media)
-          .where(and(eq(media.spaceId, spaceId), inArray(media.id, ids)))
-      : []
+    const refs = rows.flatMap((r) => relationRefs(fields, r.data))
+    // Médias et entrées liées : deux lectures indépendantes, en parallèle.
+    const [found, relations] = await Promise.all([
+      ids.length
+        ? this.db
+            .select({
+              id: media.id,
+              kind: media.kind,
+              width: media.width,
+              height: media.height,
+              bytes: media.bytes,
+            })
+            .from(media)
+            .where(and(eq(media.spaceId, spaceId), inArray(media.id, ids)))
+        : [],
+      this.relations(refs, locale, spaceId),
+    ])
     const mediaInfo = new Map<string, MediaInfo>(found.map(({ id, ...info }) => [id, info]))
     return rows.map((row) => ({
       ...(row.slug !== null && { slug: row.slug }),
       publishedAt: row.publishedAt,
-      fields: resolveData(fields, row.data, { locale, origin, media: mediaInfo }),
+      fields: resolveData(fields, row.data, { locale, origin, media: mediaInfo, relations }),
     }))
+  }
+
+  /** Entrées liées en ligne (V4) : publiées, hors corbeille, de cet espace, et complètes en
+   *  anglais si la langue est l'anglais (même règle que `/content`). Identifiant et titre. */
+  private async relations(ids: string[], locale: Locale, spaceId: string) {
+    const unique = [...new Set(ids)]
+    const found = unique.length
+      ? await this.db
+          .select({
+            id: entries.id,
+            slug: entries.slug,
+            published: entries.published,
+            fields: contentTypes.fields,
+          })
+          .from(entries)
+          .innerJoin(contentTypes, eq(contentTypes.id, entries.typeId))
+          .where(and(inArray(entries.id, unique), eq(contentTypes.spaceId, spaceId), online()))
+      : []
+    return new Map(
+      found
+        .filter((e) => shownIn(locale, e.fields, e.published!))
+        .map((e) => [
+          e.id,
+          // Un titre anglais facultatif et vide : le titre français plutôt qu'une étiquette vide.
+          {
+            slug: e.slug,
+            title: entryTitle(e.fields, e.published!, locale) || entryTitle(e.fields, e.published!),
+          },
+        ]),
+    )
   }
 }

@@ -41,10 +41,11 @@ import {
   type ContentType,
   type Entry,
   type EntryVersion,
+  entryLabel,
   FROZEN,
   READONLY_KEY,
 } from '@/lib/content'
-import { formatLongDateTime, formatShortDateTime, formatTime } from '@/lib/format'
+import { formatLongDateTime, formatShortDateTime, formatTime, plural } from '@/lib/format'
 import { slugify } from '@/lib/slug'
 import { useContentStore } from '@/stores/content'
 import { useSessionStore } from '@/stores/session'
@@ -308,13 +309,26 @@ const unpublish = () =>
     'Entrée dépubliée : elle est de nouveau en brouillon.',
   )
 
-/** « Supprimer » met à la corbeille, sans confirmation : la liste propose « Annuler » (V4). */
+/** Citée par un champ Relation (V4) : elle disparaîtra de ces entrées sur le site, on demande. */
+async function confirmCitations() {
+  const citing = await api<{ type: { name: string }; title: string }[]>(`${base.value}/citations`)
+  if (!citing.length) return true
+  const names = citing.slice(0, 2).map((c) => entryLabel(c.type.name, c.title))
+  const more = citing.length > 2 ? '…' : ''
+  return window.confirm(
+    `« ${title.value || 'Sans titre'} » est relié à ${plural(citing.length, 'entrée')} (${names.join(', ')}${more}). Il disparaîtra de ces entrées sur le site. Mettre à la corbeille ?`,
+  )
+}
+
+/** « Supprimer » met à la corbeille : la liste propose « Annuler » (V4). Pas de confirmation,
+ *  sauf si l'entrée est citée par un champ Relation (`confirmCitations`). */
 async function remove() {
   // La saisie en cours part avec l'entrée : restaurée, elle revient complète.
   if (!(await saveFirst())) return
   busy.value = true
   actionError.value = ''
   try {
+    if (!(await confirmCitations())) return
     await api(base.value, { method: 'DELETE' })
     deleted = true
     content.trashed = {

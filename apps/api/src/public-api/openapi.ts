@@ -38,7 +38,7 @@ export const openApiDocument: OpenAPIObject = {
       '',
       'La clé se génère dans **Réglages › Intégration** (super-admin). Elle désigne l’espace : il n’apparaît pas dans l’adresse. Elle ne doit jamais être exposée dans un navigateur (pas de CORS). 120 requêtes par minute et par clé.',
       '',
-      '**Valeurs, selon le type de champ** : texte court et lien → chaîne ou `null` ; texte riche → `{ html }` (seulement `p`, `h2`, `h3`, `ul`, `ol`, `li`, `strong`, `em`, `a`, `mark`, texte échappé) ; liste de choix → `{ key, label }` ; date → `{ start, end?, ongoing? }` en `AAAA-MM` ou `AAAA-MM-JJ` ; liste de valeurs → tableau ; nombre ; oui / non → booléen (valeur par défaut si jamais touché) ; image → `{ alt, width, height, src, srcset: { webp, avif } }` ; PDF → `{ url, bytes }` ; groupe → tableau d’objets construits de la même façon. Une valeur vide vaut `null`.',
+      '**Valeurs, selon le type de champ** : texte court et lien → chaîne ou `null` ; texte riche → `{ html }` (seulement `p`, `h2`, `h3`, `ul`, `ol`, `li`, `strong`, `em`, `a`, `mark`, texte échappé) ; liste de choix → `{ key, label }` ; date → `{ start, end?, ongoing? }` en `AAAA-MM` ou `AAAA-MM-JJ` ; liste de valeurs → tableau ; nombre ; oui / non → booléen (valeur par défaut si jamais touché) ; image → `{ alt, width, height, src, srcset: { webp, avif } }` ; PDF → `{ url, bytes }` ; groupe → tableau d’objets construits de la même façon ; relation → `[{ slug, title }]` (une seule entrée : `{ slug, title }` ou `null`), seulement les entrées en ligne, titre dans la langue demandée. Une valeur vide vaut `null`.',
     ].join('\n'),
   },
   servers: [{ url: '/api/v1' }],

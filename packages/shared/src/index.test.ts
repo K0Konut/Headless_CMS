@@ -16,6 +16,7 @@ import {
   entryPruner,
   entryStatus,
   frozenFieldChange,
+  relationRefs,
   isEnComplete,
   isValidLink,
   parisDateTime,
@@ -168,6 +169,34 @@ describe('types de contenu', () => {
       },
     ],
     [
+      'une relation traduisible',
+      {
+        fields: [{ ...title, key: 'cats', type: 'relation', target: 'categories', multiple: true }],
+      },
+    ],
+    [
+      'une relation dans un groupe',
+      {
+        fields: [
+          {
+            ...title,
+            type: 'group',
+            translatable: false,
+            fields: [
+              {
+                ...title,
+                key: 'cats',
+                type: 'relation',
+                translatable: false,
+                target: 'c',
+                multiple: true,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    [
       'un groupe dont le minimum dépasse le maximum',
       {
         fields: [{ ...title, type: 'group', translatable: false, fields: [title], min: 3, max: 2 }],
@@ -192,6 +221,58 @@ describe('types de contenu', () => {
     expect(after([{ ...title, type: 'richtext' }])).toMatch(/type du champ « title »/)
     expect(after([{ ...title, translatable: false }])).toMatch(/non traduisible/)
     expect(after([{ ...group, fields: [{ ...title, translatable: false }] }])).toMatch(/« title »/)
+  })
+
+  it('fige la collection cible d’une relation', () => {
+    const relation = {
+      key: 'cats',
+      label: 'Catégories',
+      type: 'relation',
+      required: false,
+      translatable: false,
+      target: 'categories',
+      multiple: true,
+    } as const
+    const before = fieldSchema.array().parse([relation])
+    const after = fieldSchema.array().parse([{ ...relation, target: 'tags', multiple: false }])
+    expect(frozenFieldChange(before, after)).toMatch(/collection cible du champ « cats »/)
+    const single = fieldSchema.array().parse([{ ...relation, multiple: false }])
+    expect(frozenFieldChange(before, single)).toMatch(/plus passer à une seule/)
+    expect(frozenFieldChange(single, before)).toBeNull()
+  })
+})
+
+describe('relations', () => {
+  const field = (multiple: boolean) =>
+    fieldSchema.parse({
+      key: 'cats',
+      label: 'Catégories',
+      type: 'relation',
+      required: true,
+      translatable: false,
+      target: 'categories',
+      multiple,
+    })
+  const A = '11111111-1111-4111-8111-111111111111'
+  const B = '22222222-2222-4222-8222-222222222222'
+
+  it('valide une liste d’identifiants, sans doublon, une seule si besoin', () => {
+    const many = entryDataSchema([field(true)])
+    expect(many.safeParse({ cats: [A, B] }).success).toBe(true)
+    expect(many.safeParse({ cats: [A, A] }).success).toBe(false)
+    expect(many.safeParse({ cats: ['pas-un-uuid'] }).success).toBe(false)
+    const one = entryDataSchema([field(false)])
+    expect(one.safeParse({ cats: [A] }).success).toBe(true)
+    expect(one.safeParse({ cats: [A, B] }).success).toBe(false)
+  })
+
+  it('exige au moins une entrée si le champ est obligatoire, et lit les identifiants', () => {
+    const type = { kind: 'collection' as const, fields: [field(true)] }
+    expect(publicationIssues(type, { cats: [] }, 'x')).toEqual([
+      { path: 'cats', message: 'Champ obligatoire' },
+    ])
+    expect(publicationIssues(type, { cats: [A] }, 'x')).toEqual([])
+    expect(relationRefs([field(true)], { cats: [A, B] })).toEqual([A, B])
   })
 })
 

@@ -15,11 +15,14 @@ import {
   mediaRefs,
   publicationIssues,
   publicationMessage,
+  relationFieldsTargeting,
+  relationRefs,
   type saveEntrySchema,
   type scheduleEntrySchema,
   scheduleIssue,
   type LastSchedule,
   type EntryData,
+  type Field,
   previewLink,
 } from '@dashility/shared'
 import { and, desc, eq, inArray, isNotNull, lt, lte, ne, or, sql } from 'drizzle-orm'
@@ -280,6 +283,7 @@ export class EntriesService {
         message: 'Cette entrée est programmée : annulez la programmation pour la modifier',
       })
     }
+    await this.keepValidRelations(space, type.fields, data, current.id)
 
     // Sur une entrée publiée, l'identifiant d'URL attend « Publier », comme le contenu : il va
     // dans `draftSlug` (null : rien en attente, l'entrée garde son adresse).
@@ -502,13 +506,14 @@ export class EntriesService {
     }
     const { data } = await this.versionOf(type, id, number)
     await this.media.checkRefs(space, mediaRefs(type.fields, data))
+    // Une entrée liée supprimée pour de bon depuis ne revient pas avec la version.
+    await this.keepValidRelations(space, type.fields, data, current.id)
     // La version en ligne, restaurée sans autre modification en attente : rien à publier, le
     // brouillon est simplement retiré. L'identifiant d'URL n'est jamais touché.
-    const prune = entryPruner(type.fields)
-    const same =
-      !!current.published &&
-      !current.draftSlug &&
-      JSON.stringify(prune(current.published)) === JSON.stringify(data)
+    // Comparée telle que la restauration l'écrirait : élaguée et sans entrée liée disparue.
+    const online = current.published && entryPruner(type.fields)(current.published)
+    if (online) await this.keepValidRelations(space, type.fields, online, current.id)
+    const same = !!online && !current.draftSlug && JSON.stringify(online) === JSON.stringify(data)
     return this.write(current.id, version, user, {
       draft: same ? null : data,
       enComplete: isEnComplete(type.fields, data),
@@ -629,6 +634,66 @@ export class EntriesService {
     })
     // Ce que les sites affichent a changé : un build par espace (regroupé sur 10 s).
     for (const spaceId of spaces) this.deploy.schedule(spaceId)
+  }
+
+  /** Champs Relation (V4) : ne garde que les entrées de la collection cible, corbeille comprise,
+   *  et jamais l'entrée elle-même. Un identifiant d'un autre espace ne passe donc pas, et celui
+   *  d'une entrée supprimée pour de bon part sans bloquer l'enregistrement. */
+  private async keepValidRelations(space: Space, fields: Field[], data: EntryData, self: string) {
+    const ids = relationRefs(fields, data)
+    if (!ids.length) return
+    // Une seule requête pour tous les champs : chaque entrée trouvée, avec sa collection.
+    const found = await this.db
+      .select({ id: entries.id, type: contentTypes.slug })
+      .from(entries)
+      .innerJoin(contentTypes, eq(contentTypes.id, entries.typeId))
+      .where(and(eq(contentTypes.spaceId, space.id), inArray(entries.id, ids)))
+    for (const field of fields) {
+      if (field.type !== 'relation' || !Array.isArray(data[field.key])) continue
+      data[field.key] = (data[field.key] as string[]).filter(
+        (id) => id !== self && found.some((e) => e.id === id && e.type === field.target),
+      )
+    }
+  }
+
+  /** Entrées hors corbeille qui citent celle-ci par un champ Relation (V4) : « Supprimer » ne
+   *  demande confirmation que si la liste n'est pas vide. */
+  async citations(space: Space, typeSlug: string, id: EntryRef) {
+    const entry = await this.get(space, typeSlug, id)
+    const types = await this.db
+      .select({
+        id: contentTypes.id,
+        slug: contentTypes.slug,
+        name: contentTypes.name,
+        fields: contentTypes.fields,
+      })
+      .from(contentTypes)
+      .where(eq(contentTypes.spaceId, space.id))
+    // Une lecture par type qui cite cette collection, en parallèle.
+    const citing = await Promise.all(
+      types.map(async (type) => {
+        const keys = relationFieldsTargeting(type.fields, typeSlug).map((f) => f.key)
+        if (!keys.length) return []
+        const cites = (column: typeof entries.published | typeof entries.draft) =>
+          keys.map((key) => sql`jsonb_exists(${column} -> ${key}, ${entry.id})`)
+        const rows = await this.db
+          .select({ id: entries.id, published: entries.published, draft: entries.draft })
+          .from(entries)
+          .where(
+            and(
+              eq(entries.typeId, type.id),
+              alive(),
+              or(...cites(entries.published), ...cites(entries.draft)),
+            ),
+          )
+        return rows.map((row) => ({
+          type: { slug: type.slug, name: type.name },
+          id: row.id,
+          title: entryTitle(type.fields, row.draft ?? row.published ?? {}),
+        }))
+      }),
+    )
+    return citing.flat()
   }
 
   /** Contrôles de « Publier » ; renvoie le changement à écrire, ou lève l'erreur à afficher. */
