@@ -13,6 +13,7 @@ import {
   CalendarClock,
   Ellipsis,
   ExternalLink,
+  History,
   Link,
   Settings,
   Trash2,
@@ -36,11 +37,18 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError, api, errorMessage } from '@/lib/api'
-import { type ContentType, type Entry, FROZEN, READONLY_KEY } from '@/lib/content'
-import { formatLongDateTime, formatTime } from '@/lib/format'
+import {
+  type ContentType,
+  type Entry,
+  type EntryVersion,
+  FROZEN,
+  READONLY_KEY,
+} from '@/lib/content'
+import { formatLongDateTime, formatShortDateTime, formatTime } from '@/lib/format'
 import { slugify } from '@/lib/slug'
 import { useSessionStore } from '@/stores/session'
 import FieldRows from './FieldRows.vue'
+import HistoryPanel from './HistoryPanel.vue'
 import DeployStatus from './DeployStatus.vue'
 import SchedulePanel from './SchedulePanel.vue'
 import StatusBadges from './StatusBadges.vue'
@@ -219,7 +227,7 @@ async function reloadIfStale(err: unknown) {
 }
 
 async function act(
-  path: 'publish' | 'discard' | 'unpublish' | 'schedule',
+  path: 'publish' | 'discard' | 'unpublish' | 'schedule' | `versions/${number}/restore`,
   done: string,
   request: { method: 'POST' | 'PUT' | 'DELETE'; body?: object } = {
     method: 'POST',
@@ -228,6 +236,7 @@ async function act(
 ) {
   busy.value = true
   actionError.value = ''
+  restored.value = ''
   try {
     apply(await api<Entry>(`${base.value}/${path}`, request))
     checking.value = false
@@ -335,9 +344,45 @@ onBeforeRouteUpdate(confirmLeave)
 
 /** Programmée : la version est figée, les champs sont en lecture seule. */
 const scheduled = computed(() => !!entry.value?.scheduledAt)
-provide(READONLY_KEY, scheduled)
 const panelOpen = ref(false)
 
+// ── Historique (V4, document UX « Historique, dans l'éditeur ») ────────────────────────────
+
+const historyOpen = ref(false)
+/** Version ouverte en lecture seule ; null : on édite l'entrée. */
+const viewing = ref<(EntryVersion & { data: EntryData }) | null>(null)
+/** Programmée ou version ouverte : les champs sont en lecture seule. */
+const readonly = computed(() => scheduled.value || !!viewing.value)
+provide(READONLY_KEY, readonly)
+/** Message visible après une restauration (document UX). */
+const restored = ref('')
+
+async function viewVersion(number: number) {
+  actionError.value = ''
+  try {
+    viewing.value = await api(`${base.value}/versions/${number}`)
+    historyOpen.value = false
+  } catch (err) {
+    actionError.value = errorMessage(err)
+  }
+}
+
+/** Le contenu de la version remplace le brouillon ; rien n'est publié. */
+async function restoreVersion() {
+  const number = viewing.value!.number
+  if (!(await saveFirst())) return
+  if (
+    entry.value?.draft &&
+    !window.confirm('Les modifications non publiées seront remplacées. Continuer ?')
+  ) {
+    return
+  }
+  const done = `Version ${number} restaurée dans le brouillon. Relisez-la, puis publiez.`
+  if (await act(`versions/${number}/restore`, done)) {
+    viewing.value = null
+    restored.value = done
+  }
+}
 async function scheduleAt(at: string) {
   if (!(await readyToPublish('Programmer'))) {
     // Des champs à corriger : le panneau se ferme pour les laisser voir.
@@ -474,7 +519,25 @@ onBeforeUnmount(() => {
         <template v-else-if="state === 'saved'">Modifications en cours…</template>
       </p>
       <DeployStatus :space="space" :refresh-key="deployRefresh" />
-      <div class="flex flex-wrap items-center gap-2">
+      <div
+        v-if="viewing"
+        class="flex flex-wrap items-center gap-3 rounded-lg border border-primary/40 bg-primary/5 p-4 text-sm"
+      >
+        <p class="mr-auto">
+          <strong>Version {{ viewing.number }}</strong> · publiée le
+          {{ formatShortDateTime(viewing.publishedAt)
+          }}<template v-if="viewing.scheduled"> (publication programmée)</template
+          ><template v-else-if="viewing.publishedBy"> par {{ viewing.publishedBy }}</template
+          >. Lecture seule.
+        </p>
+        <Button size="sm" :disabled="busy" @click="restoreVersion">
+          Restaurer cette version
+        </Button>
+        <Button size="sm" variant="outline" :disabled="busy" @click="viewing = null">
+          Fermer
+        </Button>
+      </div>
+      <div v-else class="flex flex-wrap items-center gap-2">
         <Button v-if="previewUrl" variant="outline" :disabled="busy" @click="openPreview">
           <ExternalLink aria-hidden="true" />Prévisualiser<span class="sr-only">
             (nouvel onglet)</span
@@ -495,6 +558,14 @@ onBeforeUnmount(() => {
           @click="panelOpen = !panelOpen"
         >
           <CalendarClock aria-hidden="true" />Programmer…
+        </Button>
+        <Button
+          v-if="entry.publishedAt"
+          variant="outline"
+          :disabled="busy"
+          @click="historyOpen = true"
+        >
+          <History aria-hidden="true" />Historique
         </Button>
         <DropdownMenu v-if="hasMenu">
           <DropdownMenuTrigger as-child>
@@ -567,6 +638,7 @@ onBeforeUnmount(() => {
           Programmer à nouveau
         </Button>
       </div>
+      <p v-if="restored" class="text-sm">{{ restored }}</p>
       <p role="status" class="sr-only">{{ announcement }}</p>
       <FormError :message="actionError" />
       <div v-if="preview.message.value || preview.fallback.value" class="grid max-w-xl gap-2">
@@ -595,7 +667,7 @@ onBeforeUnmount(() => {
     </header>
 
     <!-- Programmée : lecture seule. Le fieldset désactive tous ses contrôles ; ils restent lisibles. -->
-    <fieldset v-if="isCollection" :disabled="scheduled" :class="['grid max-w-md gap-1.5', FROZEN]">
+    <fieldset v-if="isCollection" :disabled="readonly" :class="['grid max-w-md gap-1.5', FROZEN]">
       <Label for="entry-slug">Identifiant d’URL</Label>
       <Input
         id="entry-slug"
@@ -648,18 +720,32 @@ onBeforeUnmount(() => {
       <p v-if="!type.fields.length" class="text-sm text-muted-foreground">
         Ce type n’a encore aucun champ.
       </p>
-      <fieldset :disabled="scheduled" :class="['min-w-0', FROZEN]">
+      <fieldset :disabled="readonly" :class="['min-w-0', FROZEN]">
         <legend class="sr-only">
-          {{ scheduled ? 'Champs (lecture seule : publication programmée)' : 'Champs' }}
+          {{
+            viewing
+              ? `Champs (lecture seule : version ${viewing.number})`
+              : scheduled
+                ? 'Champs (lecture seule : publication programmée)'
+                : 'Champs'
+          }}
         </legend>
+        <!-- Une version ouverte s'affiche à la place de la saisie, sans la modifier. -->
         <FieldRows
-          v-model="data"
+          :model-value="viewing?.data ?? data"
           :fields="type.fields"
           id-prefix="entry"
           :lang="lang"
           :errors="errors"
+          @update:model-value="(value: EntryData) => !viewing && (data = value)"
         />
       </fieldset>
     </section>
+    <HistoryPanel
+      v-model:open="historyOpen"
+      :base="base"
+      :title="isCollection ? title || 'Sans titre' : type.name"
+      @view="viewVersion"
+    />
   </div>
 </template>

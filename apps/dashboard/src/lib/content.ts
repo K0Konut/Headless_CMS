@@ -190,3 +190,14 @@ export interface Entry {
   scheduledAt: string | null
   lastSchedule: LastSchedule | null
 }
+
+/** Une version de l'historique (V4) : une par publication. */
+export interface EntryVersion {
+  number: number
+  publishedAt: string
+  /** Email de l'auteur ; null pour une publication programmée ou d'avant l'historique. */
+  publishedBy: string | null
+  scheduled: boolean
+  /** La version que le site affiche. */
+  online: boolean
+}
