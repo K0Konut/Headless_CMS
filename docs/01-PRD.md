@@ -57,7 +57,6 @@ Le CMS gère du contenu et mesure l'audience, rien de plus. Les analytics arrive
 | Corbeille : une entrée supprimée se récupère pendant 30 jours | V4 |
 | Champ « Relation » vers les entrées d'une collection (tags, catégories, projets liés) | V4 |
 | Recherche et filtres dans les listes d'entrées | V4 |
-| Invitations et réinitialisations envoyées par email | V4 |
 
 Le CMS ne fait pas :
 
@@ -68,7 +67,7 @@ Le CMS ne fait pas :
 - les notifications ;
 - les liens tracés par candidature ;
 - des rôles différents au sein d'un même espace ;
-- d'autres emails que les invitations et les réinitialisations (V4) ; jusque-là, ces liens sont générés dans le dashboard et transmis à la main ;
+- l'envoi d'emails : les liens d'invitation et de réinitialisation sont générés dans le dashboard et transmis à la main ;
 - la double authentification (TOTP), abandonnée le 12 novembre 2026.
 
 ## Contenus et édition
@@ -213,7 +212,7 @@ Le dashboard et les sites ne parlent qu'à l'API. À chaque publication, l'API a
 
 ## V4 : filet de sécurité et organisation
 
-La V3 a rendu le CMS confortable pour moi. La V4 le rend sûr à confier à d'autres : on ne perd plus rien par erreur, le contenu s'organise, et ouvrir un espace ne demande plus de transmettre des liens à la main.
+La V3 a rendu le CMS confortable pour moi. La V4 le rend sûr à confier à d'autres : on ne perd plus rien par erreur, et le contenu s'organise.
 
 ### Historique des versions
 
@@ -236,18 +235,12 @@ La V3 a rendu le CMS confortable pour moi. La V4 le rend sûr à confier à d'au
 
 - Dans la liste d'une collection : une recherche sur le titre, et un filtre par statut (brouillon, publié, modifications non publiées, EN incomplet, programmé).
 
-### Emails
-
-- Les liens d'invitation et de réinitialisation partent par email. Ils restent affichés dans le dashboard, à copier si l'email n'arrive pas.
-- Aucun autre email : les notifications restent hors périmètre.
-- Envoi par un serveur SMTP configurable, sur une offre gratuite pour tenir le budget de 0 €.
-
 ## Sécurité, données et RGPD
 
 J'héberge le contenu de mes proches et clients et l'audience de leurs sites : je suis leur sous-traitant au sens du RGPD, et je l'accepte.
 
 - Mots de passe hachés (Argon2 ou bcrypt), sessions sécurisées ; pas de double authentification.
-- Liens d'invitation et de réinitialisation à usage unique, avec une durée de validité courte ; à partir de la V4, envoyés par email (identifiants SMTP en variables d'environnement, jamais en base). Le fournisseur d'email devient un sous-traitant : il voit les adresses des membres.
+- Liens d'invitation et de réinitialisation à usage unique, avec une durée de validité courte.
 - Chaque requête vérifie que l'utilisateur appartient à l'espace concerné ; un membre ne voit jamais les données d'un autre espace.
 - Le site lit le contenu publié avec une clé API en lecture seule, propre à son espace.
 - L'endpoint de collecte est public : limitation du débit, validation stricte des événements, filtrage des robots.
@@ -286,7 +279,7 @@ flowchart LR
     V1 -->|stats en ligne| V2["V2 · Contenu<br/>constructeur de types, saisie FR/EN, images, API, déploiement, migration"]
     V2 -->|projet ajouté sans code| V3["V3 · Confort<br/>prévisualisation, publication programmée, mise en avant"]
     V3 -->|2e espace ouvert| F(("Succès"))
-    V3 --> V4["V4 · Filet de sécurité<br/>historique, corbeille, relations, recherche, emails"]
+    V3 --> V4["V4 · Filet de sécurité<br/>historique, corbeille, relations, recherche"]
 ```
 
 Je travaille quelques heures par semaine sur le projet : chaque jalon tient en une session et se termine par une PR mergée dans `dev`. Le CMS sort après la première version du portfolio, sans échéance.
@@ -312,6 +305,5 @@ Tranchés le 4 novembre 2026 (détail dans `decisions.md`).
 - [x] Méthode allégée pour le CMS : PRD, architecture et UX, wireframes, code, sans territoire de marque ni DA.
 - [x] Projets mis en avant : tirage au build, avec un rebuild nocturne.
 - [x] Nom du CMS : **Dashility**, libre sur npm et sur GitHub au moment du choix.
-- [ ] V4 : fournisseur d'email (SMTP gratuit : Brevo, Resend, une boîte existante…), à trancher dans l'architecture technique.
-- [ ] V4 : ordre des chantiers ; proposé : historique et corbeille, puis relations, puis recherche, puis emails.
+- [x] V4 : ordre des chantiers : historique et corbeille, puis relations, puis recherche.
 - [ ] Types de contenu du portfolio autres que « Projet » (expériences, parcours, compétences, textes du site) : reportés à la phase architecture et UX.
