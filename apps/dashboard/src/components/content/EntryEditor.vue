@@ -44,7 +44,7 @@ import {
   FROZEN,
   READONLY_KEY,
 } from '@/lib/content'
-import { formatLongDateTime, formatShortDateTime, formatTime } from '@/lib/format'
+import { formatLongDateTime, formatShortDateTime, formatTime, plural } from '@/lib/format'
 import { slugify } from '@/lib/slug'
 import { useContentStore } from '@/stores/content'
 import { useSessionStore } from '@/stores/session'
@@ -315,6 +315,16 @@ async function remove() {
   busy.value = true
   actionError.value = ''
   try {
+    // Citée par un champ Relation (V4) : elle disparaîtra de ces entrées sur le site.
+    const citing = await api<{ type: { name: string }; title: string }[]>(`${base.value}/citations`)
+    if (citing.length) {
+      const names = citing
+        .slice(0, 2)
+        .map((c) => `${c.type.name} › ${c.title || 'Sans titre'}`)
+        .join(', ')
+      const question = `« ${title.value || 'Sans titre'} » est relié à ${plural(citing.length, 'entrée')} (${names}${citing.length > 2 ? '…' : ''}). Il disparaîtra de ces entrées sur le site. Mettre à la corbeille ?`
+      if (!window.confirm(question)) return
+    }
     await api(base.value, { method: 'DELETE' })
     deleted = true
     content.trashed = {
