@@ -465,6 +465,8 @@ describe('corbeille', () => {
     expect(todo.body).toEqual([])
     await api('get', `${BASE}/${entry.id}/versions`, member).expect(404)
 
+    const count = await api('get', '/spaces/portfolio/trash/count', member).expect(200)
+    expect(count.body).toEqual({ count: 1 })
     const trash = await api('get', '/spaces/portfolio/trash', member).expect(200)
     expect(trash.body).toMatchObject([
       {

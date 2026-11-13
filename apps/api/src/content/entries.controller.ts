@@ -198,6 +198,12 @@ export class TrashController {
     return this.entries.trash(space)
   }
 
+  /** Nombre d'entrées, pour le lien « Corbeille (n) » de l'écran Contenu. */
+  @Get('count')
+  async count(@Req() { space }: SpaceRequest) {
+    return { count: await this.entries.trashCount(space) }
+  }
+
   @Post(':id/restore')
   @HttpCode(200)
   restore(@Req() { space, user }: SpaceRequest, @Param('id', uuidOr404) id: string) {

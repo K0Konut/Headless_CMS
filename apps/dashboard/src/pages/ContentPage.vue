@@ -36,8 +36,8 @@ watch(
     showAllTodo.value = false
     trashCount.value = 0
     // La corbeille n'empêche pas l'écran : sans réponse, son lien n'apparaît pas.
-    api<unknown[]>(`/spaces/${encodeURIComponent(space.value)}/trash`)
-      .then((trash) => request === latest && (trashCount.value = trash.length))
+    api<{ count: number }>(`/spaces/${encodeURIComponent(space.value)}/trash/count`)
+      .then(({ count }) => request === latest && (trashCount.value = count))
       .catch(() => {})
     try {
       const loaded = await api<TodoEntry[]>(`/spaces/${encodeURIComponent(space.value)}/todo`)

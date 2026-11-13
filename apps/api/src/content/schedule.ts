@@ -1,4 +1,4 @@
-import { isNull, sql } from 'drizzle-orm'
+import { sql } from 'drizzle-orm'
 import { entries } from '../db/schema.js'
 
 /** Message d'un identifiant d'URL déjà pris, à l'enregistrement comme à la publication. */
@@ -6,10 +6,6 @@ export const SLUG_TAKEN = 'Cet identifiant d’URL est déjà utilisé par une a
 
 /** Identifiant gardé par une entrée de la corbeille (document UX, « Supprimer »). */
 export const SLUG_IN_TRASH = 'Cet identifiant est pris par une entrée de la corbeille'
-
-/** Entrée hors de la corbeille (V4) : une entrée supprimée n'existe plus ailleurs que dans la
- *  corbeille. Toute lecture d'entrées l'ajoute. */
-export const alive = () => isNull(entries.deletedAt)
 
 /** Champs d'une écriture qui change la version d'une entrée. Le changement de version porte
  *  l'annulation de la programmation (architecture, « Ce qui annule une programmation ») : aucune

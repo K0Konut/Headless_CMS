@@ -9,11 +9,10 @@ import {
   mediaRefs,
 } from '@dashility/shared'
 import { and, desc, eq, inArray, isNotNull } from 'drizzle-orm'
-import { alive } from '../content/schedule.js'
 import { DB } from '../db/db.module.js'
 import type { Db } from '../db/index.js'
 import { hashToken } from '../auth/tokens.js'
-import { contentTypes, entries, media, previewLinks } from '../db/schema.js'
+import { alive, contentTypes, entries, media, previewLinks } from '../db/schema.js'
 import type { Space } from '../spaces/guards.js'
 import { FeaturingService } from '../content/featuring.service.js'
 import { type MediaInfo, resolveData } from './resolve.js'

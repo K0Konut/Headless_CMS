@@ -29,11 +29,11 @@ import { DB } from '../db/db.module.js'
 import { isUniqueViolation } from '../db/errors.js'
 import type { Db, Tx, User } from '../db/index.js'
 import { hashToken, newToken } from '../auth/tokens.js'
-import { contentTypes, entries, entryVersions, previewLinks, users } from '../db/schema.js'
+import { alive, contentTypes, entries, entryVersions, previewLinks, users } from '../db/schema.js'
 import type { Space } from '../spaces/guards.js'
 import { DeployService } from '../deploy/deploy.service.js'
 import { MediaService } from '../media/media.service.js'
-import { SLUG_IN_TRASH, SLUG_TAKEN, alive, nextVersion } from './schedule.js'
+import { SLUG_IN_TRASH, SLUG_TAKEN, nextVersion } from './schedule.js'
 import { TypesService } from './types.service.js'
 
 type ContentType = typeof contentTypes.$inferSelect
@@ -100,10 +100,35 @@ const versionColumns = {
 }
 
 /** Durée de la corbeille (PRD). */
-const TRASH_DAYS = 30
 const DAY_MS = 24 * 60 * 60 * 1000
+const TRASH_MS = 30 * DAY_MS
 
-const PREVIEW_TTL_MS = 24 * 60 * 60 * 1000
+/** « Dépublier » : l'entrée redevient un brouillon, avec ses modifications en attente s'il y en
+ *  a ; hors ligne, l'identifiant en attente redevient l'identifiant tout court. Aussi pour une
+ *  entrée qui sort de la corbeille (V4). */
+const unpublished = (entry: {
+  published: EntryData | null
+  draft: EntryData | null
+  slug: string | null
+  draftSlug: string | null
+}) => ({
+  published: null,
+  draft: entry.draft ?? entry.published,
+  slug: entry.draftSlug ?? entry.slug,
+  draftSlug: null,
+})
+
+/** Entrées de la corbeille d'un espace. */
+const inTrash = (spaceId: string) =>
+  and(
+    isNotNull(entries.deletedAt),
+    inArray(
+      entries.typeId,
+      sql`(select ${contentTypes.id} from ${contentTypes} where ${contentTypes.spaceId} = ${spaceId})`,
+    ),
+  )
+
+const PREVIEW_TTL_MS = DAY_MS
 
 /** Une entrée d'une collection (identifiant validé par la route), ou celle d'une page unique. */
 export type EntryRef = string | 'single'
@@ -339,13 +364,7 @@ export class EntriesService {
     const type = await this.types.row(space, typeSlug)
     const current = await this.current(type, id, version)
     if (!current.published) throw new BadRequestException('Cette entrée n’est pas publiée')
-    const entry = await this.write(current.id, version, user, {
-      published: null,
-      draft: current.draft ?? current.published,
-      // Hors ligne, l'identifiant en attente redevient l'identifiant tout court.
-      slug: current.draftSlug ?? current.slug,
-      draftSlug: null,
-    })
+    const entry = await this.write(current.id, version, user, unpublished(current))
     this.deploy.schedule(space.id)
     return entry
   }
@@ -380,7 +399,7 @@ export class EntriesService {
       .from(entries)
       .innerJoin(contentTypes, eq(contentTypes.id, entries.typeId))
       .leftJoin(users, eq(users.id, entries.deletedBy))
-      .where(and(eq(contentTypes.spaceId, space.id), isNotNull(entries.deletedAt)))
+      .where(inTrash(space.id))
       .orderBy(desc(entries.deletedAt))
     return rows.map(({ id, published, draft, deletedAt, deletedBy, type }) => ({
       id,
@@ -388,88 +407,57 @@ export class EntriesService {
       title: entryTitle(type.fields, draft ?? published ?? {}),
       deletedAt: deletedAt!,
       deletedBy,
-      purgeAt: new Date(deletedAt!.getTime() + TRASH_DAYS * DAY_MS),
+      purgeAt: new Date(deletedAt!.getTime() + TRASH_MS),
     }))
   }
 
-  /** Restaure une entrée de la corbeille, toujours en brouillon, avec son historique : rien ne
-   *  revient en ligne sans « Publier » (document UX). */
+  /** Restaure une entrée de la corbeille, toujours en brouillon (dépubliée au passage), avec
+   *  son historique : rien ne revient en ligne sans « Publier » (document UX). */
   async untrash(space: Space, id: string, user: User) {
-    const entry = await this.trashed(space, id)
-    try {
-      await this.db
-        .update(entries)
-        .set({
-          deletedAt: null,
-          deletedBy: null,
-          // Dépubliée au passage, comme « Dépublier ».
-          published: null,
-          draft: entry.draft ?? entry.published,
-          slug: entry.draftSlug ?? entry.slug,
-          draftSlug: null,
-          ...nextVersion(false),
-          updatedAt: new Date(),
-          updatedBy: user.id,
-        })
-        .where(eq(entries.id, id))
-    } catch (err) {
-      // L'identifiant en attente a pu être pris depuis.
-      if (isUniqueViolation(err, SLUG_CONSTRAINT)) throw new BadRequestException(SLUG_TAKEN)
-      throw err
-    }
+    const [entry] = await this.db
+      .select({ ...entryColumns, typeSlug: contentTypes.slug })
+      .from(entries)
+      .innerJoin(contentTypes, eq(contentTypes.id, entries.typeId))
+      .where(and(eq(entries.id, id), inTrash(space.id)))
+    if (!entry) throw new NotFoundException('Entrée introuvable dans la corbeille')
+    await this.write(
+      id,
+      entry.version,
+      user,
+      { ...unpublished(entry), deletedAt: null, deletedBy: null },
+      false,
+    )
     return { id, type: { slug: entry.typeSlug } }
   }
 
   /** Suppression définitive (super-admin), historique compris. */
   async destroy(space: Space, id: string) {
-    await this.trashed(space, id)
-    await this.db.delete(entries).where(eq(entries.id, id))
+    const deleted = await this.db
+      .delete(entries)
+      .where(and(eq(entries.id, id), inTrash(space.id)))
+      .returning({ id: entries.id })
+    if (!deleted.length) throw new NotFoundException('Entrée introuvable dans la corbeille')
   }
 
   /** « Vider la corbeille » (super-admin). */
   async emptyTrash(space: Space) {
-    await this.db
-      .delete(entries)
-      .where(
-        and(
-          isNotNull(entries.deletedAt),
-          inArray(
-            entries.typeId,
-            this.db
-              .select({ id: contentTypes.id })
-              .from(contentTypes)
-              .where(eq(contentTypes.spaceId, space.id)),
-          ),
-        ),
-      )
+    await this.db.delete(entries).where(inTrash(space.id))
+  }
+
+  /** Nombre d'entrées de la corbeille, pour le lien de l'écran Contenu. */
+  async trashCount(space: Space) {
+    const [row] = await this.db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(entries)
+      .where(inTrash(space.id))
+    return row!.count
   }
 
   /** Les entrées supprimées depuis plus de 30 jours partent pour de bon, chaque nuit, avant la
    *  purge des médias orphelins (3 h 30), qui libère leurs fichiers. */
   @Cron('15 3 * * *', { timeZone: 'Europe/Paris' })
   async purgeTrash() {
-    await this.db
-      .delete(entries)
-      .where(lt(entries.deletedAt, new Date(Date.now() - TRASH_DAYS * DAY_MS)))
-  }
-
-  /** Une entrée de la corbeille de cet espace, sinon 404. */
-  private async trashed(space: Space, id: string) {
-    const [entry] = await this.db
-      .select({
-        published: entries.published,
-        draft: entries.draft,
-        slug: entries.slug,
-        draftSlug: entries.draftSlug,
-        typeSlug: contentTypes.slug,
-      })
-      .from(entries)
-      .innerJoin(contentTypes, eq(contentTypes.id, entries.typeId))
-      .where(
-        and(eq(entries.id, id), eq(contentTypes.spaceId, space.id), isNotNull(entries.deletedAt)),
-      )
-    if (!entry) throw new NotFoundException('Entrée introuvable dans la corbeille')
-    return entry
+    await this.db.delete(entries).where(lt(entries.deletedAt, new Date(Date.now() - TRASH_MS)))
   }
 
   /** Versions publiées (V4), la plus récente d'abord, sans leur contenu. */
@@ -674,7 +662,14 @@ export class EntriesService {
     user: User,
     change: Pick<
       Partial<typeof entries.$inferInsert>,
-      'published' | 'draft' | 'slug' | 'draftSlug' | 'enComplete' | 'publishedAt'
+      | 'published'
+      | 'draft'
+      | 'slug'
+      | 'draftSlug'
+      | 'enComplete'
+      | 'publishedAt'
+      | 'deletedAt'
+      | 'deletedBy'
     >,
     /** Laisser le message « programmation annulée » si l'entrée était programmée. */
     notice = true,
@@ -724,8 +719,10 @@ export class EntriesService {
       throw new NotFoundException('Entrée introuvable')
     }
     // Une entrée de la corbeille n'existe plus pour l'éditeur et ses actions (404).
-    return id === 'single'
-      ? and(eq(entries.typeId, type.id), alive())
-      : and(eq(entries.typeId, type.id), eq(entries.id, id), alive())
+    return and(
+      eq(entries.typeId, type.id),
+      alive(),
+      id === 'single' ? undefined : eq(entries.id, id),
+    )
   }
 }

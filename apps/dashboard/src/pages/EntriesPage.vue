@@ -42,10 +42,9 @@ const base = computed(
 )
 
 const content = useContentStore()
-/** Entrée mise à la corbeille juste avant d'arriver sur la liste (V4) ; une autre navigation
- *  efface le bandeau. */
-const trashed = ref<{ id: string; title: string } | null>(null)
-const undone = ref('')
+/** Bandeau de la liste (V4) : l'entrée mise à la corbeille juste avant d'arriver (avec son `id`,
+ *  pour « Annuler »), puis sa restauration. Une autre navigation l'efface. */
+const notice = ref<{ title: string; id?: string } | null>(null)
 
 const type = ref<ContentType | null>(null)
 const entries = ref<EntrySummary[] | null>(null)
@@ -58,11 +57,10 @@ watch(
   [base, entryParam],
   async ([url, entry], previous) => {
     const request = ++latest
-    const notice = content.trashed
+    const trashed = content.trashed
     content.trashed = null
-    trashed.value =
-      !entry && notice?.space === space.value && notice.type === typeSlug.value ? notice : null
-    undone.value = ''
+    notice.value =
+      !entry && trashed?.space === space.value && trashed.type === typeSlug.value ? trashed : null
     const sameType = previous?.[0] === url && type.value
     if (!sameType) type.value = null
     entries.value = null
@@ -97,11 +95,10 @@ const shown = computed(() => (entries.value ?? []).filter(FILTERS[filter.value]!
 
 /** « Annuler » : l'entrée revient de la corbeille, en brouillon (document UX). */
 async function undo() {
-  const { id, title } = trashed.value!
+  const { id, title } = notice.value!
   try {
     await api(`/spaces/${encodeURIComponent(space.value)}/trash/${id}/restore`, { method: 'POST' })
-    trashed.value = null
-    undone.value = `« ${title} » restauré en brouillon.`
+    notice.value = { title }
     entries.value = await api<EntrySummary[]>(`${base.value}/entries`)
   } catch (err) {
     error.value = errorMessage(err)
@@ -140,13 +137,15 @@ async function add() {
     <!-- Lu par les lecteurs d'écran à l'arrivée sur la liste, comme une notification. -->
     <div role="status" class="mt-4 empty:hidden">
       <p
-        v-if="trashed"
+        v-if="notice"
         class="flex flex-wrap items-center gap-3 rounded-lg border bg-card px-4 py-2.5 text-sm"
       >
-        « {{ trashed.title }} » mis à la corbeille.
-        <Button size="sm" variant="outline" @click="undo">Annuler</Button>
+        <template v-if="notice.id">
+          « {{ notice.title }} » mis à la corbeille.
+          <Button size="sm" variant="outline" @click="undo">Annuler</Button>
+        </template>
+        <template v-else>« {{ notice.title }} » restauré en brouillon.</template>
       </p>
-      <p v-else-if="undone" class="rounded-lg border bg-card px-4 py-2.5 text-sm">{{ undone }}</p>
     </div>
 
     <Skeleton v-if="!entries" class="mt-8 h-48" />

@@ -18,8 +18,8 @@ import type { z } from 'zod'
 import { DB } from '../db/db.module.js'
 import { isUniqueViolation } from '../db/errors.js'
 import type { Db } from '../db/index.js'
-import { contentTypes, entries } from '../db/schema.js'
-import { alive, nextVersion } from './schedule.js'
+import { alive, contentTypes, entries } from '../db/schema.js'
+import { nextVersion } from './schedule.js'
 import type { Space } from '../spaces/guards.js'
 
 /** Ce que l'API renvoie d'un type : sans identifiants internes. */

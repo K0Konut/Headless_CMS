@@ -10,11 +10,10 @@ import {
   parisParts,
 } from '@dashility/shared'
 import { and, asc, count, eq, inArray, isNotNull } from 'drizzle-orm'
-import { alive } from './schedule.js'
 import { createHash } from 'node:crypto'
 import { DB } from '../db/db.module.js'
 import type { Db } from '../db/index.js'
-import { contentTypes, entries, events } from '../db/schema.js'
+import { alive, contentTypes, entries, events } from '../db/schema.js'
 import type { Space } from '../spaces/guards.js'
 
 /** Ce que le classement lit d'un type. */
