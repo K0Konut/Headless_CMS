@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/select'
 import ImageInput from './ImageInput.vue'
 import PdfInput from './PdfInput.vue'
+import RelationInput from './RelationInput.vue'
 
 /** L'éditeur de texte riche (Tiptap, environ 300 Ko) n'est chargé qu'avec un champ qui l'utilise. */
 const RichTextInput = defineAsyncComponent(() => import('./RichTextInput.vue'))
@@ -215,6 +216,15 @@ function addItem() {
       v-else-if="field.type === 'pdf'"
       :id="id"
       v-model="value"
+      :label="label"
+      :error="error"
+    />
+
+    <RelationInput
+      v-else-if="field.type === 'relation'"
+      :id="id"
+      v-model="value"
+      :field="field"
       :label="label"
       :error="error"
     />

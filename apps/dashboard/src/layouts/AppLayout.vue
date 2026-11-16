@@ -46,7 +46,7 @@ watch(
   },
   { immediate: true },
 )
-const inContent = computed(() => route.name === 'content' || route.name === 'entries')
+const inContent = computed(() => ['content', 'entries', 'trash'].includes(String(route.name)))
 const contentTypes = computed(() => {
   const ready = (content.space === slug.value ? content.types : null)?.filter(
     (t) => t.fields.length,
@@ -95,7 +95,7 @@ watch(inContent, (value) => (contentOpen.value = value), { immediate: true })
               <SidebarMenuItem>
                 <SidebarMenuButton
                   as-child
-                  :is-active="route.name === 'content' || route.name === 'entries'"
+                  :is-active="inContent"
                   class="data-[active=true]:text-sidebar-primary"
                 >
                   <RouterLink :to="`/espaces/${space.slug}/contenu`">

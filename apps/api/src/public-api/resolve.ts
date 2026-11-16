@@ -23,6 +23,8 @@ export interface ResolveContext {
   /** Origine publique du CMS (`https://dashility.costamask.dev`) : les adresses sont absolues. */
   origin: string
   media: Map<string, MediaInfo>
+  /** Entrées en ligne citées par les champs Relation (V4) ; une entrée absente est omise. */
+  relations: Map<string, { slug: string | null; title: string }>
 }
 
 // Le même document est converti à chaque lecture (un build lit tout le contenu) : on garde le
@@ -100,6 +102,13 @@ function resolveValue(field: Exclude<Field, { type: 'group' }>, raw: unknown, ct
     case 'pdf': {
       const info = typeof value === 'string' ? ctx.media.get(value) : undefined
       return info ? { url: url(ctx, value as string, 'original.pdf'), bytes: info.bytes } : null
+    }
+    case 'relation': {
+      const linked = (Array.isArray(value) ? (value as string[]) : []).flatMap((id) => {
+        const entry = ctx.relations.get(id)
+        return entry ? [entry] : []
+      })
+      return field.multiple ? linked : (linked[0] ?? null)
     }
   }
 }

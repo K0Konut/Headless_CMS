@@ -4,6 +4,9 @@ import { entries } from '../db/schema.js'
 /** Message d'un identifiant d'URL déjà pris, à l'enregistrement comme à la publication. */
 export const SLUG_TAKEN = 'Cet identifiant d’URL est déjà utilisé par une autre entrée'
 
+/** Identifiant gardé par une entrée de la corbeille (document UX, « Supprimer »). */
+export const SLUG_IN_TRASH = 'Cet identifiant est pris par une entrée de la corbeille'
+
 /** Champs d'une écriture qui change la version d'une entrée. Le changement de version porte
  *  l'annulation de la programmation (architecture, « Ce qui annule une programmation ») : aucune
  *  écriture ne peut l'oublier, et la version programmée est toujours la version actuelle.

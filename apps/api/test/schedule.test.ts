@@ -103,6 +103,11 @@ describe('publication programmée', () => {
       lastSchedule: { outcome: 'published' },
     })
     expect(done.version).toBe(entry.version + 1)
+    // La publication programmée laisse sa version dans l'historique, sans auteur.
+    const versions = await api('get', `${BASE}/${entry.id}/versions`, member).expect(200)
+    expect(versions.body).toMatchObject([
+      { number: 1, online: true, scheduled: true, publishedBy: null },
+    ])
   })
 
   it('refuse une date passée, trop lointaine, ou une entrée incomplète', async () => {

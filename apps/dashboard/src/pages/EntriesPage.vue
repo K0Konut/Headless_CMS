@@ -26,6 +26,7 @@ import {
 import { api, errorMessage } from '@/lib/api'
 import type { ContentType, Entry, EntrySummary } from '@/lib/content'
 import { formatDate } from '@/lib/format'
+import { useContentStore } from '@/stores/content'
 
 /** Un type : la liste de ses entrées pour une collection, l'éditeur pour une page unique ou
  *  pour l'entrée de l'URL (`/contenu/:type/:entree`). */
@@ -40,6 +41,11 @@ const base = computed(
   () => `/spaces/${encodeURIComponent(space.value)}/types/${encodeURIComponent(typeSlug.value)}`,
 )
 
+const content = useContentStore()
+/** Bandeau de la liste (V4) : l'entrée mise à la corbeille juste avant d'arriver (avec son `id`,
+ *  pour « Annuler »), puis sa restauration. Une autre navigation l'efface. */
+const notice = ref<{ title: string; id?: string } | null>(null)
+
 const type = ref<ContentType | null>(null)
 const entries = ref<EntrySummary[] | null>(null)
 const error = ref('')
@@ -51,6 +57,10 @@ watch(
   [base, entryParam],
   async ([url, entry], previous) => {
     const request = ++latest
+    const trashed = content.trashed
+    content.trashed = null
+    notice.value =
+      !entry && trashed?.space === space.value && trashed.type === typeSlug.value ? trashed : null
     const sameType = previous?.[0] === url && type.value
     if (!sameType) type.value = null
     entries.value = null
@@ -83,6 +93,25 @@ const FILTERS: Record<string, { label: string; keep: (e: EntrySummary) => boolea
 const filter = ref('all')
 const shown = computed(() => (entries.value ?? []).filter(FILTERS[filter.value]!.keep))
 
+/** « Annuler » : l'entrée revient de la corbeille, en brouillon (document UX). */
+const undoing = ref(false)
+async function undo() {
+  const { id, title } = notice.value!
+  undoing.value = true
+  // La liste relue ici remplace celle de l'arrivée sur la page, même si celle-ci répond après.
+  const request = ++latest
+  try {
+    await api(`/spaces/${encodeURIComponent(space.value)}/trash/${id}/restore`, { method: 'POST' })
+    notice.value = { title }
+    const list = await api<EntrySummary[]>(`${base.value}/entries`)
+    if (request === latest) entries.value = list
+  } catch (err) {
+    error.value = errorMessage(err)
+  } finally {
+    undoing.value = false
+  }
+}
+
 const adding = ref(false)
 async function add() {
   adding.value = true
@@ -110,6 +139,20 @@ async function add() {
       <Button :disabled="adding" @click="add">
         <Plus aria-hidden="true" />Ajouter {{ type.entryLabel }}
       </Button>
+    </div>
+
+    <!-- Lu par les lecteurs d'écran à l'arrivée sur la liste, comme une notification. -->
+    <div role="status" class="mt-4 empty:hidden">
+      <p
+        v-if="notice"
+        class="flex flex-wrap items-center gap-3 rounded-lg border bg-card px-4 py-2.5 text-sm"
+      >
+        <template v-if="notice.id">
+          « {{ notice.title }} » mis à la corbeille.
+          <Button size="sm" variant="outline" :disabled="undoing" @click="undo">Annuler</Button>
+        </template>
+        <template v-else>« {{ notice.title }} » restauré en brouillon.</template>
+      </p>
     </div>
 
     <Skeleton v-if="!entries" class="mt-8 h-48" />

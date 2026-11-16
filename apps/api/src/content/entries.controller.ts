@@ -10,10 +10,12 @@ import {
   Put,
   Req,
   NotFoundException,
+  ParseIntPipe,
   type PipeTransform,
   UseGuards,
 } from '@nestjs/common'
 import { entryActionSchema, saveEntrySchema, scheduleEntrySchema } from '@dashility/shared'
+import { SuperAdminGuard } from '../auth/session.guard.js'
 import { type SpaceRequest, SpaceAccessGuard } from '../spaces/guards.js'
 import { uuidOr404 } from '../uuid-or-404.pipe.js'
 import { EntriesService, type EntryRef } from './entries.service.js'
@@ -35,6 +37,9 @@ const singleOrUuid: PipeTransform<string, Promise<EntryRef>> = {
   transform: async (value, meta) =>
     value === 'single' ? value : ((await uuidOr404.transform(value, meta)) as string),
 }
+
+/** Numéro de version : un entier positif, sinon 404 comme une version qui n'existe pas. */
+const versionNumber = new ParseIntPipe({ errorHttpStatusCode: 404 })
 
 /** Entrées d'un type : tous les membres de l'espace les lisent et les modifient (PRD, « Rôles »).
  *  `single` désigne l'entrée d'une page unique ; sinon l'identifiant d'une entrée de collection. */
@@ -103,6 +108,49 @@ export class EntriesController {
     return this.entries.unschedule(space, type, id)
   }
 
+  /** Entrées qui citent celle-ci par un champ Relation (V4). */
+  @Get(':id/citations')
+  citations(
+    @Req() { space }: SpaceRequest,
+    @Param('type') type: string,
+    @Param('id', uuidOr404) id: EntryRef,
+  ) {
+    return this.entries.citations(space, type, id)
+  }
+
+  /** Historique (V4). */
+  @Get(':id/versions')
+  versions(
+    @Req() { space }: SpaceRequest,
+    @Param('type') type: string,
+    @Param('id', singleOrUuid) id: EntryRef,
+  ) {
+    return this.entries.versions(space, type, id)
+  }
+
+  @Get(':id/versions/:number')
+  version(
+    @Req() { space }: SpaceRequest,
+    @Param('type') type: string,
+    @Param('id', singleOrUuid) id: EntryRef,
+    @Param('number', versionNumber) number: number,
+  ) {
+    return this.entries.version(space, type, id, number)
+  }
+
+  @Post(':id/versions/:number/restore')
+  @HttpCode(200)
+  restore(
+    @Req() { space, user }: SpaceRequest,
+    @Param('type') type: string,
+    @Param('id', singleOrUuid) id: EntryRef,
+    @Param('number', versionNumber) number: number,
+    @Body() body: unknown,
+  ) {
+    const { version } = entryActionSchema.parse(body)
+    return this.entries.restore(space, type, id, number, version, user)
+  }
+
   /** Lien d'aperçu (V3). Déclarée avant `:id/:action`, qui la prendrait sinon. */
   @Post(':id/preview')
   preview(
@@ -136,13 +184,53 @@ export class EntriesController {
     }
   }
 
+  /** Met l'entrée à la corbeille (V4). */
   @Delete(':id')
   @HttpCode(204)
   remove(
-    @Req() { space }: SpaceRequest,
+    @Req() { space, user }: SpaceRequest,
     @Param('type') type: string,
     @Param('id', singleOrUuid) id: EntryRef,
   ) {
-    return this.entries.remove(space, type, id)
+    return this.entries.remove(space, type, id, user)
+  }
+}
+
+/** Corbeille d'un espace (V4) : les membres la voient et restaurent ; seul le super-admin
+ *  supprime pour de bon. */
+@Controller('spaces/:slug/trash')
+@UseGuards(SpaceAccessGuard)
+export class TrashController {
+  constructor(private readonly entries: EntriesService) {}
+
+  @Get()
+  list(@Req() { space }: SpaceRequest) {
+    return this.entries.trash(space)
+  }
+
+  /** Nombre d'entrées, pour le lien « Corbeille (n) » de l'écran Contenu. */
+  @Get('count')
+  async count(@Req() { space }: SpaceRequest) {
+    return { count: await this.entries.trashCount(space) }
+  }
+
+  @Post(':id/restore')
+  @HttpCode(200)
+  restore(@Req() { space, user }: SpaceRequest, @Param('id', uuidOr404) id: string) {
+    return this.entries.untrash(space, id, user)
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @UseGuards(SuperAdminGuard)
+  destroy(@Req() { space }: SpaceRequest, @Param('id', uuidOr404) id: string) {
+    return this.entries.destroy(space, id)
+  }
+
+  @Delete()
+  @HttpCode(204)
+  @UseGuards(SuperAdminGuard)
+  empty(@Req() { space }: SpaceRequest) {
+    return this.entries.emptyTrash(space)
   }
 }

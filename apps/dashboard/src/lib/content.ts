@@ -18,6 +18,7 @@ import {
   Tags,
   ToggleRight,
   Type,
+  Waypoints,
 } from '@lucide/vue'
 import type { Component, InjectionKey, Ref } from 'vue'
 import { slugify } from './slug'
@@ -83,6 +84,7 @@ export const FIELD_TYPE_ICONS: Record<FieldType, Component> = {
   image: Image,
   pdf: FileType,
   group: Rows3,
+  relation: Waypoints,
 }
 
 /** Exemple d'usage de chaque type de champ, dans la grille d'ajout (document UX, « Structure »). */
@@ -98,6 +100,7 @@ export const FIELD_TYPE_HINTS: Record<FieldType, string> = {
   image: 'Une image avec son texte alternatif',
   pdf: 'Un document à télécharger : un CV',
   group: 'Des blocs de sous-champs : des étapes, des contraintes',
+  relation: 'Des entrées d’une autre collection : des catégories, des projets liés',
 }
 
 /** Noms des types de champs, dans l'ordre du document UX. */
@@ -113,6 +116,7 @@ export const FIELD_TYPE_LABELS: Record<FieldType, string> = {
   image: 'Image',
   pdf: 'Fichier PDF',
   group: 'Groupe répétable',
+  relation: 'Relation',
 }
 
 /** Identifiant de champ proposé à partir d'un libellé : « Lien vers le code » → « lien_vers_le_code ». */
@@ -137,6 +141,8 @@ export function newField(type: FieldType): Field {
       return { ...base, type, defaultValue: false }
     case 'group':
       return { ...base, type, fields: [] }
+    case 'relation':
+      return { ...base, type, target: '', multiple: true }
     default:
       return { ...base, type }
   }
@@ -190,3 +196,30 @@ export interface Entry {
   scheduledAt: string | null
   lastSchedule: LastSchedule | null
 }
+
+/** Une version de l'historique (V4) : une par publication. */
+export interface EntryVersion {
+  number: number
+  publishedAt: string
+  /** Email de l'auteur ; null pour une publication programmée ou d'avant l'historique. */
+  publishedBy: string | null
+  scheduled: boolean
+  /** La version que le site affiche. */
+  online: boolean
+}
+
+/** Une entrée de la corbeille (V4). */
+export interface TrashedEntry {
+  id: string
+  type: { slug: string; name: string }
+  title: string
+  deletedAt: string
+  /** Email de qui l'a supprimée ; null pour un ancien membre. */
+  deletedBy: string | null
+  /** Suppression définitive prévue. */
+  purgeAt: string
+}
+
+/** « Projets › Ce portfolio » : une entrée nommée avec son type, hors de sa liste. */
+export const entryLabel = (typeName: string, title: string) =>
+  `${typeName} › ${title || 'Sans titre'}`

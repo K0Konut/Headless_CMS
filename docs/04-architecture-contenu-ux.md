@@ -348,7 +348,7 @@ Contraintes               ┌ 1 ────────────────
 
 - « Annuler les modifications » revient à la version publiée, après confirmation.
 - « Dépublier » repasse l'entrée en brouillon et la retire du site au prochain déploiement.
-- « Supprimer » demande une confirmation ; c'est définitif (pas d'historique, PRD). Une page unique ne se supprime pas.
+- « Supprimer » met l'entrée dans la corbeille, d'où elle se restaure pendant 30 jours (V4, voir « V4 : historique et corbeille »). Une page unique ne se supprime pas.
 - Le choix « Brouillon » du scénario du PRD est implicite : tant qu'on ne publie pas, l'entrée reste en brouillon, déjà enregistré.
 
 **Sauvegarde automatique**
@@ -401,6 +401,7 @@ Publier, publier des modifications, dépublier ou supprimer une entrée publiée
 | Oui / non | Interrupteur | Valeur par défaut |
 | Image | Glisser-déposer ou « Parcourir », aperçu, textes alternatifs FR et EN obligatoires, « Remplacer » et « Retirer ». JPEG, PNG ou WebP, 10 Mo au plus | — |
 | Fichier PDF | « Parcourir », nom, taille et date du fichier, « Remplacer » (après confirmation, sans historique) et « Télécharger ». 10 Mo au plus | — |
+| Relation (V4) | Les entrées choisies, en étiquettes (titre, et « Brouillon » si elle n'est pas en ligne) ; « Ajouter » ouvre une liste avec recherche des entrées de la collection cible ; ↑ ↓ et × pour réordonner et retirer. Voir « V4 : relations, tags et catégories » | La collection cible (figée) ; une seule entrée ou plusieurs |
 | Groupe répétable | Cartes numérotées, repliées à l'ouverture de l'entrée ; l'en-tête montre le numéro et le premier texte court (« Contraintes 1 · Budget. ») et déplie la carte au clic. Un élément ajouté, ou qui a une erreur de publication, s'ouvre. « Ajouter », ↑ ↓ et suppression | Les sous-champs (tous les types sauf un autre groupe) ; nombre minimal et maximal d'éléments (facultatifs) |
 
 Tous les champs se règlent aussi en **obligatoire ou facultatif**, et en **traduisible ou non** (sauf le groupe : ce sont ses sous-champs qui sont traduisibles). Dans un groupe, les éléments sont les mêmes en FR et en EN : on ajoute une contrainte une fois, puis on remplit ses deux langues.
@@ -726,6 +727,152 @@ Les places restantes sont tirées au hasard à chaque build du site.
 - À son build, lire les projets mis en avant par l'API (dans l'ordre : forcés, classés, tirés) et les afficher sur l'accueil, à la place du filtre « À la une » qu'il fait aujourd'hui.
 - Se reconstruire chaque nuit, pour suivre l'évolution des scores sans attendre une publication.
 
+## V4 : historique et corbeille
+
+PRD, « V4 : filet de sécurité et organisation ». Deux filets : revenir à ce qui était en ligne avant, et récupérer une entrée supprimée par erreur.
+
+### Principes
+
+- **Une version par publication.** « Publier », « Publier les modifications » et une publication programmée enregistrent ce qui part en ligne. Les sauvegardes automatiques, « Annuler les modifications » et « Dépublier » n'en créent pas.
+- **Restaurer ne publie jamais.** Une ancienne version revient dans le brouillon ; on la relit, puis on publie comme d'habitude.
+- **Supprimer n'est plus définitif.** L'entrée part dans la corbeille de l'espace pendant 30 jours, avec son historique.
+- **Le contenu seulement.** Une version garde les champs FR et EN, pas l'identifiant d'URL : restaurer ne casse jamais une adresse.
+- Les entrées déjà publiées reçoivent une première version à la mise en ligne de la V4, datée de leur dernière publication.
+
+### Historique, dans l'éditeur
+
+Un bouton « Historique » dans l'en-tête de l'éditeur, à côté du menu ⋯, ouvre un panneau latéral. Il est absent tant que l'entrée n'a jamais été publiée.
+
+```
+┌ Historique · Ce portfolio ─────────────────────── ✕ ┐
+│ Version 4 · en ligne                                │
+│ 12 nov. à 14:02 · costa@…                           │
+│ ─────────────────────────────────────────────────── │
+│ Version 3                                           │
+│ 3 nov. à 09:00 · publication programmée             │
+│ ─────────────────────────────────────────────────── │
+│ Version 2                                           │
+│ 28 oct. à 18:40 · marie@…                           │
+│ …                                                   │
+└─────────────────────────────────────────────────────┘
+```
+
+- Une ligne par version, la plus récente en haut : numéro, date et auteur (ou « publication programmée »). La version en ligne porte le badge « en ligne » ; après « Dépublier », aucune ne le porte.
+- Une ligne ouvre la version **en lecture seule**, sur toute la largeur de l'éditeur, avec un bandeau :
+
+```
+Version 2 · publiée le 28 oct. à 18:40 par marie@…   [Restaurer cette version] [Fermer]
+```
+
+- **Restaurer cette version** remplace le brouillon par le contenu de cette version. Si le brouillon a des modifications non publiées, une confirmation prévient d'abord : « Les modifications non publiées seront remplacées. » Ensuite, l'éditeur revient en saisie, avec le statut « Modifications non publiées » (ou « Brouillon » si l'entrée est dépubliée) et le message « Version 2 restaurée dans le brouillon. Relisez-la, puis publiez. »
+- Pas de comparaison ligne à ligne entre deux versions : on les ouvre l'une après l'autre.
+- Une image remplacée depuis reste visible dans l'ancienne version et revient avec elle.
+
+| État | Affichage |
+| --- | --- |
+| Chargement | Squelettes de trois lignes dans le panneau |
+| Erreur | « L'historique n'a pas pu être chargé » et « Réessayer » |
+| Entrée jamais publiée | Pas de bouton « Historique » |
+
+### Supprimer
+
+- « Supprimer » (menu ⋯ de l'éditeur) n'a plus de confirmation : l'action se rattrape. L'entrée part dans la corbeille, quitte le site au prochain déploiement, et l'éditeur revient à la liste avec une notification « « Ce portfolio » mis à la corbeille · Annuler ». « Annuler » la restaure aussitôt.
+- Une publication programmée est annulée par la suppression.
+- Une entrée dans la corbeille garde son identifiant d'URL : une nouvelle entrée qui voudrait le même reçoit « Cet identifiant est pris par une entrée de la corbeille ».
+- Une entrée dans la corbeille n'apparaît plus nulle part ailleurs : listes, À traiter, compteurs, mise en avant, API.
+
+### Corbeille
+
+Un lien « Corbeille (3) » en bas de l'écran Contenu, sous les pages, ouvre `/espaces/:espace/contenu/corbeille`. Il est absent si la corbeille est vide.
+
+```
+‹ Contenu
+Corbeille                                               [Vider la corbeille] ★
+Les entrées sont supprimées définitivement 30 jours après leur mise à la corbeille.
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Projets › Jeu de plateau     supprimé le 10 nov. par marie@…             │
+│                              définitivement dans 27 jours   [Restaurer] ⋯ │
+│ Parcours › Stage 2023        supprimé le 2 nov. par costa@…              │
+│                              définitivement dans 19 jours   [Restaurer] ⋯ │
+└──────────────────────────────────────────────────────────────────────────┘
+★ super-admin uniquement
+```
+
+- Toutes les collections de l'espace, la suppression la plus récente en haut.
+- **Restaurer** remet l'entrée **en brouillon**, avec son historique, même si elle était publiée : rien ne revient en ligne sans « Publier ». Notification « « Jeu de plateau » restauré en brouillon » avec le lien « Ouvrir ».
+- **Supprimer définitivement** (menu ⋯, super-admin) et **Vider la corbeille** (super-admin) demandent une confirmation, qui rappelle que c'est irréversible et efface aussi l'historique.
+- Les membres voient la corbeille et restaurent ; seul le super-admin supprime pour de bon.
+- Une entrée ne s'ouvre pas depuis la corbeille : on la restaure d'abord.
+
+| État | Affichage |
+| --- | --- |
+| Corbeille vide | « La corbeille est vide. » ; le lien disparaît de Contenu |
+| Restauration impossible (type supprimé entre-temps) | Pas de cas : supprimer un type supprime aussi ses entrées dans la corbeille |
+
+## V4 : relations, tags et catégories
+
+PRD, « Relations, tags et catégories ». Le champ **Relation** relie une entrée à une ou plusieurs entrées d'une autre collection du même espace. Les tags et les catégories ne sont pas un système à part : une collection « Catégories » (un champ titre suffit), et un champ Relation dans Projets.
+
+### Principes
+
+- **On relie ce qui existe.** Pas de création à la volée depuis l'éditeur : une nouvelle catégorie se crée dans sa collection, puis se choisit.
+- **Le site ne voit que ce qui est en ligne.** On peut relier un brouillon ; il apparaît sur le site quand il est publié. Une entrée liée masquée en anglais (EN incomplet) est omise en anglais.
+- **Le site reçoit l'identifiant et le titre** de chaque entrée liée, dans la langue demandée, dans l'ordre choisi : de quoi afficher un tag ou faire un lien vers un projet lié.
+- **Pas de lien cassé.** Une entrée liée qui part dans la corbeille disparaît du site, et revient si on la restaure ; supprimée pour de bon, elle disparaît des entrées qui la citaient.
+
+### Dans Structure
+
+Le champ « Relation » rejoint la grille d'ajout d'un champ (icône `waypoints`).
+
+```
+Relation · Catégories
+Collection cible    [Catégories ▾]          (figée après la création du champ)
+Entrées             (•) Plusieurs  ( ) Une seule
+☐ Obligatoire
+```
+
+- **Collection cible** : une collection de l'espace, y compris celle du type lui-même (« Projets liés » dans Projets). Une page unique ne peut pas être une cible.
+- **Pas de réglage « traduisible »** : la relation est la même en français et en anglais, seuls les titres changent.
+- **Pas dans un groupe répétable** : le champ Relation se place au premier niveau d'un type.
+- **Supprimer une collection ciblée est refusé** : « Ce type est utilisé par le champ « Catégories » de Projets. Supprimez ou modifiez ce champ d'abord. »
+
+### Dans l'éditeur
+
+```
+Catégories          [Développement web ×] [API ×] [Mobile · Brouillon ×]   ↑ ↓
+                    [+ Ajouter]
+                      ┌ Rechercher une catégorie… ────┐
+                      │ Design                        │
+                      │ DevOps                        │
+                      │ Data · Brouillon              │
+                      └───────────────────────────────┘
+```
+
+- **Plusieurs** : les entrées choisies en étiquettes, dans l'ordre ; « Ajouter » ouvre une liste avec recherche sur le titre, qui exclut les entrées déjà choisies et l'entrée elle-même. Les étiquettes se réordonnent avec ↑ ↓ (pas seulement au glisser-déposer) et se retirent avec ×.
+- **Une seule** : une liste avec recherche, et « Aucune » pour retirer.
+- Une entrée liée en brouillon porte la pastille « Brouillon » ; sous le champ : « Les entrées en brouillon n'apparaissent pas sur le site. »
+- Une entrée liée dans la corbeille reste affichée, grisée, avec « Dans la corbeille » ; on peut la retirer.
+- **Obligatoire** : au moins une entrée pour publier (une entrée liée en brouillon compte).
+- Une même entrée ne peut pas être choisie deux fois.
+- Le champ n'est pas en deux colonnes FR / EN : il occupe toute la largeur, une seule fois, comme un champ non traduisible.
+
+| État | Affichage |
+| --- | --- |
+| Collection cible vide | « Aucune entrée dans Catégories. » et le lien « Ajouter dans Catégories » (nouvel onglet) |
+| Recherche sans résultat | « Aucune catégorie ne correspond » |
+| Chargement de la liste | « Chargement… » dans la liste |
+
+### Supprimer une entrée liée ailleurs
+
+« Supprimer » n'a pas de confirmation (V4, corbeille), **sauf si l'entrée est citée** par d'autres :
+
+```
+« Développement web » est relié à 3 entrées (Projets › Dashility, Projets › Ce portfolio…).
+Il disparaîtra de ces entrées sur le site. Mettre à la corbeille ?
+```
+
+La relation est gardée tant que l'entrée est dans la corbeille : la restaurer la remet en place. La purge à 30 jours, ou une suppression définitive, la retire des entrées qui la citaient.
+
 ## Parcours utilisateurs
 
 ### 1. Toi, premier lancement : brancher le portfolio (V1)
@@ -795,11 +942,17 @@ Le projet est en brouillon. Tu cliques sur « Prévisualiser » : un nouvel ongl
 
 Dans Structure › Projets, tu coches « Mettre en avant les entrées les plus efficaces », indiques `/fr/projets/{slug}` et `/en/projects/{slug}`, et choisis « À la une » comme champ de forçage. Dans Analytics, le bloc « Mise en avant · Projets » montre le score de chaque projet sur 6 mois. Tu viens de publier un projet sans vues : tu coches « À la une » pour qu'il prenne une place tout de suite, puis tu le décoches quelques semaines plus tard, quand il a passé les 20 vues. Chaque nuit, le portfolio se reconstruit avec la sélection du jour.
 
-## V3 et au-delà : ce qui s'ajoute
+### 11. Un membre supprime un projet par erreur (V4)
 
-| Écran | Rôle | Version |
-| --- | --- | --- |
-| Connexion et Mon compte | Double authentification TOTP : étape de code à la connexion, activation dans Mon compte, désactivation par le super-admin si un membre perd son téléphone | Après la V1 |
+Il supprime « Jeu de plateau » depuis l'éditeur. La notification propose « Annuler » ; il ne la voit pas. Le lendemain, il ouvre Contenu › Corbeille, clique sur « Restaurer » : le projet revient en brouillon, il le relit et clique sur « Publier ».
+
+### 12. Toi : revenir au texte d'hier (V4)
+
+Tu as réécrit l'accroche de « Ce portfolio » et publié, puis tu préfères l'ancienne. Dans l'éditeur, « Historique », version 3, « Restaurer cette version » : l'ancienne accroche revient dans le brouillon, tu publies.
+
+### 13. Toi : classer tes projets par catégorie (V4)
+
+Dans Structure, tu crées une collection « Catégories » avec un champ titre, puis tu ajoutes à Projets un champ Relation « Catégories » vers elle. Dans Contenu › Catégories, tu crées et publies « Développement web », « API » et « Mobile ». Dans chaque projet, « Ajouter » dans le champ Catégories ; tu publies. Le site reçoit, pour chaque projet, `[{ slug: 'web', title: 'Développement web' }, …]` et affiche les tags.
 
 ## Questions reportées
 

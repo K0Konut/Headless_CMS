@@ -2,7 +2,9 @@ import argon2 from 'argon2'
 import request from 'supertest'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { upsertSuperAdmin } from '../src/auth/super-admin.js'
-import { users } from '../src/db/schema.js'
+import { eq } from 'drizzle-orm'
+import { entries, users } from '../src/db/schema.js'
+import { EntriesService } from '../src/content/entries.service.js'
 import { PASSWORD, db, sessionCookie, useTestApp } from './helpers.js'
 
 const ctx = useTestApp()
@@ -309,10 +311,77 @@ describe('publication', () => {
     await act(entry.id, 'inconnue', entry.version).expect(404)
   })
 
-  it('supprime une entrée de collection, jamais une page unique', async () => {
+  it('garde une version par publication et en restaure une dans le brouillon', async () => {
+    const entry = await entryWith(READY)
+    const first = await act(entry.id, 'publish', entry.version).expect(200)
+    const changed = { title: { fr: 'Nouveau titre', en: 'New title' } }
+    const saved = await api('patch', `${BASE}/${entry.id}`, member)
+      .send({ version: first.body.version, data: changed })
+      .expect(200)
+    // Une sauvegarde automatique ne crée pas de version.
+    let versions = await api('get', `${BASE}/${entry.id}/versions`, member).expect(200)
+    expect(versions.body).toHaveLength(1)
+    const second = await act(entry.id, 'publish', saved.body.version).expect(200)
+
+    versions = await api('get', `${BASE}/${entry.id}/versions`, member).expect(200)
+    expect(versions.body).toMatchObject([
+      { number: 2, online: true, publishedBy: 'lea@exemple.fr', scheduled: false },
+      { number: 1, online: false },
+    ])
+    const one = await api('get', `${BASE}/${entry.id}/versions/1`, member).expect(200)
+    expect(one.body).toMatchObject({ number: 1, data: READY })
+    await api('get', `${BASE}/${entry.id}/versions/9`, member).expect(404)
+    await api('get', `${BASE}/${entry.id}/versions/abc`, member).expect(404)
+
+    // Restaurer remplace le brouillon et ne publie rien.
+    await api('post', `${BASE}/${entry.id}/versions/1/restore`, member)
+      .send({ version: second.body.version - 1 })
+      .expect(409)
+    const restored = await api('post', `${BASE}/${entry.id}/versions/1/restore`, member)
+      .send({ version: second.body.version })
+      .expect(200)
+    expect(restored.body).toMatchObject({ published: changed, draft: READY })
+
+    // Une entrée programmée est figée : pas de restauration.
+    await db
+      .update(entries)
+      .set({ scheduledAt: new Date(Date.now() + 3_600_000) })
+      .where(eq(entries.id, entry.id))
+    const frozen = await api('post', `${BASE}/${entry.id}/versions/2/restore`, member)
+      .send({ version: restored.body.version })
+      .expect(409)
+    expect(frozen.body.error.code).toBe('entry_scheduled')
+    await db.update(entries).set({ scheduledAt: null }).where(eq(entries.id, entry.id))
+
+    // Dépubliée, aucune version n'est en ligne.
+    await act(entry.id, 'unpublish', restored.body.version).expect(200)
+    versions = await api('get', `${BASE}/${entry.id}/versions`, member).expect(200)
+    expect(versions.body.map((v: { online: boolean }) => v.online)).toEqual([false, false])
+  })
+
+  it('restaure une version selon la structure actuelle du type', async () => {
+    const entry = await entryWith({ ...READY, stack: ['Vue'] })
+    const published = await act(entry.id, 'publish', entry.version).expect(200)
+    await api('put', '/spaces/portfolio/types/projets', admin)
+      .send({ ...PROJECTS, slug: undefined, fields: [title] })
+      .expect(200)
+    const current = await api('get', `${BASE}/${entry.id}`, member).expect(200)
+    expect(current.body.version).toBeGreaterThan(published.body.version)
+    const restored = await api('post', `${BASE}/${entry.id}/versions/1/restore`, member)
+      .send({ version: current.body.version })
+      .expect(200)
+    // Le champ supprimé depuis ne revient pas : la version restaurée est celle en ligne, il n'y
+    // a donc rien à publier.
+    expect(restored.body).toMatchObject({ published: READY, draft: null })
+    const one = await api('get', `${BASE}/${entry.id}/versions/1`, member).expect(200)
+    expect(one.body.data).toEqual(READY)
+  })
+
+  it('met une entrée de collection à la corbeille, jamais une page unique', async () => {
     const entry = await entryWith(READY)
     await api('delete', `${BASE}/${entry.id}`, member).expect(204)
     await api('get', `${BASE}/${entry.id}`, member).expect(404)
+    await api('delete', `${BASE}/${entry.id}`, member).expect(404)
 
     await api('post', '/spaces/portfolio/types', admin)
       .send({ slug: 'cv', kind: 'single', name: 'CV', entryLabel: null, fields: [title] })
@@ -367,5 +436,130 @@ describe('texte riche', () => {
       .send({ version: empty.body.version })
       .expect(400)
     expect(refused.body.error.issues).toEqual([{ path: 'body.fr', message: 'Champ obligatoire' }])
+  })
+})
+
+describe('corbeille', () => {
+  const READY = { title: { fr: 'Ce portfolio', en: 'This portfolio' } }
+
+  async function published(slug = 'ce-portfolio') {
+    const { body } = await api('post', BASE, member).expect(201)
+    const saved = await api('patch', `${BASE}/${body.id}`, member)
+      .send({ version: body.version, data: READY, slug })
+      .expect(200)
+    const done = await api('post', `${BASE}/${body.id}/publish`, member)
+      .send({ version: saved.body.version })
+      .expect(200)
+    return done.body as { id: string; version: number }
+  }
+
+  it('une entrée supprimée n’existe plus que dans la corbeille', async () => {
+    const entry = await published()
+    await api('delete', `${BASE}/${entry.id}`, member).expect(204)
+
+    const list = await api('get', BASE, member).expect(200)
+    expect(list.body).toEqual([])
+    const types = await api('get', '/spaces/portfolio/types', member).expect(200)
+    expect(types.body[0].counts).toMatchObject({ total: 0, published: 0 })
+    const todo = await api('get', '/spaces/portfolio/todo', member).expect(200)
+    expect(todo.body).toEqual([])
+    await api('get', `${BASE}/${entry.id}/versions`, member).expect(404)
+
+    const count = await api('get', '/spaces/portfolio/trash/count', member).expect(200)
+    expect(count.body).toEqual({ count: 1 })
+    const trash = await api('get', '/spaces/portfolio/trash', member).expect(200)
+    expect(trash.body).toMatchObject([
+      {
+        id: entry.id,
+        type: { slug: 'projets' },
+        title: 'Ce portfolio',
+        deletedBy: 'lea@exemple.fr',
+      },
+    ])
+    const days =
+      (Date.parse(trash.body[0].purgeAt) - Date.parse(trash.body[0].deletedAt)) / 86_400_000
+    expect(days).toBe(30)
+  })
+
+  it('garde l’identifiant d’URL d’une entrée de la corbeille', async () => {
+    const entry = await published()
+    await api('delete', `${BASE}/${entry.id}`, member).expect(204)
+    const { body } = await api('post', BASE, member).expect(201)
+    const saved = await api('patch', `${BASE}/${body.id}`, member)
+      .send({ version: body.version, data: READY, slug: 'ce-portfolio' })
+      .expect(200)
+    expect(saved.body.slugError).toBe('Cet identifiant est pris par une entrée de la corbeille')
+  })
+
+  it('restaure en brouillon, avec son historique', async () => {
+    const entry = await published()
+    await api('delete', `${BASE}/${entry.id}`, member).expect(204)
+    const restored = await api(
+      'post',
+      `/spaces/portfolio/trash/${entry.id}/restore`,
+      member,
+    ).expect(200)
+    expect(restored.body).toEqual({ id: entry.id, type: { slug: 'projets' } })
+
+    const back = await api('get', `${BASE}/${entry.id}`, member).expect(200)
+    expect(back.body).toMatchObject({ published: null, draft: READY, slug: 'ce-portfolio' })
+    const versions = await api('get', `${BASE}/${entry.id}/versions`, member).expect(200)
+    expect(versions.body).toMatchObject([{ number: 1, online: false }])
+    const trash = await api('get', '/spaces/portfolio/trash', member).expect(200)
+    expect(trash.body).toEqual([])
+    await api('post', `/spaces/portfolio/trash/${entry.id}/restore`, member).expect(404)
+  })
+
+  it('reprend son identifiant d’origine si celui en attente a été pris entre-temps', async () => {
+    const entry = await published('origine')
+    const saved = await api('patch', `${BASE}/${entry.id}`, member)
+      .send({ version: entry.version, data: READY, slug: 'nouveau' })
+      .expect(200)
+    expect(saved.body.draftSlug).toBe('nouveau')
+    await api('delete', `${BASE}/${entry.id}`, member).expect(204)
+    // Une autre entrée a pris l'identifiant en attente (course rare, simulée en base).
+    const other = await published('autre')
+    await db.update(entries).set({ slug: 'nouveau' }).where(eq(entries.id, other.id))
+
+    await api('post', `/spaces/portfolio/trash/${entry.id}/restore`, member).expect(200)
+    const back = await api('get', `${BASE}/${entry.id}`, member).expect(200)
+    expect(back.body).toMatchObject({ slug: 'origine', draftSlug: null, published: null })
+  })
+
+  it('seul le super-admin supprime pour de bon ou vide la corbeille', async () => {
+    const one = await published('un')
+    const two = await published('deux')
+    await api('delete', `${BASE}/${one.id}`, member).expect(204)
+    await api('delete', `${BASE}/${two.id}`, member).expect(204)
+
+    await api('delete', `/spaces/portfolio/trash/${one.id}`, member).expect(403)
+    await api('delete', '/spaces/portfolio/trash', member).expect(403)
+
+    await api('delete', `/spaces/portfolio/trash/${one.id}`, admin).expect(204)
+    let trash = await api('get', '/spaces/portfolio/trash', admin).expect(200)
+    expect(trash.body.map((e: { id: string }) => e.id)).toEqual([two.id])
+    await api('delete', '/spaces/portfolio/trash', admin).expect(204)
+    trash = await api('get', '/spaces/portfolio/trash', admin).expect(200)
+    expect(trash.body).toEqual([])
+    // Les entrées en ligne ne sont pas touchées.
+    await published('trois')
+    await api('delete', '/spaces/portfolio/trash', admin).expect(204)
+    const list = await api('get', BASE, admin).expect(200)
+    expect(list.body).toHaveLength(1)
+  })
+
+  it('efface chaque nuit les entrées de plus de 30 jours', async () => {
+    const old = await published('ancien')
+    const recent = await published('recent')
+    await api('delete', `${BASE}/${old.id}`, member).expect(204)
+    await api('delete', `${BASE}/${recent.id}`, member).expect(204)
+    await db
+      .update(entries)
+      .set({ deletedAt: new Date(Date.now() - 31 * 86_400_000) })
+      .where(eq(entries.id, old.id))
+
+    await ctx.app.get(EntriesService).purgeTrash()
+    const trash = await api('get', '/spaces/portfolio/trash', member).expect(200)
+    expect(trash.body.map((e: { id: string }) => e.id)).toEqual([recent.id])
   })
 })

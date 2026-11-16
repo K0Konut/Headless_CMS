@@ -10,6 +10,8 @@ export const useContentStore = defineStore('content', () => {
   const space = ref<string | null>(null)
   const types = ref<ContentType[] | null>(null)
   const error = ref('')
+  /** Entrée que l'éditeur vient de mettre à la corbeille (V4) : la liste propose « Annuler ». */
+  const trashed = ref<{ space: string; type: string; id: string; title: string } | null>(null)
   // Changement d'espace pendant un chargement : seule la dernière réponse compte.
   let latest = 0
 
@@ -25,5 +27,5 @@ export const useContentStore = defineStore('content', () => {
     }
   }
 
-  return { space, types, error, load }
+  return { space, types, error, trashed, load }
 })

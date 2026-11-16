@@ -6,7 +6,7 @@ import sharp from 'sharp'
 import request from 'supertest'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { upsertSuperAdmin } from '../src/auth/super-admin.js'
-import { media, users } from '../src/db/schema.js'
+import { entryVersions, media, users } from '../src/db/schema.js'
 import { MediaService } from '../src/media/media.service.js'
 import { mediaPath } from '../src/media/storage.js'
 import { PASSWORD, db, sessionCookie, useTestApp } from './helpers.js'
@@ -202,6 +202,21 @@ describe('médias dans les entrées', () => {
       .then((r) => r.rows)
     expect(existsSync(mediaPath(space!.id, orphan.id))).toBe(false)
     expect(existsSync(mediaPath(space!.id, used.id))).toBe(true)
+  })
+
+  it('garde les médias cités par une ancienne version de l’historique', async () => {
+    const { url } = await single()
+    const { body: entry } = await api('get', url, member).expect(200)
+    const old = (await upload(member, PDF, 'ancien.pdf').expect(201)).body
+    await db
+      .insert(entryVersions)
+      .values({ entryId: entry.id, number: 1, data: { cv: { fr: old.id } } })
+    await db
+      .update(media)
+      .set({ createdAt: sql`now() - interval '2 days'` })
+      .where(eq(media.id, old.id))
+
+    expect(await ctx.app.get(MediaService).purgeOrphans()).toBe(0)
   })
 
   it('efface les fichiers d’un espace supprimé', async () => {

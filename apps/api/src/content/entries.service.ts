@@ -8,31 +8,35 @@ import {
 } from '@nestjs/common'
 import {
   entryDataSchema,
+  entryPruner,
   entryStatus,
   entryTitle,
   isEnComplete,
   mediaRefs,
   publicationIssues,
   publicationMessage,
+  relationFieldsTargeting,
+  relationRefs,
   type saveEntrySchema,
   type scheduleEntrySchema,
   scheduleIssue,
   type LastSchedule,
   type EntryData,
+  type Field,
   previewLink,
 } from '@dashility/shared'
-import { and, desc, eq, isNotNull, lte, ne, or, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNotNull, lt, lte, ne, or, sql } from 'drizzle-orm'
 import { Cron } from '@nestjs/schedule'
 import type { z } from 'zod'
 import { DB } from '../db/db.module.js'
 import { isUniqueViolation } from '../db/errors.js'
-import type { Db, User } from '../db/index.js'
+import type { Db, Tx, User } from '../db/index.js'
 import { hashToken, newToken } from '../auth/tokens.js'
-import { contentTypes, entries, previewLinks } from '../db/schema.js'
+import { alive, contentTypes, entries, entryVersions, previewLinks, users } from '../db/schema.js'
 import type { Space } from '../spaces/guards.js'
 import { DeployService } from '../deploy/deploy.service.js'
 import { MediaService } from '../media/media.service.js'
-import { SLUG_TAKEN, nextVersion } from './schedule.js'
+import { SLUG_IN_TRASH, SLUG_TAKEN, nextVersion } from './schedule.js'
 import { TypesService } from './types.service.js'
 
 type ContentType = typeof contentTypes.$inferSelect
@@ -74,7 +78,60 @@ function publication(
   }
 }
 
-const PREVIEW_TTL_MS = 24 * 60 * 60 * 1000
+/** Historique (V4) : la version publiée, numérotée à la suite des autres, dans la transaction de
+ *  la publication (la ligne de l'entrée y est verrouillée par l'écriture). `by` est null pour une
+ *  publication programmée. */
+function recordVersion(tx: Tx, entryId: string, data: EntryData, by: string | null) {
+  return tx.insert(entryVersions).values({
+    entryId,
+    data,
+    publishedBy: by,
+    scheduled: !by,
+    number: sql`(select coalesce(max(${entryVersions.number}), 0) + 1 from ${entryVersions} where ${entryVersions.entryId} = ${entryId})`,
+  })
+}
+
+/** Identifiant d'URL unique dans le type : une autre violation d'unicité n'est pas « déjà pris ». */
+const SLUG_CONSTRAINT = 'entries_type_slug'
+
+/** Ce que l'API renvoie d'une version, sans son contenu. */
+const versionColumns = {
+  number: entryVersions.number,
+  publishedAt: entryVersions.publishedAt,
+  publishedBy: users.email,
+  scheduled: entryVersions.scheduled,
+}
+
+/** Durée de la corbeille (PRD). */
+const DAY_MS = 24 * 60 * 60 * 1000
+const TRASH_MS = 30 * DAY_MS
+
+/** « Dépublier » : l'entrée redevient un brouillon, avec ses modifications en attente s'il y en
+ *  a ; hors ligne, l'identifiant en attente redevient l'identifiant tout court. Aussi pour une
+ *  entrée qui sort de la corbeille (V4). */
+const unpublished = (entry: {
+  published: EntryData | null
+  draft: EntryData | null
+  slug: string | null
+  draftSlug: string | null
+}) => ({
+  published: null,
+  draft: entry.draft ?? entry.published,
+  slug: entry.draftSlug ?? entry.slug,
+  draftSlug: null,
+})
+
+/** Entrées de la corbeille d'un espace. */
+const inTrash = (spaceId: string) =>
+  and(
+    isNotNull(entries.deletedAt),
+    inArray(
+      entries.typeId,
+      sql`(select ${contentTypes.id} from ${contentTypes} where ${contentTypes.spaceId} = ${spaceId})`,
+    ),
+  )
+
+const PREVIEW_TTL_MS = DAY_MS
 
 /** Une entrée d'une collection (identifiant validé par la route), ou celle d'une page unique. */
 export type EntryRef = string | 'single'
@@ -96,7 +153,7 @@ export class EntriesService {
     const rows = await this.db
       .select(entryColumns)
       .from(entries)
-      .where(eq(entries.typeId, type.id))
+      .where(and(eq(entries.typeId, type.id), alive()))
       .orderBy(desc(entries.updatedAt))
     return rows.map(({ id, slug, published, draft, enComplete, updatedAt, scheduledAt }) => ({
       id,
@@ -120,6 +177,7 @@ export class EntriesService {
       .where(
         and(
           eq(contentTypes.spaceId, space.id),
+          alive(),
           // Un type sans champ est masqué dans Contenu (document UX, « Structure »).
           sql`jsonb_array_length(${contentTypes.fields}) > 0`,
           or(
@@ -225,6 +283,7 @@ export class EntriesService {
         message: 'Cette entrée est programmée : annulez la programmation pour la modifier',
       })
     }
+    await this.keepValidRelations(space, type.fields, data, current.id)
 
     // Sur une entrée publiée, l'identifiant d'URL attend « Publier », comme le contenu : il va
     // dans `draftSlug` (null : rien en attente, l'entrée garde son adresse).
@@ -235,8 +294,9 @@ export class EntriesService {
     // il n'est pas changé, et la réponse le signale.
     let slugError: string | undefined
     if (slug && slug !== current.slug) {
+      // Corbeille comprise : une entrée supprimée garde son identifiant (document UX).
       const [taken] = await this.db
-        .select({ id: entries.id })
+        .select({ deletedAt: entries.deletedAt })
         .from(entries)
         .where(
           and(
@@ -247,7 +307,7 @@ export class EntriesService {
         )
       if (taken) {
         slug = undefined
-        slugError = SLUG_TAKEN
+        slugError = taken.deletedAt ? SLUG_IN_TRASH : SLUG_TAKEN
       }
     }
     const slugChange =
@@ -270,7 +330,7 @@ export class EntriesService {
       return slugError ? { ...entry, slugError } : entry
     } catch (err) {
       // Pris entre la vérification et l'écriture : cas rare, signalé sans perdre la suite.
-      if (isUniqueViolation(err)) throw new BadRequestException(SLUG_TAKEN)
+      if (isUniqueViolation(err, SLUG_CONSTRAINT)) throw new BadRequestException(SLUG_TAKEN)
       throw err
     }
   }
@@ -308,29 +368,156 @@ export class EntriesService {
     const type = await this.types.row(space, typeSlug)
     const current = await this.current(type, id, version)
     if (!current.published) throw new BadRequestException('Cette entrée n’est pas publiée')
-    const entry = await this.write(current.id, version, user, {
-      published: null,
-      draft: current.draft ?? current.published,
-      // Hors ligne, l'identifiant en attente redevient l'identifiant tout court.
-      slug: current.draftSlug ?? current.slug,
-      draftSlug: null,
-    })
+    const entry = await this.write(current.id, version, user, unpublished(current))
     this.deploy.schedule(space.id)
     return entry
   }
 
-  /** Suppression définitive (pas d'historique, PRD). Une page unique ne se supprime pas : elle
-   *  disparaît avec son type. */
-  async remove(space: Space, typeSlug: string, id: EntryRef) {
+  /** « Supprimer » : l'entrée part dans la corbeille de l'espace pour 30 jours (V4). Elle quitte
+   *  le site au prochain déploiement ; une programmation est annulée. Une page unique ne se
+   *  supprime pas : elle disparaît avec son type. */
+  async remove(space: Space, typeSlug: string, id: EntryRef, user: User) {
     const type = await this.types.row(space, typeSlug)
     if (type.kind === 'single') throw new BadRequestException('Une page unique ne se supprime pas')
+    const [trashed] = await this.db
+      .update(entries)
+      .set({ deletedAt: new Date(), deletedBy: user.id, ...nextVersion(false) })
+      .where(this.byId(type, id))
+      .returning({ published: entries.published })
+    if (!trashed) throw new NotFoundException('Entrée introuvable')
+    // Un brouillon n'était pas sur le site : rien à redéployer.
+    if (trashed.published) this.deploy.schedule(space.id)
+  }
+
+  /** Corbeille de l'espace, la suppression la plus récente d'abord (document UX, « Corbeille »). */
+  async trash(space: Space) {
+    const rows = await this.db
+      .select({
+        id: entries.id,
+        published: entries.published,
+        draft: entries.draft,
+        deletedAt: entries.deletedAt,
+        deletedBy: users.email,
+        type: { slug: contentTypes.slug, name: contentTypes.name, fields: contentTypes.fields },
+      })
+      .from(entries)
+      .innerJoin(contentTypes, eq(contentTypes.id, entries.typeId))
+      .leftJoin(users, eq(users.id, entries.deletedBy))
+      .where(inTrash(space.id))
+      .orderBy(desc(entries.deletedAt))
+    return rows.map(({ id, published, draft, deletedAt, deletedBy, type }) => ({
+      id,
+      type: { slug: type.slug, name: type.name },
+      title: entryTitle(type.fields, draft ?? published ?? {}),
+      deletedAt: deletedAt!,
+      deletedBy,
+      purgeAt: new Date(deletedAt!.getTime() + TRASH_MS),
+    }))
+  }
+
+  /** Restaure une entrée de la corbeille, toujours en brouillon (dépubliée au passage), avec
+   *  son historique : rien ne revient en ligne sans « Publier » (document UX). */
+  async untrash(space: Space, id: string, user: User) {
+    const [entry] = await this.db
+      .select({ ...entryColumns, typeSlug: contentTypes.slug })
+      .from(entries)
+      .innerJoin(contentTypes, eq(contentTypes.id, entries.typeId))
+      .where(and(eq(entries.id, id), inTrash(space.id)))
+    if (!entry) throw new NotFoundException('Entrée introuvable dans la corbeille')
+    const restored = { ...unpublished(entry), deletedAt: null, deletedBy: null }
+    try {
+      await this.write(id, entry.version, user, restored, false)
+    } catch (err) {
+      // L'identifiant en attente a été pris depuis : l'entrée reprend le sien, qu'elle a gardé
+      // réservé dans la corbeille, plutôt que de rester bloquée.
+      if (!(err instanceof BadRequestException) || !entry.draftSlug) throw err
+      await this.write(id, entry.version, user, { ...restored, slug: entry.slug }, false)
+    }
+    return { id, type: { slug: entry.typeSlug } }
+  }
+
+  /** Suppression définitive (super-admin), historique compris. */
+  async destroy(space: Space, id: string) {
     const deleted = await this.db
       .delete(entries)
-      .where(this.byId(type, id))
-      .returning({ id: entries.id, published: entries.published })
-    if (!deleted.length) throw new NotFoundException('Entrée introuvable')
-    // Un brouillon n'était pas sur le site : rien à redéployer.
-    if (deleted[0]!.published) this.deploy.schedule(space.id)
+      .where(and(eq(entries.id, id), inTrash(space.id)))
+      .returning({ id: entries.id })
+    if (!deleted.length) throw new NotFoundException('Entrée introuvable dans la corbeille')
+  }
+
+  /** « Vider la corbeille » (super-admin). */
+  async emptyTrash(space: Space) {
+    await this.db.delete(entries).where(inTrash(space.id))
+  }
+
+  /** Nombre d'entrées de la corbeille, pour le lien de l'écran Contenu. */
+  async trashCount(space: Space) {
+    const [row] = await this.db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(entries)
+      .where(inTrash(space.id))
+    return row!.count
+  }
+
+  /** Les entrées supprimées depuis plus de 30 jours partent pour de bon, chaque nuit, avant la
+   *  purge des médias orphelins (3 h 30), qui libère leurs fichiers. */
+  @Cron('15 3 * * *', { timeZone: 'Europe/Paris' })
+  async purgeTrash() {
+    await this.db.delete(entries).where(lt(entries.deletedAt, new Date(Date.now() - TRASH_MS)))
+  }
+
+  /** Versions publiées (V4), la plus récente d'abord, sans leur contenu. */
+  async versions(space: Space, typeSlug: string, id: EntryRef) {
+    const entry = await this.get(space, typeSlug, id)
+    const rows = await this.db
+      .select(versionColumns)
+      .from(entryVersions)
+      .leftJoin(users, eq(users.id, entryVersions.publishedBy))
+      .where(eq(entryVersions.entryId, entry.id))
+      .orderBy(desc(entryVersions.number))
+    // Toute publication crée une version (`write`, `publishDue`) et « Dépublier » vide `published` :
+    // la plus récente est en ligne tant que l'entrée est publiée.
+    return rows.map((row, i) => ({ ...row, online: i === 0 && !!entry.published }))
+  }
+
+  /** Une version, avec son contenu, pour la relire en lecture seule. */
+  async version(space: Space, typeSlug: string, id: EntryRef, number: number) {
+    return this.versionOf(await this.types.row(space, typeSlug), id, number)
+  }
+
+  /** « Restaurer cette version » : son contenu remplace le brouillon. Rien n'est publié : on
+   *  relit, puis on publie (document UX). */
+  async restore(
+    space: Space,
+    typeSlug: string,
+    id: EntryRef,
+    number: number,
+    version: number,
+    user: User,
+  ) {
+    const type = await this.types.row(space, typeSlug)
+    const current = await this.current(type, id, version)
+    // Comme une sauvegarde : une entrée programmée est figée (« Modifier l'entrée » d'abord).
+    if (current.scheduledAt) {
+      throw new ConflictException({
+        code: 'entry_scheduled',
+        message: 'Cette entrée est programmée : annulez la programmation pour la modifier',
+      })
+    }
+    const { data } = await this.versionOf(type, id, number)
+    await this.media.checkRefs(space, mediaRefs(type.fields, data))
+    // Une entrée liée supprimée pour de bon depuis ne revient pas avec la version.
+    await this.keepValidRelations(space, type.fields, data, current.id)
+    // La version en ligne, restaurée sans autre modification en attente : rien à publier, le
+    // brouillon est simplement retiré. L'identifiant d'URL n'est jamais touché.
+    // Comparée telle que la restauration l'écrirait : élaguée et sans entrée liée disparue.
+    const online = current.published && entryPruner(type.fields)(current.published)
+    if (online) await this.keepValidRelations(space, type.fields, online, current.id)
+    const same = !!online && !current.draftSlug && JSON.stringify(online) === JSON.stringify(data)
+    return this.write(current.id, version, user, {
+      draft: same ? null : data,
+      enComplete: isEnComplete(type.fields, data),
+    })
   }
 
   /** « Programmer… » : la version actuelle sera publiée à l'heure dite, après les contrôles de
@@ -383,7 +570,7 @@ export class EntriesService {
     const [any] = await this.db
       .select({ id: entries.id })
       .from(entries)
-      .where(lte(entries.scheduledAt, new Date()))
+      .where(and(lte(entries.scheduledAt, new Date()), alive()))
       .limit(1)
     if (!any) return
 
@@ -392,7 +579,7 @@ export class EntriesService {
         .select({ entry: entries, type: contentTypes })
         .from(entries)
         .innerJoin(contentTypes, eq(contentTypes.id, entries.typeId))
-        .where(lte(entries.scheduledAt, new Date()))
+        .where(and(lte(entries.scheduledAt, new Date()), alive()))
         .for('update', { of: entries, skipLocked: true })
       const published = new Set<string>()
       for (const { entry, type } of due) {
@@ -418,8 +605,8 @@ export class EntriesService {
             continue
           }
           // Point de reprise : un identifiant pris entre-temps n'annule pas les autres publications.
-          await tx.transaction((step) =>
-            step
+          await tx.transaction(async (step) => {
+            await step
               .update(entries)
               .set({
                 ...change,
@@ -427,20 +614,86 @@ export class EntriesService {
                 lastSchedule: outcome('published'),
                 updatedAt: new Date(),
               })
-              .where(eq(entries.id, entry.id)),
-          )
+              .where(eq(entries.id, entry.id))
+            await recordVersion(step, entry.id, change.published, null)
+          })
           published.add(type.spaceId)
         } catch (err) {
           // Une entrée en erreur ne bloque pas les autres : elle est marquée en échec, et la tâche
           // ne la reprendra pas à la minute suivante.
-          if (!isUniqueViolation(err)) this.logger.error(err)
-          await end(outcome('failed', isUniqueViolation(err) ? SLUG_TAKEN : 'erreur interne'))
+          if (!isUniqueViolation(err, SLUG_CONSTRAINT)) this.logger.error(err)
+          await end(
+            outcome(
+              'failed',
+              isUniqueViolation(err, SLUG_CONSTRAINT) ? SLUG_TAKEN : 'erreur interne',
+            ),
+          )
         }
       }
       return published
     })
     // Ce que les sites affichent a changé : un build par espace (regroupé sur 10 s).
     for (const spaceId of spaces) this.deploy.schedule(spaceId)
+  }
+
+  /** Champs Relation (V4) : ne garde que les entrées de la collection cible, corbeille comprise,
+   *  et jamais l'entrée elle-même. Un identifiant d'un autre espace ne passe donc pas, et celui
+   *  d'une entrée supprimée pour de bon part sans bloquer l'enregistrement. */
+  private async keepValidRelations(space: Space, fields: Field[], data: EntryData, self: string) {
+    const ids = relationRefs(fields, data)
+    if (!ids.length) return
+    // Une seule requête pour tous les champs : chaque entrée trouvée, avec sa collection.
+    const found = await this.db
+      .select({ id: entries.id, type: contentTypes.slug })
+      .from(entries)
+      .innerJoin(contentTypes, eq(contentTypes.id, entries.typeId))
+      .where(and(eq(contentTypes.spaceId, space.id), inArray(entries.id, ids)))
+    for (const field of fields) {
+      if (field.type !== 'relation' || !Array.isArray(data[field.key])) continue
+      data[field.key] = (data[field.key] as string[]).filter(
+        (id) => id !== self && found.some((e) => e.id === id && e.type === field.target),
+      )
+    }
+  }
+
+  /** Entrées hors corbeille qui citent celle-ci par un champ Relation (V4) : « Supprimer » ne
+   *  demande confirmation que si la liste n'est pas vide. */
+  async citations(space: Space, typeSlug: string, id: EntryRef) {
+    const entry = await this.get(space, typeSlug, id)
+    const types = await this.db
+      .select({
+        id: contentTypes.id,
+        slug: contentTypes.slug,
+        name: contentTypes.name,
+        fields: contentTypes.fields,
+      })
+      .from(contentTypes)
+      .where(eq(contentTypes.spaceId, space.id))
+    // Une lecture par type qui cite cette collection, en parallèle.
+    const citing = await Promise.all(
+      types.map(async (type) => {
+        const keys = relationFieldsTargeting(type.fields, typeSlug).map((f) => f.key)
+        if (!keys.length) return []
+        const cites = (column: typeof entries.published | typeof entries.draft) =>
+          keys.map((key) => sql`jsonb_exists(${column} -> ${key}, ${entry.id})`)
+        const rows = await this.db
+          .select({ id: entries.id, published: entries.published, draft: entries.draft })
+          .from(entries)
+          .where(
+            and(
+              eq(entries.typeId, type.id),
+              alive(),
+              or(...cites(entries.published), ...cites(entries.draft)),
+            ),
+          )
+        return rows.map((row) => ({
+          type: { slug: type.slug, name: type.name },
+          id: row.id,
+          title: entryTitle(type.fields, row.draft ?? row.published ?? {}),
+        }))
+      }),
+    )
+    return citing.flat()
   }
 
   /** Contrôles de « Publier » ; renvoie le changement à écrire, ou lève l'erreur à afficher. */
@@ -476,30 +729,55 @@ export class EntriesService {
     user: User,
     change: Pick<
       Partial<typeof entries.$inferInsert>,
-      'published' | 'draft' | 'slug' | 'draftSlug' | 'enComplete' | 'publishedAt'
+      | 'published'
+      | 'draft'
+      | 'slug'
+      | 'draftSlug'
+      | 'enComplete'
+      | 'publishedAt'
+      | 'deletedAt'
+      | 'deletedBy'
     >,
     /** Laisser le message « programmation annulée » si l'entrée était programmée. */
     notice = true,
   ) {
     try {
-      const [entry] = await this.db
-        .update(entries)
-        .set({
-          ...change,
-          ...nextVersion(notice),
-          updatedAt: new Date(),
-          updatedBy: user.id,
-        })
-        .where(and(eq(entries.id, id), eq(entries.version, version)))
-        .returning(entryColumns)
-      if (!entry) throw new ConflictException('Cette entrée a été modifiée ailleurs')
-      return entry
+      // Une publication laisse sa version dans l'historique, dans la même transaction : aucune
+      // publication par le dashboard ne peut l'oublier (la tâche de programmation fait de même).
+      return await this.db.transaction(async (tx) => {
+        const [entry] = await tx
+          .update(entries)
+          .set({
+            ...change,
+            ...nextVersion(notice),
+            updatedAt: new Date(),
+            updatedBy: user.id,
+          })
+          .where(and(eq(entries.id, id), eq(entries.version, version)))
+          .returning(entryColumns)
+        if (!entry) throw new ConflictException('Cette entrée a été modifiée ailleurs')
+        if (change.published) await recordVersion(tx, id, change.published, user.id)
+        return entry
+      })
     } catch (err) {
       // Publier ou dépublier met en ligne l'identifiant en attente : une autre entrée a pu le
       // prendre entre-temps.
-      if (isUniqueViolation(err)) throw new BadRequestException(SLUG_TAKEN)
+      if (isUniqueViolation(err, SLUG_CONSTRAINT)) throw new BadRequestException(SLUG_TAKEN)
       throw err
     }
+  }
+
+  /** Une version, élaguée selon les champs actuels du type : on voit ce que la restauration
+   *  remettrait, même si un champ a changé depuis. */
+  private async versionOf(type: ContentType, id: EntryRef, number: number) {
+    const [row] = await this.db
+      .select({ ...versionColumns, data: entryVersions.data })
+      .from(entryVersions)
+      .innerJoin(entries, eq(entries.id, entryVersions.entryId))
+      .leftJoin(users, eq(users.id, entryVersions.publishedBy))
+      .where(and(this.byId(type, id), eq(entryVersions.number, number)))
+    if (!row) throw new NotFoundException('Version introuvable')
+    return { ...row, data: entryPruner(type.fields)(row.data) }
   }
 
   /** `single` désigne l'entrée d'une page unique, la seule de son type. */
@@ -507,8 +785,11 @@ export class EntriesService {
     if ((id === 'single') !== (type.kind === 'single')) {
       throw new NotFoundException('Entrée introuvable')
     }
-    return id === 'single'
-      ? eq(entries.typeId, type.id)
-      : and(eq(entries.typeId, type.id), eq(entries.id, id))
+    // Une entrée de la corbeille n'existe plus pour l'éditeur et ses actions (404).
+    return and(
+      eq(entries.typeId, type.id),
+      alive(),
+      id === 'single' ? undefined : eq(entries.id, id),
+    )
   }
 }

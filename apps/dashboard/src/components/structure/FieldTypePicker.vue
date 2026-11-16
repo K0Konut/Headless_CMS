@@ -6,10 +6,11 @@ import { FIELD_TYPE_HINTS, FIELD_TYPE_ICONS, FIELD_TYPE_LABELS } from '@/lib/con
 
 /** Premier temps de l'ajout d'un champ : choisir son type dans une grille (document UX,
  *  « Ajouter un champ, en deux temps »). */
-const props = defineProps<{ idPrefix: string; allowGroup: boolean }>()
+const props = defineProps<{ idPrefix: string; topLevel: boolean }>()
 const emit = defineEmits<{ pick: [FieldType]; cancel: [] }>()
 
-const types = FIELD_TYPES.filter((t) => props.allowGroup || t !== 'group')
+// Groupe et relation ne se placent qu'au premier niveau d'un type (le schéma le refuse aussi).
+const types = FIELD_TYPES.filter((t) => props.topLevel || (t !== 'group' && t !== 'relation'))
 const list = ref<HTMLUListElement>()
 onMounted(() => list.value?.querySelector('button')?.focus())
 </script>
@@ -23,7 +24,7 @@ onMounted(() => list.value?.querySelector('button')?.focus())
   >
     <div class="flex items-center gap-2">
       <p :id="`${idPrefix}-picker-title`" class="flex-1 font-medium">
-        Quel genre d’information ce {{ allowGroup ? 'champ' : 'sous-champ' }} contient-il ?
+        Quel genre d’information ce {{ topLevel ? 'champ' : 'sous-champ' }} contient-il ?
       </p>
       <Button type="button" variant="ghost" size="sm" @click="emit('cancel')">Annuler</Button>
     </div>

@@ -85,6 +85,13 @@ export const router = createRouter({
           meta: { title: 'Contenu' },
         },
         {
+          // Avant `contenu/:type` : « corbeille » est un identifiant de type réservé.
+          path: 'espaces/:espace/contenu/corbeille',
+          name: 'trash',
+          component: () => import('@/pages/TrashPage.vue'),
+          meta: { title: 'Corbeille' },
+        },
+        {
           path: 'espaces/:espace/contenu/:type/:entree?',
           name: 'entries',
           component: () => import('@/pages/EntriesPage.vue'),
