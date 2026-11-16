@@ -43,6 +43,7 @@ test('relier un projet à des catégories, puis supprimer une catégorie citée'
     entry = await admin.call('patch', `${base}/${entry.id}`, {
       version: entry.version,
       data: { titre: { fr } },
+      slug: fr.toLowerCase(),
     })
     if (publish) await admin.call('post', `${base}/${entry.id}/publish`, { version: entry.version })
     return entry.id as string
