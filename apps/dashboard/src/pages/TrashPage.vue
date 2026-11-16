@@ -6,7 +6,7 @@ import FormError from '@/components/FormError.vue'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api, errorMessage } from '@/lib/api'
-import type { TrashedEntry } from '@/lib/content'
+import { type TrashedEntry, entryLabel } from '@/lib/content'
 import { formatDate, plural } from '@/lib/format'
 import { useSessionStore } from '@/stores/session'
 
@@ -38,7 +38,7 @@ watch(base, load, { immediate: true })
 const DAY_MS = 24 * 60 * 60 * 1000
 const daysLeft = (entry: TrashedEntry) =>
   Math.max(1, Math.ceil((Date.parse(entry.purgeAt) - Date.now()) / DAY_MS))
-const label = (entry: TrashedEntry) => `${entry.type.name} › ${entry.title || 'Sans titre'}`
+const label = (entry: TrashedEntry) => entryLabel(entry.type.name, entry.title)
 
 /** Action sur la corbeille ; les entrées traitées (toutes sans `id`) quittent la liste. */
 async function run(action: () => Promise<unknown>, id?: string) {

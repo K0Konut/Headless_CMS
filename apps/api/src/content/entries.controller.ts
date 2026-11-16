@@ -108,6 +108,16 @@ export class EntriesController {
     return this.entries.unschedule(space, type, id)
   }
 
+  /** Entrées qui citent celle-ci par un champ Relation (V4). */
+  @Get(':id/citations')
+  citations(
+    @Req() { space }: SpaceRequest,
+    @Param('type') type: string,
+    @Param('id', uuidOr404) id: EntryRef,
+  ) {
+    return this.entries.citations(space, type, id)
+  }
+
   /** Historique (V4). */
   @Get(':id/versions')
   versions(

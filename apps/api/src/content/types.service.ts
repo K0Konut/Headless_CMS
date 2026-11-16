@@ -7,17 +7,19 @@ import {
 } from '@nestjs/common'
 import {
   type createContentTypeSchema,
+  type Field,
   frozenFieldChange,
+  relationFieldsTargeting,
   entryPruner,
   isEnComplete,
   type updateContentTypeSchema,
 } from '@dashility/shared'
-import { and, asc, eq, inArray, max, type SQL, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, max, ne, type SQL, sql } from 'drizzle-orm'
 import { isDeepStrictEqual } from 'node:util'
 import type { z } from 'zod'
 import { DB } from '../db/db.module.js'
 import { isUniqueViolation } from '../db/errors.js'
-import type { Db } from '../db/index.js'
+import type { Db, Tx } from '../db/index.js'
 import { alive, contentTypes, entries } from '../db/schema.js'
 import { nextVersion } from './schedule.js'
 import type { Space } from '../spaces/guards.js'
@@ -57,6 +59,7 @@ export class TypesService {
   }
 
   async create(space: Space, body: z.infer<typeof createContentTypeSchema>) {
+    await this.checkTargets(this.db, space, body, body.fields)
     try {
       await this.db.transaction(async (tx) => {
         // Le nouveau type se place en dernier.
@@ -103,6 +106,7 @@ export class TypesService {
       }
       const frozen = frozenFieldChange(current.fields, body.fields)
       if (frozen) throw new BadRequestException(frozen)
+      await this.checkTargets(tx, space, current, body.fields)
       await tx
         .update(contentTypes)
         .set({
@@ -138,12 +142,47 @@ export class TypesService {
     return this.get(space, slug)
   }
 
+  /** Un type ciblé par un champ Relation d'un autre type ne se supprime pas (document UX). */
   async remove(space: Space, slug: string) {
+    const others = await this.db
+      .select({ name: contentTypes.name, fields: contentTypes.fields })
+      .from(contentTypes)
+      .where(and(eq(contentTypes.spaceId, space.id), ne(contentTypes.slug, slug)))
+    for (const other of others) {
+      const [field] = relationFieldsTargeting(other.fields, slug)
+      if (field) {
+        throw new ConflictException({
+          code: 'type_targeted',
+          message: `Ce type est utilisé par le champ « ${field.label} » de ${other.name}. Supprimez ou modifiez ce champ d’abord.`,
+        })
+      }
+    }
     const deleted = await this.db
       .delete(contentTypes)
       .where(this.bySlug(space, slug))
       .returning({ id: contentTypes.id })
     if (!deleted.length) throw new NotFoundException('Type introuvable')
+  }
+
+  /** Chaque champ Relation cible une collection de l'espace, le type lui-même compris. */
+  private async checkTargets(
+    db: Db | Tx,
+    space: Space,
+    self: { slug: string; kind: string },
+    fields: Field[],
+  ) {
+    const targets = [...new Set(fields.flatMap((f) => (f.type === 'relation' ? [f.target] : [])))]
+    if (!targets.length) return
+    const found = await db
+      .select({ slug: contentTypes.slug, kind: contentTypes.kind })
+      .from(contentTypes)
+      .where(and(eq(contentTypes.spaceId, space.id), inArray(contentTypes.slug, targets)))
+    for (const target of targets) {
+      const kind = target === self.slug ? self.kind : found.find((t) => t.slug === target)?.kind
+      if (kind !== 'collection') {
+        throw new BadRequestException(`La cible « ${target} » n’est pas une collection de l’espace`)
+      }
+    }
   }
 
   /** `slugs` doit contenir chaque type de l'espace une fois : un ordre partiel ou périmé

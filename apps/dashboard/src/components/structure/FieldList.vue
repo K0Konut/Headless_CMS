@@ -17,7 +17,7 @@ const props = defineProps<{
   /** Champs tels qu'enregistrés : leur identifiant, leur type et leur traduction sont figés. */
   saved: Field[]
   /** Un groupe ne contient pas d'autre groupe (document UX). */
-  allowGroup: boolean
+  topLevel: boolean
 }>()
 const fields = defineModel<Field[]>({ required: true })
 
@@ -64,7 +64,7 @@ const savedField = (field: Field) =>
 <template>
   <div class="grid gap-3">
     <p v-if="!fields.length" class="text-sm text-muted-foreground">
-      {{ allowGroup ? 'Aucun champ pour l’instant.' : 'Aucun sous-champ pour l’instant.' }}
+      {{ topLevel ? 'Aucun champ pour l’instant.' : 'Aucun sous-champ pour l’instant.' }}
     </p>
     <ol v-else class="overflow-hidden rounded-lg border bg-card">
       <li
@@ -141,7 +141,7 @@ const savedField = (field: Field) =>
     <FieldTypePicker
       v-if="picking"
       :id-prefix="idPrefix"
-      :allow-group="allowGroup"
+      :top-level="topLevel"
       @pick="add"
       @cancel="cancelPick"
     />
@@ -153,7 +153,7 @@ const savedField = (field: Field) =>
       class="justify-self-start"
       @click="picking = true"
     >
-      <Plus aria-hidden="true" />{{ allowGroup ? 'Ajouter un champ' : 'Ajouter un sous-champ' }}
+      <Plus aria-hidden="true" />{{ topLevel ? 'Ajouter un champ' : 'Ajouter un sous-champ' }}
     </Button>
   </div>
 </template>
