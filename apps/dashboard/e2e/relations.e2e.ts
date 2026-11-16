@@ -7,19 +7,19 @@ test('relier un projet à des catégories, puis supprimer une catégorie citée'
 }) => {
   const admin = await adminApi(browser)
   await admin.call('post', '/spaces', {
-    name: 'Atelier',
-    slug: 'atelier',
-    siteUrl: 'https://atelier.fr',
+    name: 'Réseau',
+    slug: 'reseau',
+    siteUrl: 'https://reseau.fr',
   })
   const titre = { key: 'titre', label: 'Titre', type: 'text', required: true, translatable: true }
-  await admin.call('post', '/spaces/atelier/types', {
+  await admin.call('post', '/spaces/reseau/types', {
     slug: 'categories',
     kind: 'collection',
     name: 'Catégories',
     entryLabel: 'une catégorie',
     fields: [titre],
   })
-  await admin.call('post', '/spaces/atelier/types', {
+  await admin.call('post', '/spaces/reseau/types', {
     slug: 'projets',
     kind: 'collection',
     name: 'Projets',
@@ -38,7 +38,7 @@ test('relier un projet à des catégories, puis supprimer une catégorie citée'
     ],
   })
   const create = async (type: string, fr: string, publish: boolean) => {
-    const base = `/spaces/atelier/types/${type}/entries`
+    const base = `/spaces/reseau/types/${type}/entries`
     let entry = await admin.call('post', base)
     entry = await admin.call('patch', `${base}/${entry.id}`, {
       version: entry.version,
@@ -59,7 +59,7 @@ test('relier un projet à des catégories, puis supprimer une catégorie citée'
     void dialog.accept()
   })
 
-  await page.goto(`/espaces/atelier/contenu/projets/${project}`)
+  await page.goto(`/espaces/reseau/contenu/projets/${project}`)
   const search = page.getByRole('combobox', { name: 'Catégories : ajouter une entrée' })
   await search.fill('We')
   await page.getByRole('option', { name: 'Web' }).click()
@@ -78,9 +78,9 @@ test('relier un projet à des catégories, puis supprimer une catégorie citée'
   await expect(page.getByRole('list', { name: 'Catégories' }).getByRole('listitem')).toHaveCount(2)
 
   // Supprimer une catégorie citée demande confirmation.
-  await page.goto(`/espaces/atelier/contenu/categories/${web}`)
+  await page.goto(`/espaces/reseau/contenu/categories/${web}`)
   await page.getByRole('button', { name: 'Autres actions' }).click()
   await page.getByRole('menuitem', { name: 'Supprimer' }).click()
-  await expect(page).toHaveURL('/espaces/atelier/contenu/categories')
+  await expect(page).toHaveURL('/espaces/reseau/contenu/categories')
   expect(dialogs.at(-1)).toContain('« Web » est relié à 1 entrée (Projets › Dashility)')
 })
